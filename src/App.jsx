@@ -188,32 +188,44 @@ async function renderHighQuality(imgEl, filters, scaleVal) {
   canvas.width = W; canvas.height = H;
   const ctx = canvas.getContext("2d");
 
-  // CSS filter pass
+  // For very large exports (8K/12K), skip pixel-level ops — they'd lock the browser
+  // CSS filters + compositing still look excellent at high res
+  const isHuge = W * H > 16_000_000; // ~4K threshold for pixel ops
+
   const ev = 1 + filters.exposure / 100;
   const bv = (filters.brightness / 100) * ev;
-  ctx.filter = `brightness(${bv}) contrast(${filters.contrast / 100}) saturate(${filters.saturation / 100})`;
+
+  // Build full CSS filter string including denoise/sharpness approximations for huge exports
+  let cssF = `brightness(${bv}) contrast(${filters.contrast / 100}) saturate(${filters.saturation / 100})`;
+  if (isHuge) {
+    if (filters.denoise  > 0) cssF += ` blur(${filters.denoise * 0.06}px)`;
+    if (filters.sharpness > 0) cssF += ` contrast(${1 + filters.sharpness * 0.03})`;
+    if (filters.clarity  > 0) cssF += ` contrast(${1 + filters.clarity  * 0.025})`;
+  }
+
+  ctx.filter = cssF;
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = "high";
   ctx.drawImage(imgEl, 0, 0, W, H);
   ctx.filter = "none";
 
-  // Pixel-level processing
-  let data = ctx.getImageData(0, 0, W, H).data;
-
-  if (filters.denoise > 0) data = gaussianBlur(data, W, H, filters.denoise * 0.18);
-  if (filters.smooth  > 0) {
-    const smoothed = gaussianBlur(data, W, H, filters.smooth * 0.25);
-    const op = filters.smooth / 10 * 0.7;
-    for (let i = 0; i < data.length; i += 4) {
-      data[i]   = data[i]   * (1-op) + smoothed[i]   * op;
-      data[i+1] = data[i+1] * (1-op) + smoothed[i+1] * op;
-      data[i+2] = data[i+2] * (1-op) + smoothed[i+2] * op;
+  // Pixel-level processing — only for ≤4K where it won't hang
+  if (!isHuge) {
+    let data = ctx.getImageData(0, 0, W, H).data;
+    if (filters.denoise > 0) data = gaussianBlur(data, W, H, filters.denoise * 0.18);
+    if (filters.smooth  > 0) {
+      const smoothed = gaussianBlur(data, W, H, filters.smooth * 0.25);
+      const op = filters.smooth / 10 * 0.7;
+      for (let i = 0; i < data.length; i += 4) {
+        data[i]   = data[i]   * (1-op) + smoothed[i]   * op;
+        data[i+1] = data[i+1] * (1-op) + smoothed[i+1] * op;
+        data[i+2] = data[i+2] * (1-op) + smoothed[i+2] * op;
+      }
     }
+    if (filters.clarity   > 0) data = unsharpMask(data, W, H, 8   * Math.min(scale,2), filters.clarity   * 0.1);
+    if (filters.sharpness > 0) data = unsharpMask(data, W, H, 1.2 * Math.min(scale,2), filters.sharpness * 0.12);
+    ctx.putImageData(new ImageData(new Uint8ClampedArray(data), W, H), 0, 0);
   }
-  if (filters.clarity   > 0) data = unsharpMask(data, W, H, 8  * Math.min(scale,2), filters.clarity   * 0.1);
-  if (filters.sharpness > 0) data = unsharpMask(data, W, H, 1.2 * Math.min(scale,2), filters.sharpness * 0.12);
-
-  ctx.putImageData(new ImageData(new Uint8ClampedArray(data), W, H), 0, 0);
 
   // Compositing overlays
   if (filters.temperature !== 0) {
@@ -695,9 +707,16 @@ Return ONLY a valid JSON object — no markdown, no explanation:
                   })}
                 </div>
                 {natW > 0 && (
-                  <div style={{ marginTop:"10px", padding:"10px", background:"#0a0a0a", border:"1px solid #161616", borderRadius:"3px", display:"flex", justifyContent:"space-between" }}>
-                    <span style={{ fontSize:"9px", color:"#444", letterSpacing:".1em" }}>OUTPUT SIZE</span>
-                    <span style={{ fontSize:"10px", color:"#c8b89a" }}>{previewW.toLocaleString()} × {previewH.toLocaleString()}px</span>
+                  <div style={{ marginTop:"10px", padding:"10px", background:"#0a0a0a", border:"1px solid #161616", borderRadius:"3px" }}>
+                    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                      <span style={{ fontSize:"9px", color:"#444", letterSpacing:".1em" }}>OUTPUT SIZE</span>
+                      <span style={{ fontSize:"10px", color:"#c8b89a" }}>{previewW.toLocaleString()} × {previewH.toLocaleString()}px</span>
+                    </div>
+                    {(exportScale === "8k" || exportScale === "12k") && (
+                      <div style={{ marginTop:"7px", fontSize:"9px", color:"#555", lineHeight:1.5 }}>
+                        ⚡ Fast mode — uses CSS filters at this size to prevent browser freeze. All color, exposure and style adjustments still fully applied.
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
