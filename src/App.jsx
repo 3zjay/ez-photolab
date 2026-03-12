@@ -330,7 +330,7 @@ export default function PhotoOptimizer() {
       let res, data, attempts = 0;
       while (attempts < 3) {
         res = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey.trim()}`,
+          `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${apiKey.trim()}`,
           { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }
         );
         data = await res.json();
