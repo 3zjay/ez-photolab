@@ -285,7 +285,6 @@ export default function PhotoOptimizer() {
 
   // Gemini key
   const [apiKey,       setApiKey]       = useState("");
-  const [showKeyInput, setShowKeyInput] = useState(false);
   const [keyError,     setKeyError]     = useState("");
 
   const fileInputRef = useRef(null);
@@ -300,57 +299,59 @@ export default function PhotoOptimizer() {
 
   // ── Gemini vision call ──────────────────────────────────────────────────
   const analyzeWithAI = async () => {
-    if (!apiKey.trim()) { setShowKeyInput(true); return; }
+    if (!apiKey.trim()) {
+      setKeyError("Paste your Gemini API key above first.");
+      return;
+    }
     setLoading(true); setAiSuggestion(null); setKeyError("");
     try {
-      const base64 = image.split(",")[1];
-      const mimeMatch = image.match(/data:(image\/[^;]+);/);
-      const mime = mimeMatch ? mimeMatch[1] : "image/jpeg";
+      // Resize image to max 1024px before sending — Gemini doesn't need full res
+      const img = imgRef.current;
+      const maxDim = 1024;
+      const scale = Math.min(1, maxDim / Math.max(img.naturalWidth, img.naturalHeight));
+      const canvas = document.createElement("canvas");
+      canvas.width  = Math.round(img.naturalWidth  * scale);
+      canvas.height = Math.round(img.naturalHeight * scale);
+      canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
+      const base64 = canvas.toDataURL("image/jpeg", 0.85).split(",")[1];
 
       const body = {
         contents: [{
           parts: [
-            { inline_data: { mime_type: mime, data: base64 } },
-            { text: `Analyze this photo for quality issues (faces, noise, sharpness, lighting, color). 
-Return ONLY a valid JSON object — no markdown, no explanation:
-{
-  "analysis": "2-3 sentences describing quality issues",
-  "adjustments": {
-    "brightness": <0-200, default 100>,
-    "contrast": <0-200, default 100>,
-    "saturation": <0-200, default 100>,
-    "exposure": <-100 to 100, default 0>,
-    "temperature": <-100 to 100, default 0>,
-    "sharpness": <0-20, default 0>,
-    "clarity": <0-20, default 0>,
-    "denoise": <0-10, default 0>,
-    "smooth": <0-10, default 0>,
-    "vignette": <0-100, default 0>,
-    "fade": <0-100, default 0>
-  },
-  "tip": "one specific actionable tip"
-}` }
+            { inline_data: { mime_type: "image/jpeg", data: base64 } },
+            { text: `Analyze this photo for quality issues (faces, noise, sharpness, lighting, color). Return ONLY a valid JSON object with no markdown, no backticks, no explanation — just raw JSON:
+{"analysis":"2-3 sentences describing quality issues","adjustments":{"brightness":100,"contrast":100,"saturation":100,"exposure":0,"temperature":0,"sharpness":0,"clarity":0,"denoise":0,"smooth":0,"vignette":0,"fade":0},"tip":"one specific actionable tip"}` }
           ]
         }],
-        generationConfig: { temperature: 0.2, maxOutputTokens: 800 }
+        generationConfig: { temperature: 0.1, maxOutputTokens: 600 }
       };
 
       const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey.trim()}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey.trim()}`,
         { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }
       );
 
-      if (res.status === 400 || res.status === 403) {
-        setKeyError("Invalid API key. Get a free key at aistudio.google.com");
-        setLoading(false); setShowKeyInput(true); return;
+      const data = await res.json();
+
+      // Handle API errors with clear messages
+      if (!res.ok) {
+        const msg = data?.error?.message || `API error ${res.status}`;
+        if (res.status === 400) setKeyError("Bad request — try a different image format.");
+        else if (res.status === 403 || res.status === 401) setKeyError("Invalid API key. Check it at aistudio.google.com");
+        else if (res.status === 429) setKeyError("Rate limit hit — wait a moment and try again.");
+        else setKeyError(msg);
+        setLoading(false); return;
       }
 
-      const data = await res.json();
       const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
-      const clean = text.replace(/```json|```/g, "").trim();
-      setAiSuggestion(JSON.parse(clean));
+      if (!text) throw new Error("Empty response from Gemini");
+
+      // Strip any markdown fences Gemini might add despite instructions
+      const clean = text.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
+      const parsed = JSON.parse(clean);
+      setAiSuggestion(parsed);
     } catch (e) {
-      setAiSuggestion({ analysis: "Could not analyze. Check your key or try a preset.", adjustments: null, tip: null });
+      setKeyError(`Error: ${e.message || "Could not parse response. Try again."}`);
     }
     setLoading(false);
   };
@@ -445,11 +446,6 @@ Return ONLY a valid JSON object — no markdown, no explanation:
           <div style={{ fontSize:"9px", color:"#383838", letterSpacing:".22em", marginTop:"2px" }}>OPTIMIZE · RESTORE · ENHANCE</div>
         </div>
         <div style={{ display:"flex", alignItems:"center", gap:"8px" }}>
-          {/* API Key button */}
-          <button className="btn" onClick={() => setShowKeyInput(v => !v)}
-            style={{ background:"transparent", color: apiKey ? "#c8b89a" : "#555", padding:"7px 12px", border:`1px solid ${apiKey ? "#c8b89a44" : "#1e1e1e"}`, fontSize:"10px", borderRadius:"2px", display:"flex", alignItems:"center", gap:"5px" }}>
-            <span style={{ fontSize:"11px" }}>{apiKey ? "●" : "○"}</span> GEMINI KEY
-          </button>
           {image && <>
             <button className="btn" onClick={() => setFilters(DEFAULT_STATE)} style={{ background:"transparent", color:"#555", padding:"7px 14px", border:"1px solid #1e1e1e", fontSize:"10px" }}>RESET</button>
             <button className="btn" onClick={() => setShowExport(true)} style={{ background:"#c8b89a", color:"#0a0a0a", padding:"7px 18px", fontSize:"10px", fontWeight:500 }}>↓ EXPORT</button>
@@ -457,36 +453,29 @@ Return ONLY a valid JSON object — no markdown, no explanation:
         </div>
       </div>
 
-      {/* API Key panel */}
-      {showKeyInput && (
-        <div style={{ borderBottom:"1px solid #141414", padding:"14px 28px", background:"#0c0c0c", animation:"fadein .2s ease" }}>
-          <div style={{ maxWidth:"520px", display:"flex", flexDirection:"column", gap:"8px" }}>
-            <div style={{ fontSize:"9px", color:"#555", letterSpacing:".15em", marginBottom:"2px" }}>
-              GEMINI API KEY — Free at{" "}
-              <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer"
-                style={{ color:"#c8b89a", textDecoration:"none" }}>aistudio.google.com</a>
-              {" "}· Never sent to our servers · Stays in your browser only
-            </div>
-            <div style={{ display:"flex", gap:"8px" }}>
-              <input className="key-input" type="password"
-                placeholder="AIza..." value={apiKey}
-                onChange={e => { setApiKey(e.target.value); setKeyError(""); }} />
-              <button className="btn" onClick={() => setShowKeyInput(false)}
-                style={{ background:"#c8b89a", color:"#0a0a0a", padding:"10px 16px", fontSize:"10px", borderRadius:"3px", whiteSpace:"nowrap" }}>
-                SAVE KEY
-              </button>
-            </div>
-            {keyError && <div style={{ fontSize:"9px", color:"#e07070", letterSpacing:".06em" }}>⚠ {keyError}</div>}
-            <div style={{ fontSize:"9px", color:"#333", letterSpacing:".06em" }}>
-              Free tier: 1,500 analyses/day · No credit card required
-            </div>
-          </div>
-        </div>
-      )}
-
-      <div style={{ display:"flex", height: showKeyInput ? "calc(100vh - 130px)" : "calc(100vh - 61px)" }}>
+      <div style={{ display:"flex", height:"calc(100vh - 61px)" }}>
         {/* Left panel */}
         <div style={{ width:"268px", borderRight:"1px solid #141414", overflowY:"auto", padding:"20px 18px", flexShrink:0, display:"flex", flexDirection:"column", gap:"22px" }}>
+
+          {/* Gemini Key — always visible in panel */}
+          <div>
+            <div style={{ fontSize:"9px", letterSpacing:".22em", color:"#383838", marginBottom:"10px" }}>GEMINI API KEY</div>
+            <div style={{ display:"flex", gap:"6px" }}>
+              <input className="key-input" type="password"
+                placeholder="AIza... (free at aistudio.google.com)"
+                value={apiKey}
+                onChange={e => { setApiKey(e.target.value); setKeyError(""); }}
+                style={{ flex:1, minWidth:0 }}
+              />
+              {apiKey && <span style={{ color:"#4caf50", fontSize:"16px", display:"flex", alignItems:"center", flexShrink:0 }}>✓</span>}
+            </div>
+            {keyError && <div style={{ marginTop:"5px", fontSize:"9px", color:"#e07070" }}>⚠ {keyError}</div>}
+            <div style={{ marginTop:"5px", fontSize:"8px", color:"#2a2a2a", letterSpacing:".06em", lineHeight:1.5 }}>
+              Free · 1,500/day · No credit card ·{" "}
+              <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer"
+                style={{ color:"#c8b89a44", textDecoration:"none" }}>get key →</a>
+            </div>
+          </div>
 
           {/* Presets */}
           <div>
