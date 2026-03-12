@@ -326,12 +326,28 @@ export default function PhotoOptimizer() {
         generationConfig: { temperature: 0.1, maxOutputTokens: 600 }
       };
 
-      const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey.trim()}`,
-        { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }
-      );
-
-      const data = await res.json();
+      // Retry up to 3 times with backoff on rate limit
+      let res, data, attempts = 0;
+      while (attempts < 3) {
+        res = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey.trim()}`,
+          { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }
+        );
+        data = await res.json();
+        if (res.status === 429) {
+          attempts++;
+          if (attempts < 3) {
+            setKeyError(`Rate limit — retrying in ${attempts * 3}s...`);
+            await new Promise(r => setTimeout(r, attempts * 3000));
+            setKeyError("");
+          } else {
+            setKeyError("Rate limit — wait 30 seconds and try again.");
+            setLoading(false); return;
+          }
+        } else {
+          break;
+        }
+      }
 
       // Handle API errors with clear messages
       if (!res.ok) {
