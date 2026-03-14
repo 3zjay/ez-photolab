@@ -134,13 +134,7 @@ function canvasToBlob(canvas, mime, quality) {
 
 // ── Export rendering (canvas — only used when saving) ───────────────────────
 async function renderForExport(imgEl, filters, targetW, targetH) {
-  // Cap at safe browser canvas limit (~16MP)
-  const MAX_PX = 16_000_000;
-  let W = targetW, H = targetH;
-  if (W * H > MAX_PX) {
-    const s = Math.sqrt(MAX_PX / (W * H));
-    W = Math.floor(W * s); H = Math.floor(H * s);
-  }
+  const W = targetW, H = targetH;
   const canvas = document.createElement("canvas");
   canvas.width = W; canvas.height = H;
   const ctx = canvas.getContext("2d");
@@ -362,14 +356,12 @@ export default function App() {
   const natH         = imgRef.current?.naturalHeight || 0;
   const getExportDimensions = () => {
     if (!natW || !natH) return { w: 0, h: 0 };
-    const MAX_PX = 16_000_000;
     let scale;
     if (exportScale === "8k")       scale = 7680  / Math.max(natW, natH);
     else if (exportScale === "12k") scale = 12288 / Math.max(natW, natH);
     else                            scale = exportScale;
-    let w = Math.round(natW * scale);
-    let h = Math.round(natH * scale);
-    if (w * h > MAX_PX) { const s = Math.sqrt(MAX_PX / (w*h)); w = Math.floor(w*s); h = Math.floor(h*s); }
+    const w = Math.round(natW * scale);
+    const h = Math.round(natH * scale);
     return { w, h };
   };
   const { w: exportW, h: exportH } = getExportDimensions();
