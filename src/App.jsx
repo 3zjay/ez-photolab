@@ -110,16 +110,29 @@ function autoEnhance(imgEl) {
   }
 }
 
-// ── Cross-platform download ───────────────────────────────────────────────────
-function downloadBlob(blob, name) {
+// ── Smart save: Web Share API on mobile, download on desktop ─────────────────
+async function saveFile(blob, name) {
+  // Web Share API — triggers native iOS "Save to Photos" / Android gallery sheet
+  if (navigator.canShare && navigator.canShare({ files: [new File([blob], name, { type: blob.type })] })) {
+    try {
+      await navigator.share({
+        files: [new File([blob], name, { type: blob.type })],
+        title: "PHOTOlab",
+      });
+      return "shared";
+    } catch(e) {
+      if (e.name === "AbortError") return "cancelled"; // user cancelled share sheet
+      // fall through to download
+    }
+  }
+  // Fallback: standard download (desktop Chrome/Firefox, older browsers)
   const url = URL.createObjectURL(blob);
-  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
-  if (isIOS) { window.location.href = url; setTimeout(()=>URL.revokeObjectURL(url),10000); return; }
   const a = document.createElement("a");
   a.href = url; a.download = name;
   document.body.appendChild(a); a.click();
   document.body.removeChild(a);
-  setTimeout(()=>URL.revokeObjectURL(url), 5000);
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+  return "downloaded";
 }
 
 function canvasToBlob(canvas, mime, quality) {
@@ -132,44 +145,37 @@ function canvasToBlob(canvas, mime, quality) {
   });
 }
 
-// ── Export rendering (canvas — only used when saving) ───────────────────────
-async function renderForExport(imgEl, filters, targetW, targetH) {
+// ── Export: uses EXACT same CSS filter as preview — guarantees match ──────────
+// No pixel manipulation = no hanging, GPU-accelerated, instant even at 12K
+async function renderForExport(imgEl, cssFilterString, filters, targetW, targetH) {
   const W = targetW, H = targetH;
   const canvas = document.createElement("canvas");
   canvas.width = W; canvas.height = H;
   const ctx = canvas.getContext("2d");
-
-  // Draw with CSS filters
-  const ev = 1+filters.exposure/100, bv = (filters.brightness/100)*ev;
-  ctx.filter = `brightness(${bv}) contrast(${filters.contrast/100}) saturate(${filters.saturation/100})`;
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = "high";
 
-  // Smart-crop for exact dimensions
-  const sW=imgEl.naturalWidth, sH=imgEl.naturalHeight;
-  const sA=sW/sH, tA=W/H;
-  let sx=0,sy=0,sw=sW,sh=sH;
-  if (Math.abs(sA-tA) > 0.01) {
-    if (sA>tA) { sw=sH*tA; sx=(sW-sw)/2; }
-    else       { sh=sW/tA; sy=(sH-sh)/2; }
-  }
-  ctx.drawImage(imgEl, sx, sy, sw, sh, 0, 0, W, H);
+  // Apply the EXACT same CSS filter string used in the preview <img> tag
+  ctx.filter = cssFilterString;
+  ctx.drawImage(imgEl, 0, 0, W, H);
   ctx.filter = "none";
 
-  // Warmth overlay
+  // Warmth overlay (matches preview overlay div)
   if (filters.temperature !== 0) {
     const a = Math.abs(filters.temperature)/300;
     ctx.globalCompositeOperation = "overlay";
     ctx.fillStyle = filters.temperature>0 ? `rgba(255,140,0,${a})` : `rgba(100,149,237,${a})`;
-    ctx.fillRect(0,0,W,H); ctx.globalCompositeOperation = "source-over";
+    ctx.fillRect(0,0,W,H);
+    ctx.globalCompositeOperation = "source-over";
   }
-  // Fade
+  // Fade overlay
   if (filters.fade > 0) {
     ctx.globalCompositeOperation = "screen";
     ctx.fillStyle = `rgba(255,255,255,${filters.fade/180})`;
-    ctx.fillRect(0,0,W,H); ctx.globalCompositeOperation = "source-over";
+    ctx.fillRect(0,0,W,H);
+    ctx.globalCompositeOperation = "source-over";
   }
-  // Vignette
+  // Vignette overlay
   if (filters.vignette > 0) {
     const g = ctx.createRadialGradient(W/2,H/2,W*0.3,W/2,H/2,W*0.85);
     g.addColorStop(0,"rgba(0,0,0,0)");
@@ -307,7 +313,7 @@ export default function App() {
   const downloadBgResult = async () => {
     if (!bgResult) return;
     const blob = await (await fetch(bgResult)).blob();
-    downloadBlob(blob, "photolab_nobg.png");
+    await saveFile(blob, "photolab_nobg.png");
   };
 
   // ── Standard export ───────────────────────────────────────────────────────
@@ -316,15 +322,21 @@ export default function App() {
     setExporting(true); setExportDone(false); setExportInfo("");
     try {
       const { w: W, h: H } = getExportDimensions();
-      const { canvas, W:rW, H:rH } = await renderForExport(img, filters, W, H);
-      const fmt = EXPORT_FORMATS.find(f=>f.id===exportFormat);
-      const q   = exportFormat==="png" ? undefined : exportQuality/100;
+      // Pass the EXACT same cssFilter used in preview — guarantees match
+      const { canvas, W:rW, H:rH } = await renderForExport(img, cssFilter, filters, W, H);
+      const fmt  = EXPORT_FORMATS.find(f=>f.id===exportFormat);
+      const q    = exportFormat==="png" ? undefined : exportQuality/100;
       const blob = await canvasToBlob(canvas, fmt.mime, q);
-      const kb = Math.round(blob.size/1024);
+      const kb   = Math.round(blob.size/1024);
       setExportInfo(`${rW.toLocaleString()} × ${rH.toLocaleString()}px · ${kb>1024?(kb/1024).toFixed(1)+"MB":kb+"KB"}`);
-      downloadBlob(blob, `photolab.${fmt.ext}`);
+      await saveFile(blob, `photolab.${fmt.ext}`);
       setExportDone(true); setTimeout(()=>setExportDone(false),4000);
-    } catch(e) { console.error(e); setExportInfo("Export failed — try a lower scale."); }
+    } catch(e) {
+      if (e?.name !== "AbortError") {
+        console.error(e);
+        setExportInfo("Export failed — try a lower scale.");
+      }
+    }
     setExporting(false);
   };
 
@@ -337,13 +349,13 @@ export default function App() {
       let tW=mode.w, tH=mode.h;
       const sW=img.naturalWidth, sH=img.naturalHeight;
       if (!tH) { const sc=Math.min(1,tW/Math.max(sW,sH)); tW=Math.round(sW*sc); tH=Math.round(sH*sc); }
-      const { canvas, W, H } = await renderForExport(img, filters, tW, tH);
+      const { canvas, W, H } = await renderForExport(img, cssFilter, filters, tW, tH);
       const blob = await canvasToBlob(canvas,"image/jpeg",mode.quality);
       const kb   = Math.round(blob.size/1024);
       setExportInfo(`${W}×${H}px · ${kb>1024?(kb/1024).toFixed(1)+"MB":kb+"KB"}`);
-      downloadBlob(blob,`facebook_${mode.id}.jpg`);
+      await saveFile(blob,`facebook_${mode.id}.jpg`);
       setFbDone(true); setTimeout(()=>setFbDone(false),4000);
-    } catch(e) { console.error(e); }
+    } catch(e) { if (e?.name !== "AbortError") console.error(e); }
     setFbExporting(false);
   };
 
@@ -367,8 +379,8 @@ export default function App() {
   const { w: exportW, h: exportH } = getExportDimensions();
 
   // ── Panel content (shared desktop/mobile) ────────────────────────────────
-  const Panel = () => (
-    <div style={{display:"flex",flexDirection:"column",gap:"18px",padding:isMobile?"16px 16px 80px":"16px"}}>
+  const Panel = ({ isMobileInline = false }) => (
+    <div style={{display:"flex",flexDirection:"column",gap:"18px",padding:isMobileInline?"12px 14px 32px":"16px"}}>
 
       {/* TOOLS */}
       {activeTab==="tools" && (
@@ -436,7 +448,7 @@ export default function App() {
 
       {/* EDIT */}
       {activeTab==="edit"&&(<>
-        {image&&(
+        {image && !isMobileInline &&(
           <div>
             <Label>Auto Enhance & Beauty Filter</Label>
             <Btn onClick={handleAutoEnhance} disabled={autoLoading} color="purple" textColor="#fff"
@@ -531,26 +543,24 @@ export default function App() {
       `}</style>
 
       {/* Header */}
-      <header style={{background:"#fff",borderBottom:"1px solid #eee",height:"56px",padding:"0 16px",display:"flex",alignItems:"center",justifyContent:"space-between",position:"sticky",top:0,zIndex:50,boxShadow:"0 1px 4px rgba(0,0,0,.05)"}}>
-        <div style={{display:"flex",alignItems:"center",gap:"10px"}}>
-          <div style={{width:"32px",height:"32px",background:"linear-gradient(135deg,#6c63ff,#a78bfa)",borderRadius:"8px",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"16px",flexShrink:0}}>✨</div>
-          <div>
-            <div style={{fontSize:"16px",fontWeight:700,color:"#1a1a2e",letterSpacing:"-.3px"}}>PHOTOlab</div>
-            {!isMobile&&<div style={{fontSize:"10px",color:"#bbb",marginTop:"-1px"}}>Enhance · Restore · Export</div>}
-          </div>
+      <header style={{background:"#fff",borderBottom:"1px solid #eee",height:"52px",padding:"0 14px",display:"flex",alignItems:"center",justifyContent:"space-between",position:"sticky",top:0,zIndex:50,boxShadow:"0 1px 4px rgba(0,0,0,.05)"}}>
+        <div style={{display:"flex",alignItems:"center",gap:"9px"}}>
+          <div style={{width:"30px",height:"30px",background:"linear-gradient(135deg,#6c63ff,#a78bfa)",borderRadius:"8px",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"15px",flexShrink:0}}>✨</div>
+          <div style={{fontSize:"16px",fontWeight:700,color:"#1a1a2e",letterSpacing:"-.3px"}}>PHOTOlab</div>
         </div>
         <div style={{display:"flex",gap:"6px",alignItems:"center"}}>
+          {/* Edit / Tools — no drawer on mobile, just switches the bottom panel */}
           <div style={{display:"flex",background:"#f2f2f8",borderRadius:"10px",padding:"3px",gap:"2px"}}>
             {["EDIT","TOOLS"].map(t=>(
-              <button key={t} onClick={()=>{setActiveTab(t.toLowerCase());if(isMobile)setPanelOpen(true);}}
-                style={{padding:isMobile?"6px 12px":"6px 16px",fontSize:"12px",fontWeight:600,border:"none",cursor:"pointer",background:activeTab===t.toLowerCase()?"#fff":"transparent",color:activeTab===t.toLowerCase()?"#6c63ff":"#888",borderRadius:"8px",boxShadow:activeTab===t.toLowerCase()?"0 1px 4px rgba(0,0,0,.1)":"none",transition:"all .18s"}}>
+              <button key={t} onClick={()=>setActiveTab(t.toLowerCase())}
+                style={{padding:"5px 12px",fontSize:"12px",fontWeight:600,border:"none",cursor:"pointer",background:activeTab===t.toLowerCase()?"#fff":"transparent",color:activeTab===t.toLowerCase()?"#6c63ff":"#888",borderRadius:"8px",boxShadow:activeTab===t.toLowerCase()?"0 1px 4px rgba(0,0,0,.1)":"none",transition:"all .18s"}}>
                 {t==="EDIT"?"✏️ Edit":"🛠 Tools"}
               </button>
             ))}
           </div>
           {image&&(
             <button onClick={()=>setShowExport(true)}
-              style={{padding:"8px 16px",background:"linear-gradient(135deg,#6c63ff,#a78bfa)",color:"#fff",border:"none",borderRadius:"8px",fontSize:"13px",fontWeight:700,cursor:"pointer",boxShadow:"0 2px 8px rgba(108,99,255,.3)"}}>
+              style={{padding:"7px 14px",background:"linear-gradient(135deg,#6c63ff,#a78bfa)",color:"#fff",border:"none",borderRadius:"8px",fontSize:"13px",fontWeight:700,cursor:"pointer",boxShadow:"0 2px 8px rgba(108,99,255,.3)"}}>
               {isMobile?"↓ Save":"↓ Export"}
             </button>
           )}
@@ -559,7 +569,7 @@ export default function App() {
 
       {/* Desktop */}
       {!isMobile&&(
-        <div style={{display:"flex",height:"calc(100vh - 56px)"}}>
+        <div style={{display:"flex",height:"calc(100vh - 52px)"}}>
           <div style={{width:"290px",borderRight:"1px solid #eee",overflowY:"auto",background:"#fff",flexShrink:0}}>
             <Panel/>
           </div>
@@ -569,35 +579,38 @@ export default function App() {
         </div>
       )}
 
-      {/* Mobile */}
+      {/* Mobile — photo on top, controls always visible on bottom */}
       {isMobile&&(
-        <div style={{display:"flex",flexDirection:"column",minHeight:"calc(100vh - 56px)"}}>
-          <div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",padding:"16px",background:"#f7f8fa",position:"relative",minHeight:"50vh"}}>
+        <div style={{display:"flex",flexDirection:"column",height:"calc(100vh - 52px)",overflow:"hidden"}}>
+
+          {/* Photo preview — fixed top half */}
+          <div style={{height:"42vh",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",background:"#f0f1f5",position:"relative",borderBottom:"1px solid #e8e8f0"}}>
             <PhotoPreview {...{image,dragging,setDragging,loadImage,fileInputRef,imgRef,splitRef,activeTab,bgResult,bgMode,showBefore,setShowBefore,showSplit,splitPos,setSplitPos,setIsDraggingSplit,cssFilter,tempColor,tempAlpha,filters,isEdited,setImage,setAutoMsg,setBgStatus,setBgSubjectUrl,setBgResult,isMobile}}/>
           </div>
-          {image&&(
-            <div style={{background:"#fff",borderTop:"1px solid #eee",padding:"10px 16px",display:"flex",gap:"8px"}}>
-              <button onClick={()=>setPanelOpen(true)}
-                style={{flex:1,padding:"11px",background:"#f2f2f8",border:"none",borderRadius:"10px",fontSize:"13px",fontWeight:600,color:"#6c63ff",cursor:"pointer"}}>⚙️ Adjust</button>
-              <button onClick={()=>{setFilters(DEFAULT_STATE);setAutoMsg(null);}}
-                style={{padding:"11px 16px",background:"#f2f2f8",border:"none",borderRadius:"10px",fontSize:"13px",color:"#888",cursor:"pointer",fontWeight:500}}>Reset</button>
-            </div>
-          )}
-        </div>
-      )}
 
-      {/* Mobile drawer */}
-      {isMobile&&panelOpen&&(
-        <>
-          <div onClick={()=>setPanelOpen(false)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.3)",zIndex:80}}/>
-          <div style={{position:"fixed",right:0,top:0,bottom:0,width:"min(320px,92vw)",background:"#fff",boxShadow:"-4px 0 24px rgba(0,0,0,.15)",zIndex:90,overflowY:"auto",animation:"slidein .25s ease"}}>
-            <div style={{padding:"12px 16px",borderBottom:"1px solid #eee",display:"flex",justifyContent:"space-between",alignItems:"center",position:"sticky",top:0,background:"#fff",zIndex:1}}>
-              <span style={{fontWeight:700,fontSize:"15px",color:"#1a1a2e"}}>{activeTab==="edit"?"Adjust":"Tools"}</span>
-              <button onClick={()=>setPanelOpen(false)} style={{background:"#f2f2f8",border:"none",width:"32px",height:"32px",borderRadius:"8px",cursor:"pointer",fontSize:"16px",color:"#888"}}>✕</button>
-            </div>
-            <Panel/>
+          {/* Controls — always visible, scrollable bottom half */}
+          <div style={{flex:1,overflowY:"auto",background:"#fff",WebkitOverflowScrolling:"touch"}}>
+            {/* Quick action bar — always pinned at top of controls */}
+            {image && (
+              <div style={{display:"flex",gap:"8px",padding:"10px 14px",borderBottom:"1px solid #f0f0f4",background:"#fff",position:"sticky",top:0,zIndex:10}}>
+                <button onClick={handleAutoEnhance} disabled={autoLoading}
+                  style={{flex:1,padding:"9px",background:"linear-gradient(135deg,#6c63ff,#a78bfa)",color:"#fff",border:"none",borderRadius:"9px",fontSize:"12px",fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:"6px"}}>
+                  {autoLoading?<><Spin/>Enhancing...</>:"✨ Auto-Enhance"}
+                </button>
+                <button onClick={()=>{setFilters(DEFAULT_STATE);setAutoMsg(null);}}
+                  style={{padding:"9px 14px",background:"#f2f2f8",border:"none",borderRadius:"9px",fontSize:"12px",fontWeight:600,color:"#888",cursor:"pointer"}}>
+                  Reset
+                </button>
+              </div>
+            )}
+            {autoMsg&&image&&(
+              <div style={{margin:"10px 14px 0",padding:"9px 12px",background:"#f0f0ff",border:"1.5px solid #d8d4ff",borderRadius:"8px"}}>
+                <div style={{fontSize:"11px",color:"#555",lineHeight:1.5}}>{autoMsg}</div>
+              </div>
+            )}
+            <Panel isMobileInline/>
           </div>
-        </>
+        </div>
       )}
 
       {/* Export Modal */}
@@ -689,7 +702,7 @@ export default function App() {
                  :`↓ Download ${EXPORT_FORMATS.find(f=>f.id===exportFormat)?.label} · ${exportScale}×`}
               </Btn>
               <p style={{fontSize:"11px",color:"#bbb",textAlign:"center",marginTop:"8px"}}>
-                iOS: tap Share → Save to Photos after download
+                On iOS iOS: tap Share → Save to Photos after download Android: tap Save Image in the share sheet
               </p>
             </>)}
 
@@ -723,7 +736,7 @@ export default function App() {
                  :`↓ Export for Facebook · ${FB_MODES.find(m=>m.id===fbMode)?.desc}`}
               </Btn>
               <p style={{fontSize:"11px",color:"#bbb",textAlign:"center",marginTop:"8px"}}>
-                iOS: tap Share → Save to Photos after download
+                On iOS iOS: tap Share → Save to Photos after download Android: tap Save Image in the share sheet
               </p>
             </>)}
           </div>
@@ -735,7 +748,7 @@ export default function App() {
 
 // ── Photo Preview ─────────────────────────────────────────────────────────────
 function PhotoPreview({ image,dragging,setDragging,loadImage,fileInputRef,imgRef,splitRef,activeTab,bgResult,bgMode,showBefore,setShowBefore,showSplit,splitPos,setSplitPos,setIsDraggingSplit,cssFilter,tempColor,tempAlpha,filters,isEdited,setImage,setAutoMsg,setBgStatus,setBgSubjectUrl,setBgResult,isMobile }) {
-  const maxH = isMobile ? "48vh" : "calc(100vh - 140px)";
+  const maxH = isMobile ? "40vh" : "calc(100vh - 140px)";
 
   if (!image) return (
     <div className={`drop ${dragging?"on":""}`}
