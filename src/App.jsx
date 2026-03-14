@@ -266,7 +266,7 @@ export default function App(){
       };
       let res,data,attempts=0;
       while(attempts<3){
-        res=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey.trim()}`,
+        res=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key=${apiKey.trim()}`,
           {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
         data=await res.json();
         if(res.status===429){
