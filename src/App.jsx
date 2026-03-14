@@ -1,6 +1,6 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 
-// ── Constants ─────────────────────────────────────────────────────────────────
+// ── Constants ────────────────────────────────────────────────────────────────
 const FILTERS = [
   { key:"brightness", label:"Brightness",  min:0,    max:200, default:100, unit:"%", group:"basic" },
   { key:"contrast",   label:"Contrast",    min:0,    max:200, default:100, unit:"%", group:"basic" },
@@ -14,232 +14,200 @@ const FILTERS = [
   { key:"vignette",   label:"Vignette",    min:0,    max:100, default:0,   unit:"%", group:"style" },
   { key:"fade",       label:"Fade",        min:0,    max:100, default:0,   unit:"%", group:"style" },
 ];
-const DEFAULT_STATE = Object.fromEntries(FILTERS.map(f=>[f.key,f.default]));
+const DEFAULT_STATE = Object.fromEntries(FILTERS.map(f => [f.key, f.default]));
 
+// Gentle presets — subtle improvements, never distort
 const PRESETS = [
-  { name:"Restore Old Photo", icon:"🖼", values:{ brightness:110,contrast:115,saturation:115,exposure:15,sharpness:8, clarity:6, denoise:7,smooth:2,temperature:10,vignette:0, fade:0  }},
-  { name:"Enhance Portrait",  icon:"👤", values:{ brightness:108,contrast:110,saturation:105,exposure:8, sharpness:5, clarity:8, denoise:4,smooth:5,temperature:5, vignette:20,fade:0  }},
-  { name:"Clean & Sharp",     icon:"✨", values:{ brightness:105,contrast:120,saturation:100,exposure:5, sharpness:12,clarity:10,denoise:3,smooth:0,temperature:0, vignette:10,fade:0  }},
-  { name:"Soft & Warm",       icon:"🌅", values:{ brightness:110,contrast:95, saturation:110,exposure:10,sharpness:2, clarity:3, denoise:5,smooth:6,temperature:30,vignette:25,fade:15 }},
+  { name:"Portrait",    icon:"👤", values:{ smooth:5, clarity:5, sharpness:3, contrast:105, saturation:104, temperature:8,  vignette:12, fade:0 }},
+  { name:"Vivid",       icon:"🌈", values:{ contrast:112, saturation:118, clarity:6, sharpness:4, brightness:103, exposure:3 }},
+  { name:"Soft",        icon:"☁️", values:{ smooth:4, brightness:104, contrast:96, saturation:105, fade:8, temperature:6 }},
+  { name:"B&W",         icon:"⚫", values:{ saturation:0, contrast:115, clarity:7, sharpness:3, brightness:102 }},
+  { name:"Warm",        icon:"🌅", values:{ temperature:35, saturation:108, brightness:103, contrast:103, fade:5 }},
+  { name:"Cool",        icon:"❄️", values:{ temperature:-30, saturation:106, brightness:102, contrast:104 }},
+  { name:"Restore",     icon:"🖼", values:{ denoise:4, smooth:2, clarity:5, sharpness:3, contrast:108, saturation:108, exposure:5 }},
+  { name:"Sharp",       icon:"✨", values:{ sharpness:8, clarity:9, contrast:110, denoise:0 }},
 ];
-const GROUPS=[{key:"basic",label:"Basic"},{key:"enhance",label:"Enhance"},{key:"style",label:"Style"}];
 
-const EXPORT_FORMATS=[
-  {id:"png", label:"PNG", desc:"Lossless · Best quality",    ext:"png", mime:"image/png"},
-  {id:"webp",label:"WebP",desc:"Near-lossless · Smallest",   ext:"webp",mime:"image/webp"},
-  {id:"jpg", label:"JPEG",desc:"Compressed · Universal",     ext:"jpg", mime:"image/jpeg"},
-];
-const SCALE_OPTIONS=[
-  {value:1,   label:"1×",  desc:"Original"},
-  {value:2,   label:"2×",  desc:"Double"},
-  {value:4,   label:"4×",  desc:"Ultra HD"},
-  {value:"8k",label:"8K",  desc:"7680px"},
-  {value:"12k",label:"12K",desc:"12288px"},
-];
-const FB_MODES=[
-  {id:"portrait", label:"Portrait Post",  desc:"1080 × 1350px",      w:1080,h:1350,quality:75},
-  {id:"square",   label:"Square Post",    desc:"1080 × 1080px",      w:1080,h:1080,quality:75},
-  {id:"landscape",label:"Landscape Post", desc:"2048px longest side", w:2048,h:null,quality:75},
-  {id:"cover",    label:"Cover Photo",    desc:"851 × 315px",         w:851, h:315, quality:75},
-];
-const BG_COLORS=["#ffffff","#f0f0f0","#000000","#1a1a2e","#2d4a3e","#4a1a2e","#1a3a4a","#fff8e7"];
+const GROUPS = [{ key:"basic",label:"Basic" },{ key:"enhance",label:"Enhance" },{ key:"style",label:"Style" }];
 
-// ── Smart Auto-Enhance (no API needed) ───────────────────────────────────────
-function analyzeAndEnhance(imgEl) {
+const EXPORT_FORMATS = [
+  { id:"jpg", label:"JPEG", desc:"Best for photos",    ext:"jpg",  mime:"image/jpeg" },
+  { id:"png", label:"PNG",  desc:"Lossless",            ext:"png",  mime:"image/png"  },
+  { id:"webp",label:"WebP", desc:"Smallest file size",  ext:"webp", mime:"image/webp" },
+];
+
+const FB_MODES = [
+  { id:"portrait",  label:"Portrait Post",  desc:"1080 × 1350px",     w:1080, h:1350, quality:0.82 },
+  { id:"square",    label:"Square Post",    desc:"1080 × 1080px",     w:1080, h:1080, quality:0.82 },
+  { id:"landscape", label:"Landscape Post", desc:"2048px wide",        w:2048, h:null, quality:0.82 },
+  { id:"cover",     label:"Cover Photo",    desc:"851 × 315px",        w:851,  h:315,  quality:0.82 },
+];
+
+const BG_COLORS = ["#ffffff","#f5f5f5","#000000","#1a1a2e","#2d4a3e","#4a1a2e","#1a3a4a","#fff8e7"];
+
+// ── CSS filter string from values ────────────────────────────────────────────
+function toCSSFilter(f) {
+  const ev = 1 + f.exposure / 100;
+  const bv = (f.brightness / 100) * ev;
+  let s = `brightness(${bv.toFixed(3)}) contrast(${(f.contrast/100).toFixed(3)}) saturate(${(f.saturation/100).toFixed(3)})`;
+  if (f.denoise > 0) s += ` blur(${(f.denoise * 0.06).toFixed(2)}px)`;
+  if (f.sharpness > 0) s += ` contrast(${(1 + f.sharpness * 0.025).toFixed(3)})`;
+  if (f.clarity   > 0) s += ` contrast(${(1 + f.clarity   * 0.018).toFixed(3)})`;
+  return s;
+}
+
+// ── Beauty / Auto-Enhance ────────────────────────────────────────────────────
+function autoEnhance(imgEl) {
   const c = document.createElement("canvas");
-  const scale = Math.min(1, 400/Math.max(imgEl.naturalWidth, imgEl.naturalHeight));
+  const scale = Math.min(1, 200 / Math.max(imgEl.naturalWidth, imgEl.naturalHeight));
   c.width  = Math.round(imgEl.naturalWidth  * scale);
   c.height = Math.round(imgEl.naturalHeight * scale);
   const ctx = c.getContext("2d");
   ctx.drawImage(imgEl, 0, 0, c.width, c.height);
   const data = ctx.getImageData(0, 0, c.width, c.height).data;
 
-  let rSum=0,gSum=0,bSum=0,n=0;
-  let dark=0,bright=0,saturated=0;
-  const histL = new Array(256).fill(0);
-
-  for(let i=0;i<data.length;i+=4){
-    const r=data[i],g=data[i+1],b=data[i+2];
-    rSum+=r; gSum+=g; bSum+=b; n++;
-    const L = 0.299*r + 0.587*g + 0.114*b;
-    histL[Math.round(L)]++;
-    if(L<60)  dark++;
-    if(L>200) bright++;
-    const max=Math.max(r,g,b), min=Math.min(r,g,b);
-    if(max>0&&(max-min)/max>0.3) saturated++;
+  let rSum=0, gSum=0, bSum=0, skin=0, dark=0, blown=0, total=0;
+  for (let i=0; i<data.length; i+=4) {
+    const r=data[i], g=data[i+1], b=data[i+2];
+    rSum+=r; gSum+=g; bSum+=b; total++;
+    const L = 0.299*r+0.587*g+0.114*b;
+    if (L < 25)  dark++;
+    if (L > 248) blown++;
+    if (r>90&&g>40&&b>20&&r>g&&r>b&&(r-b)>20&&L>45&&L<225) skin++;
   }
 
-  const avgL = (0.299*rSum + 0.587*gSum + 0.114*bSum) / n;
-  const avgR = rSum/n, avgB = bSum/n;
-  const darkRatio   = dark/n;
-  const brightRatio = bright/n;
-  const satRatio    = saturated/n;
+  const hasPerson = (skin/total) > 0.04;
+  const isDark    = (dark/total)  > 0.35;
+  const isBlown   = (blown/total) > 0.18;
+  const isWarm    = (rSum-bSum)/total > 28;
+  const isCool    = (bSum-rSum)/total > 20;
 
-  // Noise estimate: measure local variance in a sample
-  let noiseScore = 0;
-  const W=c.width, H=c.height;
-  let noiseSamples=0;
-  for(let y=1;y<H-1;y+=4){
-    for(let x=1;x<W-1;x+=4){
-      const idx=(y*W+x)*4;
-      const idxU=((y-1)*W+x)*4, idxD=((y+1)*W+x)*4;
-      const diff=Math.abs(data[idx]-data[idxU])+Math.abs(data[idx]-data[idxD]);
-      noiseScore+=diff; noiseSamples++;
-    }
+  const adj = { ...DEFAULT_STATE };
+
+  if (hasPerson) {
+    // Beauty portrait mode
+    adj.smooth      = 5;
+    adj.clarity     = 5;
+    adj.sharpness   = 3;
+    adj.contrast    = 106;
+    adj.saturation  = 105;
+    adj.temperature = 8;
+    adj.vignette    = 15;
+    if (isDark)  { adj.exposure = 8;  adj.brightness = 106; }
+    if (isBlown) { adj.brightness = 96; }
+    return { adj, label:"beauty", msg:"Beauty filter applied — portrait enhanced." };
+  } else {
+    // Scene mode
+    adj.clarity    = 6;
+    adj.sharpness  = 4;
+    adj.contrast   = 108;
+    adj.saturation = 106;
+    if (isDark)  { adj.exposure = 10; adj.brightness = 107; }
+    if (isBlown) { adj.brightness = 95; }
+    if (isWarm)  adj.temperature = -8;
+    if (isCool)  adj.temperature =  12;
+    return { adj, label:"scene", msg:"Scene enhanced — clarity and colour boost applied." };
   }
-  noiseScore = noiseScore/noiseSamples;
-
-  // Build adjustments based on analysis
-  const adj = {...DEFAULT_STATE};
-
-  // Exposure / brightness
-  if(avgL < 80)       { adj.exposure = Math.round((80-avgL)*0.6);  adj.brightness = 115; }
-  else if(avgL > 180) { adj.exposure = Math.round((180-avgL)*0.4); adj.brightness = 90; }
-  else                { adj.brightness = Math.round(100 + (100-avgL)*0.15); }
-
-  // Contrast — low contrast if histogram is clustered
-  const spread = histL.reduce((a,v,i)=>a+(v>0?1:0),0);
-  if(spread < 180) adj.contrast = 120;
-  else if(spread > 220) adj.contrast = 95;
-  else adj.contrast = 108;
-
-  // Saturation
-  if(satRatio < 0.15)      adj.saturation = 125;
-  else if(satRatio > 0.6)  adj.saturation = 90;
-  else adj.saturation = 108;
-
-  // Warmth / temperature
-  const warmBias = avgR - avgB;
-  if(warmBias < -15)  adj.temperature = 20;   // too blue/cool → warm up
-  else if(warmBias > 25) adj.temperature = -10; // too warm → cool down
-
-  // Noise
-  if(noiseScore > 12)       { adj.denoise = Math.min(8, Math.round(noiseScore/4)); adj.smooth = 3; }
-  else if(noiseScore > 6)   { adj.denoise = 4; }
-
-  // Sharpness & clarity
-  if(noiseScore < 8)  { adj.sharpness = 6; adj.clarity = 7; }
-  else                { adj.sharpness = 3; adj.clarity = 4; }
-
-  // Analysis text
-  const lines = [];
-  if(avgL < 80)  lines.push("underexposed");
-  if(avgL > 180) lines.push("overexposed");
-  if(spread < 180) lines.push("low contrast");
-  if(satRatio < 0.15) lines.push("desaturated colors");
-  if(noiseScore > 10) lines.push("visible noise/grain");
-  if(warmBias < -15) lines.push("cool color cast");
-  if(warmBias > 25)  lines.push("warm color cast");
-
-  const analysis = lines.length === 0
-    ? "Photo looks well-balanced. Applied subtle sharpness and clarity boost."
-    : `Detected: ${lines.join(", ")}. Adjustments applied automatically.`;
-
-  return { adj, analysis };
 }
 
-// ── Pixel helpers ─────────────────────────────────────────────────────────────
-function gaussianBlur(data,w,h,sigma){
-  if(sigma<=0)return data;
-  const r=Math.ceil(sigma*2),size=r*2+1;
-  const k=new Float32Array(size*size);let s=0;
-  for(let y=-r;y<=r;y++)for(let x=-r;x<=r;x++){const v=Math.exp(-(x*x+y*y)/(2*sigma*sigma));k[(y+r)*size+(x+r)]=v;s+=v;}
-  for(let i=0;i<k.length;i++)k[i]/=s;
-  const out=new Uint8ClampedArray(data.length);
-  for(let y=0;y<h;y++)for(let x=0;x<w;x++){
-    let r2=0,g=0,b=0,a=0;
-    for(let ky=0;ky<size;ky++)for(let kx=0;kx<size;kx++){
-      const sy=Math.min(Math.max(y+ky-r,0),h-1),sx=Math.min(Math.max(x+kx-r,0),w-1);
-      const kv=k[ky*size+kx],idx=(sy*w+sx)*4;
-      r2+=data[idx]*kv;g+=data[idx+1]*kv;b+=data[idx+2]*kv;a+=data[idx+3]*kv;
-    }
-    const i=(y*w+x)*4;out[i]=r2;out[i+1]=g;out[i+2]=b;out[i+3]=a;
+// ── Cross-platform download ───────────────────────────────────────────────────
+function downloadBlob(blob, name) {
+  const url = URL.createObjectURL(blob);
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+  if (isIOS) { window.location.href = url; setTimeout(()=>URL.revokeObjectURL(url),10000); return; }
+  const a = document.createElement("a");
+  a.href = url; a.download = name;
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a);
+  setTimeout(()=>URL.revokeObjectURL(url), 5000);
+}
+
+function canvasToBlob(canvas, mime, quality) {
+  return new Promise(resolve => {
+    if (canvas.toBlob) { canvas.toBlob(resolve, mime, quality); return; }
+    const d=canvas.toDataURL(mime,quality), arr=d.split(","), bstr=atob(arr[1]);
+    let n=bstr.length; const u=new Uint8Array(n);
+    while(n--) u[n]=bstr.charCodeAt(n);
+    resolve(new Blob([u],{type:mime}));
+  });
+}
+
+// ── Export rendering (canvas — only used when saving) ───────────────────────
+async function renderForExport(imgEl, filters, targetW, targetH) {
+  // Cap at safe browser canvas limit (~16MP)
+  const MAX_PX = 16_000_000;
+  let W = targetW, H = targetH;
+  if (W * H > MAX_PX) {
+    const s = Math.sqrt(MAX_PX / (W * H));
+    W = Math.floor(W * s); H = Math.floor(H * s);
   }
-  return out;
-}
-function unsharpMask(data,w,h,sigma,amount){
-  const bl=gaussianBlur(data,w,h,sigma);
-  const out=new Uint8ClampedArray(data.length);
-  for(let i=0;i<data.length;i+=4){
-    out[i]=Math.min(255,Math.max(0,data[i]+amount*(data[i]-bl[i])));
-    out[i+1]=Math.min(255,Math.max(0,data[i+1]+amount*(data[i+1]-bl[i+1])));
-    out[i+2]=Math.min(255,Math.max(0,data[i+2]+amount*(data[i+2]-bl[i+2])));
-    out[i+3]=data[i+3];
+  const canvas = document.createElement("canvas");
+  canvas.width = W; canvas.height = H;
+  const ctx = canvas.getContext("2d");
+
+  // Draw with CSS filters
+  const ev = 1+filters.exposure/100, bv = (filters.brightness/100)*ev;
+  ctx.filter = `brightness(${bv}) contrast(${filters.contrast/100}) saturate(${filters.saturation/100})`;
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+
+  // Smart-crop for exact dimensions
+  const sW=imgEl.naturalWidth, sH=imgEl.naturalHeight;
+  const sA=sW/sH, tA=W/H;
+  let sx=0,sy=0,sw=sW,sh=sH;
+  if (Math.abs(sA-tA) > 0.01) {
+    if (sA>tA) { sw=sH*tA; sx=(sW-sw)/2; }
+    else       { sh=sW/tA; sy=(sH-sh)/2; }
   }
-  return out;
-}
-function getScaleForTarget(imgW,imgH,v){
-  if(v==="8k") return Math.max(1,7680/imgW);
-  if(v==="12k")return Math.max(1,12288/imgW);
-  return v;
-}
-async function renderHighQuality(imgEl,filters,scaleVal){
-  const scale=getScaleForTarget(imgEl.naturalWidth,imgEl.naturalHeight,scaleVal);
-  const W=Math.round(imgEl.naturalWidth*scale),H=Math.round(imgEl.naturalHeight*scale);
-  const canvas=document.createElement("canvas");canvas.width=W;canvas.height=H;
-  const ctx=canvas.getContext("2d");
-  const isHuge=W*H>16_000_000;
-  const ev=1+filters.exposure/100,bv=(filters.brightness/100)*ev;
-  let cssF=`brightness(${bv}) contrast(${filters.contrast/100}) saturate(${filters.saturation/100})`;
-  if(isHuge){if(filters.denoise>0)cssF+=` blur(${filters.denoise*0.06}px)`;if(filters.sharpness>0)cssF+=` contrast(${1+filters.sharpness*0.03})`;}
-  ctx.filter=cssF;ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality="high";
-  ctx.drawImage(imgEl,0,0,W,H);ctx.filter="none";
-  if(!isHuge){
-    let data=ctx.getImageData(0,0,W,H).data;
-    if(filters.denoise>0)data=gaussianBlur(data,W,H,filters.denoise*0.18);
-    if(filters.smooth>0){const sm=gaussianBlur(data,W,H,filters.smooth*0.25);const op=filters.smooth/10*0.7;for(let i=0;i<data.length;i+=4){data[i]=data[i]*(1-op)+sm[i]*op;data[i+1]=data[i+1]*(1-op)+sm[i+1]*op;data[i+2]=data[i+2]*(1-op)+sm[i+2]*op;}}
-    if(filters.clarity>0)data=unsharpMask(data,W,H,8*Math.min(scale,2),filters.clarity*0.1);
-    if(filters.sharpness>0)data=unsharpMask(data,W,H,1.2*Math.min(scale,2),filters.sharpness*0.12);
-    ctx.putImageData(new ImageData(new Uint8ClampedArray(data),W,H),0,0);
+  ctx.drawImage(imgEl, sx, sy, sw, sh, 0, 0, W, H);
+  ctx.filter = "none";
+
+  // Warmth overlay
+  if (filters.temperature !== 0) {
+    const a = Math.abs(filters.temperature)/300;
+    ctx.globalCompositeOperation = "overlay";
+    ctx.fillStyle = filters.temperature>0 ? `rgba(255,140,0,${a})` : `rgba(100,149,237,${a})`;
+    ctx.fillRect(0,0,W,H); ctx.globalCompositeOperation = "source-over";
   }
-  if(filters.temperature!==0){const a=Math.abs(filters.temperature)/300;ctx.globalCompositeOperation="overlay";ctx.fillStyle=filters.temperature>0?`rgba(255,140,0,${a})`:`rgba(100,149,237,${a})`;ctx.fillRect(0,0,W,H);ctx.globalCompositeOperation="source-over";}
-  if(filters.fade>0){ctx.globalCompositeOperation="screen";ctx.fillStyle=`rgba(255,255,255,${filters.fade/180})`;ctx.fillRect(0,0,W,H);ctx.globalCompositeOperation="source-over";}
-  if(filters.vignette>0){const g=ctx.createRadialGradient(W/2,H/2,W*0.3,W/2,H/2,W*0.85);g.addColorStop(0,"rgba(0,0,0,0)");g.addColorStop(1,`rgba(0,0,0,${filters.vignette/100})`);ctx.globalCompositeOperation="multiply";ctx.fillStyle=g;ctx.fillRect(0,0,W,H);ctx.globalCompositeOperation="source-over";}
-  return{canvas,W,H};
-}
-async function renderFacebook(imgEl,filters,fbMode){
-  let tW=fbMode.w,tH=fbMode.h;
-  const sW=imgEl.naturalWidth,sH=imgEl.naturalHeight;
-  if(fbMode.id==="landscape"){const sc=Math.min(1,2048/Math.max(sW,sH));tW=Math.round(sW*sc);tH=Math.round(sH*sc);}
-  else if(!tH)tH=Math.round(sH*(tW/sW));
-  const canvas=document.createElement("canvas");canvas.width=tW;canvas.height=tH;
-  const ctx=canvas.getContext("2d");
-  const ev=1+filters.exposure/100,bv=(filters.brightness/100)*ev;
-  ctx.filter=`brightness(${bv}) contrast(${filters.contrast/100}) saturate(${filters.saturation/100})`;
-  ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality="high";
-  const sA=sW/sH,tA=tW/tH;let sx=0,sy=0,sw=sW,sh=sH;
-  if(sA>tA){sw=sH*tA;sx=(sW-sw)/2;}else{sh=sW/tA;sy=(sH-sh)/2;}
-  ctx.drawImage(imgEl,sx,sy,sw,sh,0,0,tW,tH);ctx.filter="none";
-  if(filters.temperature!==0){const a=Math.abs(filters.temperature)/300;ctx.globalCompositeOperation="overlay";ctx.fillStyle=filters.temperature>0?`rgba(255,140,0,${a})`:`rgba(100,149,237,${a})`;ctx.fillRect(0,0,tW,tH);ctx.globalCompositeOperation="source-over";}
-  if(filters.vignette>0){const g=ctx.createRadialGradient(tW/2,tH/2,tW*0.3,tW/2,tH/2,tW*0.85);g.addColorStop(0,"rgba(0,0,0,0)");g.addColorStop(1,`rgba(0,0,0,${filters.vignette/100})`);ctx.globalCompositeOperation="multiply";ctx.fillStyle=g;ctx.fillRect(0,0,tW,tH);ctx.globalCompositeOperation="source-over";}
-  return{canvas,W:tW,H:tH};
-}
-function buildCSSFilter(f){
-  const ev=1+f.exposure/100,bv=(f.brightness/100)*ev;
-  let s=`brightness(${bv}) contrast(${f.contrast/100}) saturate(${f.saturation/100})`;
-  if(f.denoise>0)s+=` blur(${f.denoise*0.07}px)`;
-  return s;
+  // Fade
+  if (filters.fade > 0) {
+    ctx.globalCompositeOperation = "screen";
+    ctx.fillStyle = `rgba(255,255,255,${filters.fade/180})`;
+    ctx.fillRect(0,0,W,H); ctx.globalCompositeOperation = "source-over";
+  }
+  // Vignette
+  if (filters.vignette > 0) {
+    const g = ctx.createRadialGradient(W/2,H/2,W*0.3,W/2,H/2,W*0.85);
+    g.addColorStop(0,"rgba(0,0,0,0)");
+    g.addColorStop(1,`rgba(0,0,0,${filters.vignette/100})`);
+    ctx.globalCompositeOperation = "multiply";
+    ctx.fillStyle = g; ctx.fillRect(0,0,W,H);
+    ctx.globalCompositeOperation = "source-over";
+  }
+  return { canvas, W, H };
 }
 
 // ── Component ────────────────────────────────────────────────────────────────
-export default function App(){
+export default function App() {
   const [image,        setImage]        = useState(null);
   const [filters,      setFilters]      = useState(DEFAULT_STATE);
   const [activeTab,    setActiveTab]    = useState("edit");
-  const [activeGroup,  setActiveGroup]  = useState("enhance");
-  const [activeFilter, setActiveFilter] = useState(null);
+  const [activeGroup,  setActiveGroup]  = useState("basic");
   const [showBefore,   setShowBefore]   = useState(false);
+  const [splitPos,     setSplitPos]     = useState(50);
+  const [isDraggingSplit, setIsDraggingSplit] = useState(false);
   const [dragging,     setDragging]     = useState(false);
+  const [panelOpen,    setPanelOpen]    = useState(false);
   const [autoMsg,      setAutoMsg]      = useState(null);
   const [autoLoading,  setAutoLoading]  = useState(false);
   const [showExport,   setShowExport]   = useState(false);
   const [exportTab,    setExportTab]    = useState("standard");
-  const [exportFormat, setExportFormat] = useState("png");
+  const [exportFormat, setExportFormat] = useState("jpg");
+  const [exportQuality,setExportQuality]= useState(92);
   const [exportScale,  setExportScale]  = useState(2);
-  const [exportQuality,setExportQuality]= useState(97);
   const [exporting,    setExporting]    = useState(false);
   const [exportDone,   setExportDone]   = useState(false);
-  const [exportInfo,   setExportInfo]   = useState(null);
+  const [exportInfo,   setExportInfo]   = useState("");
   const [fbMode,       setFbMode]       = useState("portrait");
   const [fbExporting,  setFbExporting]  = useState(false);
   const [fbDone,       setFbDone]       = useState(false);
@@ -250,500 +218,521 @@ export default function App(){
   const [bgColor,      setBgColor]      = useState("#ffffff");
   const [bgBlur,       setBgBlur]       = useState(14);
   const [bgResult,     setBgResult]     = useState(null);
+  const [isMobile,     setIsMobile]     = useState(false);
 
   const fileInputRef = useRef(null);
   const imgRef       = useRef(null);
+  const splitRef     = useRef(null);
 
-  const loadImage = file=>{
-    if(!file||!file.type.startsWith("image/"))return;
-    const reader=new FileReader();
-    reader.onload=e=>{setImage(e.target.result);setFilters(DEFAULT_STATE);setAutoMsg(null);setBgStatus("idle");setBgSubjectUrl(null);setBgResult(null);};
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768);
+    check(); window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, []);
+
+  useEffect(() => {
+    if (bgSubjectUrl && bgStatus==="done") buildComposite(bgSubjectUrl, bgMode, bgColor, bgBlur);
+  }, [bgMode, bgColor, bgBlur, bgSubjectUrl]);
+
+  // Split drag handling
+  const onSplitMove = useCallback((clientX) => {
+    if (!splitRef.current) return;
+    const rect = splitRef.current.getBoundingClientRect();
+    setSplitPos(Math.min(95, Math.max(5, ((clientX - rect.left) / rect.width) * 100)));
+  }, []);
+
+  useEffect(() => {
+    if (!isDraggingSplit) return;
+    const mm = e => onSplitMove(e.clientX);
+    const tm = e => { e.preventDefault(); onSplitMove(e.touches[0].clientX); };
+    const up = () => setIsDraggingSplit(false);
+    window.addEventListener("mousemove", mm);
+    window.addEventListener("mouseup", up);
+    window.addEventListener("touchmove", tm, { passive:false });
+    window.addEventListener("touchend", up);
+    return () => { window.removeEventListener("mousemove",mm); window.removeEventListener("mouseup",up); window.removeEventListener("touchmove",tm); window.removeEventListener("touchend",up); };
+  }, [isDraggingSplit, onSplitMove]);
+
+  const loadImage = file => {
+    if (!file || !file.type.startsWith("image/")) return;
+    const reader = new FileReader();
+    reader.onload = e => {
+      setImage(e.target.result);
+      setFilters(DEFAULT_STATE);
+      setAutoMsg(null);
+      setBgStatus("idle"); setBgSubjectUrl(null); setBgResult(null);
+      setSplitPos(50); setShowBefore(false);
+      if (isMobile) setPanelOpen(true);
+    };
     reader.readAsDataURL(file);
   };
 
-  useEffect(()=>{
-    if(bgSubjectUrl&&bgStatus==="done") buildComposite(bgSubjectUrl,bgMode,bgColor,bgBlur);
-  },[bgMode,bgColor,bgBlur,bgSubjectUrl]);
-
-  // ── Smart Auto-Enhance ───────────────────────────────────────────────────
+  // ── Auto-Enhance ──────────────────────────────────────────────────────────
   const handleAutoEnhance = () => {
-    const img = imgRef.current;
-    if(!img) return;
-    setAutoLoading(true);
-    setAutoMsg(null);
-    setTimeout(()=>{
+    const img = imgRef.current; if (!img) return;
+    setAutoLoading(true); setAutoMsg(null);
+    setTimeout(() => {
       try {
-        const {adj, analysis} = analyzeAndEnhance(img);
-        setFilters({...DEFAULT_STATE,...adj});
-        setAutoMsg(analysis);
-      } catch(e) {
-        setAutoMsg("Could not analyze — try a preset instead.");
-      }
+        const { adj, msg } = autoEnhance(img);
+        setFilters({ ...DEFAULT_STATE, ...adj });
+        setAutoMsg(msg);
+        setSplitPos(50); // reset split to center
+      } catch(e) { setAutoMsg("Could not analyse — try a preset."); }
       setAutoLoading(false);
-    }, 50);
+    }, 30);
   };
 
-  // ── Background Removal ───────────────────────────────────────────────────
-  const handleRemoveBg = async()=>{
-    if(!image||bgStatus==="loading")return;
-    setBgStatus("loading");setBgProgress(0);setBgSubjectUrl(null);setBgResult(null);
-    try{
-      const{removeBackground}=await import("@imgly/background-removal");
-      const res=await fetch(image);
-      const blob=await res.blob();
-      const resultBlob=await removeBackground(blob,{progress:(key,cur,total)=>setBgProgress(Math.round(cur/total*100)),model:"medium"});
-      const url=URL.createObjectURL(resultBlob);
-      setBgSubjectUrl(url);setBgStatus("done");
-      await buildComposite(url,bgMode,bgColor,bgBlur);
-    }catch(e){console.error(e);setBgStatus("error");}
+  // ── Background removal ────────────────────────────────────────────────────
+  const handleRemoveBg = async () => {
+    if (!image || bgStatus==="loading") return;
+    setBgStatus("loading"); setBgProgress(0); setBgSubjectUrl(null); setBgResult(null);
+    try {
+      const { removeBackground } = await import("@imgly/background-removal");
+      const res = await fetch(image);
+      const blob = await res.blob();
+      const out  = await removeBackground(blob, { progress:(k,c,t)=>setBgProgress(Math.round(c/t*100)), model:"medium" });
+      const url  = URL.createObjectURL(out);
+      setBgSubjectUrl(url); setBgStatus("done");
+      await buildComposite(url, bgMode, bgColor, bgBlur);
+    } catch(e) { console.error(e); setBgStatus("error"); }
   };
 
-  const buildComposite=async(subjectUrl,mode,color,blurPx)=>{
-    const orig=imgRef.current;
-    if(!orig||!subjectUrl)return;
-    const W=orig.naturalWidth,H=orig.naturalHeight;
-    const sub=new Image();sub.src=subjectUrl;
-    await new Promise(r=>{sub.onload=r;if(sub.complete)r();});
-    const canvas=document.createElement("canvas");canvas.width=W;canvas.height=H;
-    const ctx=canvas.getContext("2d");
-    if(mode==="transparent"){ctx.drawImage(sub,0,0,W,H);}
-    else if(mode==="color"){ctx.fillStyle=color;ctx.fillRect(0,0,W,H);ctx.drawImage(sub,0,0,W,H);}
-    else if(mode==="blur"){ctx.filter=`blur(${blurPx}px)`;ctx.drawImage(orig,-30,-30,W+60,H+60);ctx.filter="none";ctx.drawImage(sub,0,0,W,H);}
-    setBgResult(canvas.toDataURL("image/png"));
+  const buildComposite = async (subUrl, mode, color, blur) => {
+    const orig = imgRef.current; if (!orig || !subUrl) return;
+    const W=orig.naturalWidth, H=orig.naturalHeight;
+    const sub = new Image(); sub.src = subUrl;
+    await new Promise(r => { sub.onload=r; if(sub.complete) r(); });
+    const c = document.createElement("canvas"); c.width=W; c.height=H;
+    const ctx = c.getContext("2d");
+    if (mode==="transparent") ctx.drawImage(sub,0,0,W,H);
+    else if (mode==="color")  { ctx.fillStyle=color; ctx.fillRect(0,0,W,H); ctx.drawImage(sub,0,0,W,H); }
+    else if (mode==="blur")   { ctx.filter=`blur(${blur}px)`; ctx.drawImage(orig,-30,-30,W+60,H+60); ctx.filter="none"; ctx.drawImage(sub,0,0,W,H); }
+    setBgResult(c.toDataURL("image/png"));
   };
 
-  const downloadBgResult=()=>{if(!bgResult)return;const a=document.createElement("a");a.download="photolab_bg.png";a.href=bgResult;a.click();};
+  const downloadBgResult = async () => {
+    if (!bgResult) return;
+    const blob = await (await fetch(bgResult)).blob();
+    downloadBlob(blob, "photolab_nobg.png");
+  };
 
-  // ── Export ───────────────────────────────────────────────────────────────
-  const handleExport=async()=>{
-    if(!imgRef.current)return;
-    setExporting(true);setExportDone(false);setExportInfo(null);
-    try{
-      const{canvas,W,H}=await renderHighQuality(imgRef.current,filters,exportScale);
-      const fmt=EXPORT_FORMATS.find(f=>f.id===exportFormat);
-      const quality=exportFormat==="png"?undefined:exportQuality/100;
-      const dataUrl=canvas.toDataURL(fmt.mime,quality);
-      const bytes=Math.round((dataUrl.length*3)/4/1024);
-      setExportInfo(`${W}×${H}px · ~${bytes>1024?(bytes/1024).toFixed(1)+"MB":bytes+"KB"}`);
-      const a=document.createElement("a");a.download=`photolab_${exportScale}x.${fmt.ext}`;a.href=dataUrl;a.click();
-      setExportDone(true);setTimeout(()=>setExportDone(false),3500);
-    }catch(e){console.error(e);}
+  // ── Standard export ───────────────────────────────────────────────────────
+  const handleExport = async () => {
+    const img = imgRef.current; if (!img) return;
+    setExporting(true); setExportDone(false); setExportInfo("");
+    try {
+      const { w: W, h: H } = getExportDimensions();
+      const { canvas, W:rW, H:rH } = await renderForExport(img, filters, W, H);
+      const fmt = EXPORT_FORMATS.find(f=>f.id===exportFormat);
+      const q   = exportFormat==="png" ? undefined : exportQuality/100;
+      const blob = await canvasToBlob(canvas, fmt.mime, q);
+      const kb = Math.round(blob.size/1024);
+      setExportInfo(`${rW.toLocaleString()} × ${rH.toLocaleString()}px · ${kb>1024?(kb/1024).toFixed(1)+"MB":kb+"KB"}`);
+      downloadBlob(blob, `photolab.${fmt.ext}`);
+      setExportDone(true); setTimeout(()=>setExportDone(false),4000);
+    } catch(e) { console.error(e); setExportInfo("Export failed — try a lower scale."); }
     setExporting(false);
   };
-  const handleFbExport=async()=>{
-    if(!imgRef.current)return;
-    setFbExporting(true);setFbDone(false);
-    try{
-      const mode=FB_MODES.find(m=>m.id===fbMode);
-      const{canvas,W,H}=await renderFacebook(imgRef.current,filters,mode);
-      const dataUrl=canvas.toDataURL("image/jpeg",mode.quality/100);
-      const bytes=Math.round((dataUrl.length*3)/4/1024);
-      setExportInfo(`${W}×${H}px · ~${bytes>1024?(bytes/1024).toFixed(1)+"MB":bytes+"KB"}`);
-      const a=document.createElement("a");a.download=`facebook_${mode.id}.jpg`;a.href=dataUrl;a.click();
-      setFbDone(true);setTimeout(()=>setFbDone(false),3500);
-    }catch(e){console.error(e);}
+
+  // ── Facebook export ───────────────────────────────────────────────────────
+  const handleFbExport = async () => {
+    const img = imgRef.current; if (!img) return;
+    setFbExporting(true); setFbDone(false);
+    try {
+      const mode = FB_MODES.find(m=>m.id===fbMode);
+      let tW=mode.w, tH=mode.h;
+      const sW=img.naturalWidth, sH=img.naturalHeight;
+      if (!tH) { const sc=Math.min(1,tW/Math.max(sW,sH)); tW=Math.round(sW*sc); tH=Math.round(sH*sc); }
+      const { canvas, W, H } = await renderForExport(img, filters, tW, tH);
+      const blob = await canvasToBlob(canvas,"image/jpeg",mode.quality);
+      const kb   = Math.round(blob.size/1024);
+      setExportInfo(`${W}×${H}px · ${kb>1024?(kb/1024).toFixed(1)+"MB":kb+"KB"}`);
+      downloadBlob(blob,`facebook_${mode.id}.jpg`);
+      setFbDone(true); setTimeout(()=>setFbDone(false),4000);
+    } catch(e) { console.error(e); }
     setFbExporting(false);
   };
 
-  const isEdited=Object.entries(filters).some(([k,v])=>v!==DEFAULT_STATE[k]);
-  const cssFilter=buildCSSFilter(filters);
-  const tempAlpha=Math.abs(filters.temperature)/300;
-  const tempColor=filters.temperature>0?`rgba(255,140,0,${tempAlpha})`:`rgba(100,149,237,${tempAlpha})`;
-  const natW=imgRef.current?.naturalWidth||0,natH=imgRef.current?.naturalHeight||0;
-  const ps=getScaleForTarget(natW||1,natH||1,exportScale);
-  const previewW=Math.round(natW*ps),previewH=Math.round(natH*ps);
+  const isEdited     = Object.entries(filters).some(([k,v])=>v!==DEFAULT_STATE[k]);
+  const cssFilter    = toCSSFilter(filters);
+  const tempAlpha    = Math.abs(filters.temperature)/300;
+  const tempColor    = filters.temperature>0?`rgba(255,140,0,${tempAlpha})`:`rgba(100,149,237,${tempAlpha})`;
+  const showSplit    = isEdited && activeTab==="edit";
+  const natW         = imgRef.current?.naturalWidth  || 0;
+  const natH         = imgRef.current?.naturalHeight || 0;
+  const getExportDimensions = () => {
+    if (!natW || !natH) return { w: 0, h: 0 };
+    const MAX_PX = 16_000_000;
+    let scale;
+    if (exportScale === "8k")       scale = 7680  / Math.max(natW, natH);
+    else if (exportScale === "12k") scale = 12288 / Math.max(natW, natH);
+    else                            scale = exportScale;
+    let w = Math.round(natW * scale);
+    let h = Math.round(natH * scale);
+    if (w * h > MAX_PX) { const s = Math.sqrt(MAX_PX / (w*h)); w = Math.floor(w*s); h = Math.floor(h*s); }
+    return { w, h };
+  };
+  const { w: exportW, h: exportH } = getExportDimensions();
 
-  // ── Render ───────────────────────────────────────────────────────────────
-  return(
-    <div style={{fontFamily:"-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif",background:"#f7f8fa",minHeight:"100vh",color:"#1a1a1a"}}>
-      <style>{`
-        *{box-sizing:border-box;margin:0;padding:0}
-        ::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:#f0f0f0}::-webkit-scrollbar-thumb{background:#d0d0d0;border-radius:2px}
-        .sl{-webkit-appearance:none;appearance:none;width:100%;height:3px;border-radius:2px;outline:none;cursor:pointer;background:linear-gradient(to right,#6c63ff var(--v,50%),#e0e0e8 var(--v,50%))}
-        .sl::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:#6c63ff;border:2px solid #fff;box-shadow:0 1px 4px rgba(108,99,255,.4);cursor:grab;transition:transform .15s}
-        .sl::-webkit-slider-thumb:active{cursor:grabbing;transform:scale(1.3)}
-        .btn{border:none;cursor:pointer;transition:all .18s;font-family:inherit;letter-spacing:0}
-        .btn:hover{opacity:.88}.btn:active{transform:scale(.97)}
-        .drop{border:2px dashed #d8d8e8;cursor:pointer;transition:all .25s;border-radius:16px}
-        .drop:hover,.drop.on{border-color:#6c63ff;background:rgba(108,99,255,.03)}
-        .pset{transition:all .18s;cursor:pointer;border:1.5px solid #e8e8f0;background:#fff;text-align:left;padding:10px 12px;border-radius:10px}
-        .pset:hover{border-color:#6c63ff44;background:#faf9ff;transform:translateY(-1px);box-shadow:0 2px 8px rgba(108,99,255,.08)}
-        .fmt{transition:all .18s;cursor:pointer;padding:11px 14px;border:1.5px solid #e8e8f0;background:#fff;text-align:left;border-radius:10px;width:100%}
-        .fmt:hover{border-color:#6c63ff44}.fmt.on{border-color:#6c63ff;background:#faf9ff}
-        .sc{transition:all .18s;cursor:pointer;padding:8px 4px;border:1.5px solid #e8e8f0;background:#fff;text-align:center;border-radius:8px;flex:1}
-        .sc:hover{border-color:#6c63ff44}.sc.on{border-color:#6c63ff;background:#faf9ff}
-        .tool-opt{width:100%;padding:11px 14px;margin-bottom:7px;border:1.5px solid #e8e8f0;background:#fff;border-radius:10px;text-align:left;cursor:pointer;display:flex;align-items:center;gap:10px;transition:all .18s;font-family:inherit}
-        .tool-opt:hover{border-color:#6c63ff44;transform:translateY(-1px)}.tool-opt.on{border-color:#6c63ff;background:#faf9ff}
-        .checker{background-image:linear-gradient(45deg,#e0e0e0 25%,transparent 25%),linear-gradient(-45deg,#e0e0e0 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#e0e0e0 75%),linear-gradient(-45deg,transparent 75%,#e0e0e0 75%);background-size:16px 16px;background-position:0 0,0 8px,8px -8px,-8px 0}
-        .tab-btn{padding:7px 18px;border:none;cursor:pointer;font-family:inherit;font-size:13px;font-weight:500;transition:all .18s;border-radius:8px;letter-spacing:0}
-        @keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
-        @keyframes fadein{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
-        @keyframes slideup{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
-        @keyframes pulse{0%,100%{opacity:.5}50%{opacity:1}}
-      `}</style>
+  // ── Panel content (shared desktop/mobile) ────────────────────────────────
+  const Panel = () => (
+    <div style={{display:"flex",flexDirection:"column",gap:"18px",padding:isMobile?"16px 16px 80px":"16px"}}>
 
-      {/* ── Header ── */}
-      <div style={{background:"#fff",borderBottom:"1px solid #eeeef4",padding:"0 24px",height:"58px",display:"flex",alignItems:"center",justifyContent:"space-between",boxShadow:"0 1px 4px rgba(0,0,0,.05)"}}>
-        <div style={{display:"flex",alignItems:"center",gap:"10px"}}>
-          <div style={{width:"32px",height:"32px",background:"linear-gradient(135deg,#6c63ff,#a78bfa)",borderRadius:"8px",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"16px"}}>✨</div>
+      {/* TOOLS */}
+      {activeTab==="tools" && (
+        <div style={{display:"flex",flexDirection:"column",gap:"14px"}}>
           <div>
-            <div style={{fontSize:"16px",fontWeight:700,color:"#1a1a2e",letterSpacing:"-.3px"}}>PHOTOlab</div>
-            <div style={{fontSize:"10px",color:"#aaa",letterSpacing:".05em",marginTop:"-1px"}}>Enhance · Restore · Export</div>
+            <Label>Background Removal</Label>
+            <p style={{fontSize:"12px",color:"#aaa",lineHeight:1.6,marginBottom:"12px"}}>AI runs in your browser — private &amp; offline.</p>
+            <Btn onClick={handleRemoveBg} disabled={!image||bgStatus==="loading"}
+              color={bgStatus==="done"?"#f0fff4":image?"purple":"#f0f0f0"}
+              textColor={bgStatus==="done"?"#16a34a":image?"#fff":"#bbb"}>
+              {bgStatus==="loading"?<Row><Spin/>Processing... {bgProgress}%</Row>
+               :bgStatus==="done"?"✓ Done — Remove Again":"✂ Remove Background"}
+            </Btn>
+            {bgStatus==="loading"&&<Bar value={bgProgress}/>}
+            {bgStatus==="error"&&<p style={{fontSize:"12px",color:"#ef4444",marginTop:"6px"}}>⚠ Failed — try a JPG or PNG</p>}
+            {!image&&<Empty>Upload a photo first</Empty>}
+          </div>
+
+          {bgStatus==="done"&&bgSubjectUrl&&(
+            <div style={{animation:"fadein .3s"}}>
+              <Label>Background Style</Label>
+              {[{id:"transparent",label:"Transparent",icon:"◻"},{id:"color",label:"Solid Color",icon:"🎨"},{id:"blur",label:"Blur Original",icon:"✦"}].map(o=>(
+                <button key={o.id} onClick={()=>setBgMode(o.id)}
+                  style={{...toolOpt,border:`1.5px solid ${bgMode===o.id?"#6c63ff":"#e8e8f0"}`,background:bgMode===o.id?"#faf9ff":"#fff"}}>
+                  <span style={{fontSize:"16px"}}>{o.icon}</span>
+                  <span style={{fontSize:"13px",fontWeight:600,color:bgMode===o.id?"#6c63ff":"#444"}}>{o.label}</span>
+                  {bgMode===o.id&&<span style={{marginLeft:"auto",color:"#6c63ff"}}>✓</span>}
+                </button>
+              ))}
+              {bgMode==="color"&&(
+                <div style={subPanel}>
+                  <SubLabel>Color</SubLabel>
+                  <div style={{display:"flex",gap:"7px",flexWrap:"wrap",marginBottom:"10px"}}>
+                    {BG_COLORS.map(c=>(
+                      <div key={c} onClick={()=>setBgColor(c)}
+                        style={{width:"26px",height:"26px",borderRadius:"6px",background:c,border:`2.5px solid ${bgColor===c?"#6c63ff":"#ddd"}`,cursor:"pointer",flexShrink:0}}/>
+                    ))}
+                  </div>
+                  <input type="color" value={bgColor} onChange={e=>setBgColor(e.target.value)}
+                    style={{width:"100%",height:"34px",border:"1.5px solid #e8e8f0",borderRadius:"8px",cursor:"pointer"}}/>
+                </div>
+              )}
+              {bgMode==="blur"&&(
+                <div style={subPanel}>
+                  <div style={{display:"flex",justifyContent:"space-between",marginBottom:"8px"}}>
+                    <SubLabel>Blur</SubLabel><span style={{fontSize:"12px",color:"#6c63ff",fontWeight:600}}>{bgBlur}px</span>
+                  </div>
+                  <input type="range" className="sl" min={2} max={40} step={1} value={bgBlur}
+                    style={{"--v":`${((bgBlur-2)/38)*100}%`}} onChange={e=>setBgBlur(+e.target.value)}/>
+                </div>
+              )}
+              {bgResult&&(
+                <>
+                  <div style={{position:"relative",borderRadius:"10px",overflow:"hidden",margin:"10px 0",border:"1.5px solid #eee"}}>
+                    {bgMode==="transparent"&&<div className="checker" style={{position:"absolute",inset:0}}/>}
+                    <img src={bgResult} alt="result" style={{width:"100%",display:"block",position:"relative"}}/>
+                  </div>
+                  <Btn onClick={downloadBgResult} color="purple" textColor="#fff">↓ Download PNG</Btn>
+                </>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* EDIT */}
+      {activeTab==="edit"&&(<>
+        {image&&(
+          <div>
+            <Label>Auto Enhance & Beauty Filter</Label>
+            <Btn onClick={handleAutoEnhance} disabled={autoLoading} color="purple" textColor="#fff"
+              style={{marginBottom:"8px"}}>
+              {autoLoading?<Row><Spin color="#fff"/>Analysing...</Row>:"✨ Auto-Enhance & Beauty Filter"}
+            </Btn>
+            {autoMsg&&(
+              <div style={{padding:"10px 12px",background:"#f0f0ff",border:"1.5px solid #d8d4ff",borderRadius:"8px",animation:"fadein .3s"}}>
+                <div style={{fontSize:"12px",color:"#555",lineHeight:1.5}}>{autoMsg}</div>
+              </div>
+            )}
+          </div>
+        )}
+
+        <div>
+          <Label>Presets</Label>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"7px"}}>
+            {PRESETS.map(p=>(
+              <button key={p.name} onClick={()=>{ setFilters({...DEFAULT_STATE,...p.values}); setAutoMsg(null); }}
+                style={{padding:"10px 12px",border:"1.5px solid #e8e8f0",background:"#fff",borderRadius:"10px",textAlign:"left",cursor:"pointer",transition:"all .18s",fontFamily:"inherit"}}>
+                <div style={{fontSize:"16px",marginBottom:"3px"}}>{p.icon}</div>
+                <div style={{fontSize:"11px",fontWeight:600,color:"#555"}}>{p.name}</div>
+              </button>
+            ))}
           </div>
         </div>
-        <div style={{display:"flex",alignItems:"center",gap:"8px"}}>
+
+        <div>
+          <div style={{display:"flex",gap:"3px",marginBottom:"14px",background:"#f2f2f8",padding:"3px",borderRadius:"10px"}}>
+            {GROUPS.map(g=>(
+              <button key={g.key} onClick={()=>setActiveGroup(g.key)}
+                style={{flex:1,padding:"7px 4px",fontSize:"12px",fontWeight:500,border:"none",cursor:"pointer",fontFamily:"inherit",background:activeGroup===g.key?"#fff":"transparent",color:activeGroup===g.key?"#6c63ff":"#999",borderRadius:"8px",boxShadow:activeGroup===g.key?"0 1px 4px rgba(0,0,0,.08)":"none",transition:"all .18s"}}>
+                {g.label}
+              </button>
+            ))}
+          </div>
+          {FILTERS.filter(f=>f.group===activeGroup).map(f=>{
+            const val=filters[f.key];
+            const pct=((val-f.min)/(f.max-f.min))*100;
+            const changed=val!==f.default;
+            return(
+              <div key={f.key} style={{marginBottom:"18px"}}>
+                <div style={{display:"flex",justifyContent:"space-between",marginBottom:"6px"}}>
+                  <span style={{fontSize:"13px",fontWeight:500,color:changed?"#6c63ff":"#666"}}>{f.label}</span>
+                  <span style={{fontSize:"12px",color:"#bbb",fontVariantNumeric:"tabular-nums"}}>
+                    {val>0&&f.default===0?"+":""}{Number.isInteger(val)?val:val.toFixed(1)}{f.unit}
+                  </span>
+                </div>
+                <input type="range" className="sl" min={f.min} max={f.max} step={f.max<=20?.5:1}
+                  value={val} style={{"--v":`${pct}%`}}
+                  onChange={e=>setFilters(p=>({...p,[f.key]:parseFloat(e.target.value)}))}/>
+              </div>
+            );
+          })}
+        </div>
+
+        {isEdited&&(
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",paddingTop:"4px",borderTop:"1px solid #f0f0f4"}}>
+            <span style={{fontSize:"11px",color:"#bbb"}}>
+              {Object.entries(filters).filter(([k,v])=>v!==DEFAULT_STATE[k]).length} adjustments
+            </span>
+            <button onClick={()=>{setFilters(DEFAULT_STATE);setAutoMsg(null);}}
+              style={{fontSize:"11px",color:"#6c63ff",background:"none",border:"none",cursor:"pointer",fontWeight:600}}>
+              Reset all
+            </button>
+          </div>
+        )}
+      </>)}
+    </div>
+  );
+
+  // ── Main render ────────────────────────────────────────────────────────────
+  return (
+    <div style={{fontFamily:"-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif",background:"#f7f8fa",minHeight:"100vh",WebkitTapHighlightColor:"transparent",color:"#1a1a1a"}}>
+      <style>{`
+        *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+        ::-webkit-scrollbar{width:4px}::-webkit-scrollbar-thumb{background:#ddd;border-radius:2px}
+        .sl{-webkit-appearance:none;appearance:none;width:100%;height:4px;border-radius:2px;outline:none;cursor:pointer;background:linear-gradient(to right,#6c63ff var(--v,50%),#e0e0e8 var(--v,50%));touch-action:none}
+        .sl::-webkit-slider-thumb{-webkit-appearance:none;width:22px;height:22px;border-radius:50%;background:#6c63ff;border:3px solid #fff;box-shadow:0 1px 6px rgba(108,99,255,.4);cursor:grab}
+        .sl::-webkit-slider-thumb:active{transform:scale(1.15)}
+        .sl::-moz-range-thumb{width:22px;height:22px;border-radius:50%;background:#6c63ff;border:3px solid #fff;cursor:grab}
+        button{touch-action:manipulation;font-family:inherit}
+        input[type=range]{touch-action:none}
+        .checker{background-image:linear-gradient(45deg,#ddd 25%,transparent 25%),linear-gradient(-45deg,#ddd 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#ddd 75%),linear-gradient(-45deg,transparent 75%,#ddd 75%);background-size:16px 16px;background-position:0 0,0 8px,8px -8px,-8px 0}
+        .drop{border:2px dashed #d0d0e0;cursor:pointer;transition:all .25s;border-radius:16px}
+        .drop:hover,.drop.on{border-color:#6c63ff;background:rgba(108,99,255,.03)}
+        @keyframes spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}
+        @keyframes fadein{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+        @keyframes slideup{from{opacity:0;transform:translateY(30px)}to{opacity:1;transform:translateY(0)}}
+        @keyframes slidein{from{transform:translateX(100%)}to{transform:translateX(0)}}
+        @keyframes pulse{0%,100%{opacity:.4}50%{opacity:1}}
+      `}</style>
+
+      {/* Header */}
+      <header style={{background:"#fff",borderBottom:"1px solid #eee",height:"56px",padding:"0 16px",display:"flex",alignItems:"center",justifyContent:"space-between",position:"sticky",top:0,zIndex:50,boxShadow:"0 1px 4px rgba(0,0,0,.05)"}}>
+        <div style={{display:"flex",alignItems:"center",gap:"10px"}}>
+          <div style={{width:"32px",height:"32px",background:"linear-gradient(135deg,#6c63ff,#a78bfa)",borderRadius:"8px",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"16px",flexShrink:0}}>✨</div>
+          <div>
+            <div style={{fontSize:"16px",fontWeight:700,color:"#1a1a2e",letterSpacing:"-.3px"}}>PHOTOlab</div>
+            {!isMobile&&<div style={{fontSize:"10px",color:"#bbb",marginTop:"-1px"}}>Enhance · Restore · Export</div>}
+          </div>
+        </div>
+        <div style={{display:"flex",gap:"6px",alignItems:"center"}}>
           <div style={{display:"flex",background:"#f2f2f8",borderRadius:"10px",padding:"3px",gap:"2px"}}>
             {["EDIT","TOOLS"].map(t=>(
-              <button key={t} className="tab-btn" onClick={()=>setActiveTab(t.toLowerCase())}
-                style={{background:activeTab===t.toLowerCase()?"#fff":"transparent",color:activeTab===t.toLowerCase()?"#6c63ff":"#888",boxShadow:activeTab===t.toLowerCase()?"0 1px 4px rgba(0,0,0,.1)":"none"}}>
+              <button key={t} onClick={()=>{setActiveTab(t.toLowerCase());if(isMobile)setPanelOpen(true);}}
+                style={{padding:isMobile?"6px 12px":"6px 16px",fontSize:"12px",fontWeight:600,border:"none",cursor:"pointer",background:activeTab===t.toLowerCase()?"#fff":"transparent",color:activeTab===t.toLowerCase()?"#6c63ff":"#888",borderRadius:"8px",boxShadow:activeTab===t.toLowerCase()?"0 1px 4px rgba(0,0,0,.1)":"none",transition:"all .18s"}}>
                 {t==="EDIT"?"✏️ Edit":"🛠 Tools"}
               </button>
             ))}
           </div>
-          {image&&<>
-            <button className="btn" onClick={()=>setFilters(DEFAULT_STATE)} style={{background:"#f2f2f8",color:"#666",padding:"7px 14px",borderRadius:"8px",fontSize:"13px",fontWeight:500}}>Reset</button>
-            <button className="btn" onClick={()=>setShowExport(true)} style={{background:"linear-gradient(135deg,#6c63ff,#a78bfa)",color:"#fff",padding:"7px 18px",borderRadius:"8px",fontSize:"13px",fontWeight:600,boxShadow:"0 2px 8px rgba(108,99,255,.3)"}}>↓ Export</button>
-          </>}
-        </div>
-      </div>
-
-      <div style={{display:"flex",height:"calc(100vh - 58px)"}}>
-
-        {/* ── Left Panel ── */}
-        <div style={{width:"280px",borderRight:"1px solid #eeeef4",overflowY:"auto",padding:"18px 16px",flexShrink:0,display:"flex",flexDirection:"column",gap:"20px",background:"#fff"}}>
-
-          {/* ══ TOOLS TAB ══ */}
-          {activeTab==="tools"&&(
-            <div style={{display:"flex",flexDirection:"column",gap:"16px"}}>
-              <div>
-                <div style={{fontSize:"11px",fontWeight:600,color:"#888",letterSpacing:".08em",textTransform:"uppercase",marginBottom:"6px"}}>Background Removal</div>
-                <div style={{fontSize:"12px",color:"#aaa",lineHeight:1.6,marginBottom:"12px"}}>AI runs in your browser — no uploads, completely private.</div>
-                <button className="btn" onClick={handleRemoveBg} disabled={!image||bgStatus==="loading"}
-                  style={{width:"100%",padding:"12px",background:bgStatus==="done"?"#f0fff4":image?"linear-gradient(135deg,#6c63ff,#a78bfa)":"#f2f2f8",color:bgStatus==="done"?"#22c55e":image?"#fff":"#bbb",fontSize:"13px",fontWeight:600,borderRadius:"10px",boxShadow:image&&bgStatus!=="done"?"0 2px 8px rgba(108,99,255,.25)":"none",marginBottom:"8px"}}>
-                  {bgStatus==="loading"
-                    ? <span style={{display:"flex",alignItems:"center",justifyContent:"center",gap:"8px"}}>
-                        <span style={{display:"inline-block",width:"12px",height:"12px",border:"2px solid rgba(255,255,255,.3)",borderTopColor:"#fff",borderRadius:"50%",animation:"spin .8s linear infinite"}}/>
-                        Processing... {bgProgress}%
-                      </span>
-                    : bgStatus==="done"?"✓ Done — Remove Again":"✂ Remove Background"}
-                </button>
-                {bgStatus==="loading"&&(
-                  <div style={{height:"4px",background:"#f0f0f8",borderRadius:"2px",marginBottom:"10px",overflow:"hidden"}}>
-                    <div style={{height:"100%",width:`${bgProgress}%`,background:"linear-gradient(90deg,#6c63ff,#a78bfa)",transition:"width .3s",borderRadius:"2px"}}/>
-                  </div>
-                )}
-                {bgStatus==="error"&&<div style={{fontSize:"12px",color:"#ef4444",marginBottom:"8px"}}>⚠ Failed. Try a JPG or PNG.</div>}
-                {!image&&<div style={{fontSize:"12px",color:"#bbb",textAlign:"center",padding:"20px",border:"2px dashed #eee",borderRadius:"10px"}}>Upload a photo first</div>}
-              </div>
-
-              {bgStatus==="done"&&bgSubjectUrl&&(
-                <div style={{animation:"fadein .3s ease"}}>
-                  <div style={{fontSize:"11px",fontWeight:600,color:"#888",letterSpacing:".08em",textTransform:"uppercase",marginBottom:"10px"}}>Background Style</div>
-                  {[{id:"transparent",label:"Transparent",icon:"◻",desc:"PNG with no background"},{id:"color",label:"Solid Color",icon:"🎨",desc:"Choose any color"},{id:"blur",label:"Blur Original",icon:"✦",desc:"Bokeh blur effect"}].map(opt=>(
-                    <button key={opt.id} className={`tool-opt ${bgMode===opt.id?"on":""}`} onClick={()=>setBgMode(opt.id)}>
-                      <span style={{fontSize:"18px"}}>{opt.icon}</span>
-                      <div style={{flex:1}}>
-                        <div style={{fontSize:"13px",fontWeight:600,color:bgMode===opt.id?"#6c63ff":"#333"}}>{opt.label}</div>
-                        <div style={{fontSize:"11px",color:"#aaa",marginTop:"1px"}}>{opt.desc}</div>
-                      </div>
-                      {bgMode===opt.id&&<span style={{color:"#6c63ff",fontSize:"16px"}}>✓</span>}
-                    </button>
-                  ))}
-                  {bgMode==="color"&&(
-                    <div style={{padding:"14px",background:"#f8f8fd",border:"1.5px solid #e8e8f0",borderRadius:"10px",marginBottom:"8px"}}>
-                      <div style={{fontSize:"11px",fontWeight:600,color:"#888",textTransform:"uppercase",letterSpacing:".06em",marginBottom:"10px"}}>Pick Color</div>
-                      <div style={{display:"flex",gap:"8px",flexWrap:"wrap",marginBottom:"10px"}}>
-                        {BG_COLORS.map(c=>(
-                          <div key={c} onClick={()=>setBgColor(c)} style={{width:"26px",height:"26px",borderRadius:"6px",background:c,border:`2.5px solid ${bgColor===c?"#6c63ff":"#ddd"}`,cursor:"pointer",transition:"border .15s",boxShadow:"0 1px 3px rgba(0,0,0,.1)"}}/>
-                        ))}
-                      </div>
-                      <input type="color" value={bgColor} onChange={e=>setBgColor(e.target.value)} style={{width:"100%",height:"34px",border:"1.5px solid #e8e8f0",borderRadius:"8px",background:"#fff",cursor:"pointer"}}/>
-                    </div>
-                  )}
-                  {bgMode==="blur"&&(
-                    <div style={{padding:"14px",background:"#f8f8fd",border:"1.5px solid #e8e8f0",borderRadius:"10px",marginBottom:"8px"}}>
-                      <div style={{fontSize:"11px",fontWeight:600,color:"#888",textTransform:"uppercase",letterSpacing:".06em",marginBottom:"8px",display:"flex",justifyContent:"space-between"}}>
-                        <span>Blur Amount</span><span style={{color:"#6c63ff"}}>{bgBlur}px</span>
-                      </div>
-                      <input type="range" className="sl" min={2} max={40} step={1} value={bgBlur} style={{"--v":`${((bgBlur-2)/38)*100}%`}} onChange={e=>setBgBlur(parseInt(e.target.value))}/>
-                    </div>
-                  )}
-                  {bgResult&&(
-                    <div style={{marginTop:"4px"}}>
-                      <div style={{position:"relative",borderRadius:"10px",overflow:"hidden",marginBottom:"10px",border:"1.5px solid #eee"}}>
-                        {bgMode==="transparent"&&<div className="checker" style={{position:"absolute",inset:0}}/>}
-                        <img src={bgResult} alt="result" style={{width:"100%",display:"block",position:"relative"}}/>
-                      </div>
-                      <button className="btn" onClick={downloadBgResult} style={{width:"100%",padding:"11px",background:"linear-gradient(135deg,#6c63ff,#a78bfa)",color:"#fff",fontSize:"13px",fontWeight:600,borderRadius:"10px",boxShadow:"0 2px 8px rgba(108,99,255,.25)"}}>
-                        ↓ Download PNG
-                      </button>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* ══ EDIT TAB ══ */}
-          {activeTab==="edit"&&(<>
-
-            {/* Smart Auto-Enhance — no API, no rate limits */}
-            {image&&(
-              <div>
-                <div style={{fontSize:"11px",fontWeight:600,color:"#888",letterSpacing:".08em",textTransform:"uppercase",marginBottom:"8px"}}>Auto Enhance</div>
-                <button className="btn" onClick={handleAutoEnhance} disabled={autoLoading}
-                  style={{width:"100%",padding:"13px",background:autoLoading?"#f2f2f8":"linear-gradient(135deg,#6c63ff,#a78bfa)",color:autoLoading?"#aaa":"#fff",fontSize:"13px",fontWeight:600,borderRadius:"10px",boxShadow:autoLoading?"none":"0 2px 10px rgba(108,99,255,.3)",marginBottom:"8px"}}>
-                  {autoLoading
-                    ? <span style={{display:"flex",alignItems:"center",justifyContent:"center",gap:"8px"}}>
-                        <span style={{display:"inline-block",width:"12px",height:"12px",border:"2px solid #ddd",borderTopColor:"#6c63ff",borderRadius:"50%",animation:"spin .8s linear infinite"}}/>
-                        Analysing...
-                      </span>
-                    : "✨ Smart Auto-Enhance"}
-                </button>
-                {autoMsg&&(
-                  <div style={{padding:"10px 12px",background:"#f0f0ff",border:"1.5px solid #d8d4ff",borderRadius:"8px",animation:"fadein .3s ease"}}>
-                    <div style={{fontSize:"11px",color:"#6c63ff",fontWeight:600,marginBottom:"3px"}}>Analysis complete</div>
-                    <div style={{fontSize:"11px",color:"#555",lineHeight:1.5}}>{autoMsg}</div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Presets */}
-            <div>
-              <div style={{fontSize:"11px",fontWeight:600,color:"#888",letterSpacing:".08em",textTransform:"uppercase",marginBottom:"8px"}}>Presets</div>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"7px"}}>
-                {PRESETS.map(p=>(
-                  <button key={p.name} className="pset" onClick={()=>setFilters({...DEFAULT_STATE,...p.values})}>
-                    <div style={{fontSize:"18px",marginBottom:"4px"}}>{p.icon}</div>
-                    <div style={{fontSize:"11px",fontWeight:600,color:"#444",lineHeight:1.3}}>{p.name}</div>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Sliders */}
-            <div>
-              <div style={{display:"flex",gap:"3px",marginBottom:"14px",background:"#f2f2f8",padding:"3px",borderRadius:"10px"}}>
-                {GROUPS.map(g=>(
-                  <button key={g.key} className="btn" onClick={()=>setActiveGroup(g.key)}
-                    style={{flex:1,padding:"6px 4px",fontSize:"12px",fontWeight:500,background:activeGroup===g.key?"#fff":"transparent",color:activeGroup===g.key?"#6c63ff":"#999",borderRadius:"8px",boxShadow:activeGroup===g.key?"0 1px 4px rgba(0,0,0,.08)":"none"}}>
-                    {g.label}
-                  </button>
-                ))}
-              </div>
-              {FILTERS.filter(f=>f.group===activeGroup).map(f=>{
-                const val=filters[f.key];
-                const pct=((val-f.min)/(f.max-f.min))*100;
-                const changed=val!==f.default;
-                return(
-                  <div key={f.key} style={{marginBottom:"18px"}} onMouseEnter={()=>setActiveFilter(f.key)} onMouseLeave={()=>setActiveFilter(null)}>
-                    <div style={{display:"flex",justifyContent:"space-between",marginBottom:"6px"}}>
-                      <span style={{fontSize:"12px",fontWeight:500,color:changed?"#6c63ff":"#666"}}>{f.label}</span>
-                      <span style={{fontSize:"12px",color:activeFilter===f.key?"#6c63ff":"#bbb",fontVariantNumeric:"tabular-nums"}}>
-                        {val>0&&f.default===0?"+":""}{Number.isInteger(val)?val:val.toFixed(1)}{f.unit}
-                      </span>
-                    </div>
-                    <input type="range" className="sl" min={f.min} max={f.max} step={f.max<=20?.5:1}
-                      value={val} style={{"--v":`${pct}%`}} onChange={e=>setFilters(p=>({...p,[f.key]:parseFloat(e.target.value)}))}/>
-                  </div>
-                );
-              })}
-            </div>
-
-            {isEdited&&(
-              <div style={{fontSize:"11px",color:"#bbb",textAlign:"center",paddingTop:"4px",borderTop:"1px solid #f0f0f4"}}>
-                {Object.entries(filters).filter(([k,v])=>v!==DEFAULT_STATE[k]).length} adjustments active
-              </div>
-            )}
-          </>)}
-        </div>
-
-        {/* ── Preview ── */}
-        <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"28px",background:"#f7f8fa",position:"relative",overflow:"hidden"}}>
-          {!image?(
-            <div className={`drop ${dragging?"on":""}`}
-              style={{width:"100%",maxWidth:"500px",aspectRatio:"4/3",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",background:"#fff",boxShadow:"0 2px 16px rgba(0,0,0,.06)"}}
-              onDragOver={e=>{e.preventDefault();setDragging(true);}} onDragLeave={()=>setDragging(false)}
-              onDrop={e=>{e.preventDefault();setDragging(false);loadImage(e.dataTransfer.files[0]);}}
-              onClick={()=>fileInputRef.current?.click()}>
-              <input ref={fileInputRef} type="file" accept="image/*" style={{display:"none"}} onChange={e=>loadImage(e.target.files[0])}/>
-              <div style={{fontSize:"48px",marginBottom:"16px",animation:"pulse 2s infinite"}}>🖼</div>
-              <div style={{fontSize:"16px",fontWeight:600,color:"#555",marginBottom:"6px"}}>Drop your photo here</div>
-              <div style={{fontSize:"13px",color:"#bbb",marginBottom:"20px"}}>or click to browse</div>
-              <div style={{display:"flex",gap:"8px"}}>
-                {["JPG","PNG","WEBP","HEIC"].map(x=>(
-                  <span key={x} style={{padding:"3px 10px",background:"#f2f2f8",borderRadius:"20px",fontSize:"11px",fontWeight:500,color:"#999"}}>{x}</span>
-                ))}
-              </div>
-            </div>
-          ):(
-            <>
-              {activeTab==="edit"&&(
-                <div style={{position:"absolute",top:"18px",right:"18px",display:"flex",background:"#fff",border:"1.5px solid #eee",zIndex:10,borderRadius:"10px",padding:"3px",gap:"2px",boxShadow:"0 2px 8px rgba(0,0,0,.08)"}}>
-                  {["After","Before"].map(label=>(
-                    <button key={label} className="btn" onClick={()=>setShowBefore(label==="Before")}
-                      style={{padding:"5px 14px",fontSize:"12px",fontWeight:500,background:(label==="Before")===showBefore?"linear-gradient(135deg,#6c63ff,#a78bfa)":"transparent",color:(label==="Before")===showBefore?"#fff":"#999",borderRadius:"7px"}}>
-                      {label}
-                    </button>
-                  ))}
-                </div>
-              )}
-              {activeTab==="tools"&&bgStatus==="done"&&(
-                <div style={{position:"absolute",top:"18px",right:"18px",padding:"5px 12px",background:"#f0fff4",border:"1.5px solid #86efac",borderRadius:"20px",fontSize:"12px",fontWeight:600,color:"#16a34a",zIndex:10}}>
-                  ✓ Background Removed
-                </div>
-              )}
-              {isEdited&&!showBefore&&activeTab==="edit"&&(
-                <div style={{position:"absolute",top:"18px",left:"18px",padding:"5px 12px",background:"#f0f0ff",border:"1.5px solid #c4b5fd",borderRadius:"20px",fontSize:"12px",fontWeight:600,color:"#6c63ff",zIndex:10}}>
-                  ✨ Edited
-                </div>
-              )}
-
-              <div style={{position:"relative",maxWidth:"100%",maxHeight:"calc(100vh - 160px)",lineHeight:0,borderRadius:"12px",overflow:"hidden",boxShadow:"0 8px 40px rgba(0,0,0,.12)"}}>
-                {activeTab==="tools"&&bgResult?(
-                  <>
-                    {bgMode==="transparent"&&<div className="checker" style={{position:"absolute",inset:0}}/>}
-                    <img src={bgResult} alt="result" style={{maxWidth:"100%",maxHeight:"calc(100vh - 160px)",objectFit:"contain",display:"block",position:"relative"}}/>
-                  </>
-                ):(
-                  <>
-                    <img ref={imgRef} src={image} alt="photo"
-                      style={{maxWidth:"100%",maxHeight:"calc(100vh - 160px)",objectFit:"contain",display:"block",
-                        filter:showBefore||activeTab==="tools"?"none":cssFilter,transition:"filter .1s ease"}}/>
-                    {!showBefore&&activeTab==="edit"&&filters.temperature!==0&&(
-                      <div style={{position:"absolute",inset:0,background:tempColor,mixBlendMode:"overlay",pointerEvents:"none"}}/>
-                    )}
-                    {!showBefore&&activeTab==="edit"&&filters.fade>0&&(
-                      <div style={{position:"absolute",inset:0,background:`rgba(255,255,255,${filters.fade/180})`,mixBlendMode:"screen",pointerEvents:"none"}}/>
-                    )}
-                    {!showBefore&&activeTab==="edit"&&filters.vignette>0&&(
-                      <div style={{position:"absolute",inset:0,background:`radial-gradient(ellipse at center,transparent 38%,rgba(0,0,0,${filters.vignette/100}) 100%)`,pointerEvents:"none"}}/>
-                    )}
-                  </>
-                )}
-              </div>
-
-              <div style={{position:"absolute",bottom:"18px"}}>
-                <button className="btn" onClick={()=>{setImage(null);setAutoMsg(null);setBgStatus("idle");setBgSubjectUrl(null);setBgResult(null);}}
-                  style={{background:"#fff",color:"#999",padding:"7px 16px",border:"1.5px solid #eee",borderRadius:"8px",fontSize:"12px",fontWeight:500,boxShadow:"0 1px 4px rgba(0,0,0,.06)"}}>
-                  ← New Photo
-                </button>
-              </div>
-            </>
+          {image&&(
+            <button onClick={()=>setShowExport(true)}
+              style={{padding:"8px 16px",background:"linear-gradient(135deg,#6c63ff,#a78bfa)",color:"#fff",border:"none",borderRadius:"8px",fontSize:"13px",fontWeight:700,cursor:"pointer",boxShadow:"0 2px 8px rgba(108,99,255,.3)"}}>
+              {isMobile?"↓ Save":"↓ Export"}
+            </button>
           )}
         </div>
-      </div>
+      </header>
 
-      {/* ── Export Modal ── */}
+      {/* Desktop */}
+      {!isMobile&&(
+        <div style={{display:"flex",height:"calc(100vh - 56px)"}}>
+          <div style={{width:"290px",borderRight:"1px solid #eee",overflowY:"auto",background:"#fff",flexShrink:0}}>
+            <Panel/>
+          </div>
+          <div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",padding:"24px",background:"#f7f8fa",position:"relative",overflow:"hidden"}}>
+            <PhotoPreview {...{image,dragging,setDragging,loadImage,fileInputRef,imgRef,splitRef,activeTab,bgResult,bgMode,showBefore,setShowBefore,showSplit,splitPos,setSplitPos,setIsDraggingSplit,cssFilter,tempColor,tempAlpha,filters,isEdited,setImage,setAutoMsg,setBgStatus,setBgSubjectUrl,setBgResult,isMobile}}/>
+          </div>
+        </div>
+      )}
+
+      {/* Mobile */}
+      {isMobile&&(
+        <div style={{display:"flex",flexDirection:"column",minHeight:"calc(100vh - 56px)"}}>
+          <div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",padding:"16px",background:"#f7f8fa",position:"relative",minHeight:"50vh"}}>
+            <PhotoPreview {...{image,dragging,setDragging,loadImage,fileInputRef,imgRef,splitRef,activeTab,bgResult,bgMode,showBefore,setShowBefore,showSplit,splitPos,setSplitPos,setIsDraggingSplit,cssFilter,tempColor,tempAlpha,filters,isEdited,setImage,setAutoMsg,setBgStatus,setBgSubjectUrl,setBgResult,isMobile}}/>
+          </div>
+          {image&&(
+            <div style={{background:"#fff",borderTop:"1px solid #eee",padding:"10px 16px",display:"flex",gap:"8px"}}>
+              <button onClick={()=>setPanelOpen(true)}
+                style={{flex:1,padding:"11px",background:"#f2f2f8",border:"none",borderRadius:"10px",fontSize:"13px",fontWeight:600,color:"#6c63ff",cursor:"pointer"}}>⚙️ Adjust</button>
+              <button onClick={()=>{setFilters(DEFAULT_STATE);setAutoMsg(null);}}
+                style={{padding:"11px 16px",background:"#f2f2f8",border:"none",borderRadius:"10px",fontSize:"13px",color:"#888",cursor:"pointer",fontWeight:500}}>Reset</button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Mobile drawer */}
+      {isMobile&&panelOpen&&(
+        <>
+          <div onClick={()=>setPanelOpen(false)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.3)",zIndex:80}}/>
+          <div style={{position:"fixed",right:0,top:0,bottom:0,width:"min(320px,92vw)",background:"#fff",boxShadow:"-4px 0 24px rgba(0,0,0,.15)",zIndex:90,overflowY:"auto",animation:"slidein .25s ease"}}>
+            <div style={{padding:"12px 16px",borderBottom:"1px solid #eee",display:"flex",justifyContent:"space-between",alignItems:"center",position:"sticky",top:0,background:"#fff",zIndex:1}}>
+              <span style={{fontWeight:700,fontSize:"15px",color:"#1a1a2e"}}>{activeTab==="edit"?"Adjust":"Tools"}</span>
+              <button onClick={()=>setPanelOpen(false)} style={{background:"#f2f2f8",border:"none",width:"32px",height:"32px",borderRadius:"8px",cursor:"pointer",fontSize:"16px",color:"#888"}}>✕</button>
+            </div>
+            <Panel/>
+          </div>
+        </>
+      )}
+
+      {/* Export Modal */}
       {showExport&&(
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.4)",backdropFilter:"blur(8px)",zIndex:100,display:"flex",alignItems:"center",justifyContent:"center"}}
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.45)",backdropFilter:"blur(6px)",zIndex:100,display:"flex",alignItems:"flex-end",justifyContent:"center",padding:isMobile?"0":"20px"}}
           onClick={e=>{if(e.target===e.currentTarget)setShowExport(false);}}>
-          <div style={{background:"#fff",borderRadius:"16px",width:"480px",maxHeight:"90vh",overflowY:"auto",padding:"28px",boxShadow:"0 20px 60px rgba(0,0,0,.2)",animation:"slideup .25s ease"}}>
+          <div style={{background:"#fff",borderRadius:isMobile?"16px 16px 0 0":"16px",width:"100%",maxWidth:"460px",maxHeight:"90vh",overflowY:"auto",padding:"24px",animation:"slideup .25s ease"}}>
 
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:"22px"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"20px"}}>
               <div>
-                <div style={{fontSize:"20px",fontWeight:700,color:"#1a1a2e",marginBottom:"3px"}}>Export Photo</div>
-                <div style={{fontSize:"12px",color:"#aaa"}}>Pixel-perfect · Up to 12K · Facebook optimized</div>
+                <div style={{fontSize:"18px",fontWeight:700,color:"#1a1a2e"}}>Export Photo</div>
+                <div style={{fontSize:"12px",color:"#bbb",marginTop:"2px"}}>High quality · All platforms</div>
               </div>
-              <button className="btn" onClick={()=>setShowExport(false)} style={{background:"#f2f2f8",color:"#888",width:"32px",height:"32px",borderRadius:"8px",fontSize:"18px",display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
+              <button onClick={()=>setShowExport(false)} style={{background:"#f2f2f8",border:"none",width:"34px",height:"34px",borderRadius:"8px",cursor:"pointer",fontSize:"18px",color:"#888"}}>✕</button>
             </div>
 
-            <div style={{display:"flex",gap:"3px",marginBottom:"22px",background:"#f2f2f8",padding:"3px",borderRadius:"10px"}}>
-              <button className="btn" onClick={()=>setExportTab("standard")}
-                style={{flex:1,padding:"9px",fontSize:"13px",fontWeight:500,background:exportTab==="standard"?"#fff":"transparent",color:exportTab==="standard"?"#6c63ff":"#999",borderRadius:"8px",boxShadow:exportTab==="standard"?"0 1px 4px rgba(0,0,0,.08)":"none"}}>
-                Standard
-              </button>
-              <button className="btn" onClick={()=>setExportTab("facebook")}
-                style={{flex:1,padding:"9px",fontSize:"13px",fontWeight:500,background:exportTab==="facebook"?"#1877f2":"transparent",color:exportTab==="facebook"?"#fff":"#999",borderRadius:"8px",boxShadow:exportTab==="facebook"?"0 1px 4px rgba(24,119,242,.3)":"none",display:"flex",alignItems:"center",justifyContent:"center",gap:"6px"}}>
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
-                Facebook
-              </button>
+            {/* Tabs */}
+            <div style={{display:"flex",gap:"3px",marginBottom:"20px",background:"#f2f2f8",padding:"3px",borderRadius:"10px"}}>
+              {[["standard","Standard"],["facebook","📘 Facebook"]].map(([id,label])=>(
+                <button key={id} onClick={()=>setExportTab(id)}
+                  style={{flex:1,padding:"9px",fontSize:"13px",fontWeight:600,border:"none",cursor:"pointer",background:exportTab===id?(id==="facebook"?"#1877f2":"#fff"):"transparent",color:exportTab===id?(id==="facebook"?"#fff":"#6c63ff"):"#999",borderRadius:"8px",boxShadow:exportTab===id?"0 1px 4px rgba(0,0,0,.1)":"none",transition:"all .18s"}}>
+                  {label}
+                </button>
+              ))}
             </div>
 
             {exportTab==="standard"&&(<>
-              <div style={{marginBottom:"18px"}}>
-                <div style={{fontSize:"11px",fontWeight:600,color:"#888",letterSpacing:".08em",textTransform:"uppercase",marginBottom:"10px"}}>Format</div>
-                <div style={{display:"flex",flexDirection:"column",gap:"7px"}}>
-                  {EXPORT_FORMATS.map(f=>(
-                    <button key={f.id} className={`fmt ${exportFormat===f.id?"on":""}`} onClick={()=>setExportFormat(f.id)}>
-                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                        <div>
-                          <span style={{fontSize:"13px",fontWeight:600,color:exportFormat===f.id?"#6c63ff":"#444"}}>{f.label}</span>
-                          <span style={{fontSize:"11px",color:"#bbb",marginLeft:"10px"}}>{f.desc}</span>
-                        </div>
-                        {exportFormat===f.id&&<span style={{color:"#6c63ff",fontSize:"16px"}}>✓</span>}
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-              {exportFormat!=="png"&&(
-                <div style={{marginBottom:"18px"}}>
-                  <div style={{fontSize:"11px",fontWeight:600,color:"#888",letterSpacing:".08em",textTransform:"uppercase",marginBottom:"8px",display:"flex",justifyContent:"space-between"}}>
-                    <span>Quality</span><span style={{color:"#6c63ff"}}>{exportQuality}%</span>
-                  </div>
-                  <input type="range" className="sl" min={60} max={100} step={1} value={exportQuality}
-                    style={{"--v":`${((exportQuality-60)/40)*100}%`}} onChange={e=>setExportQuality(parseInt(e.target.value))}/>
-                </div>
-              )}
-              <div style={{marginBottom:"22px"}}>
-                <div style={{fontSize:"11px",fontWeight:600,color:"#888",letterSpacing:".08em",textTransform:"uppercase",marginBottom:"10px"}}>Resolution</div>
-                <div style={{display:"flex",gap:"6px",flexWrap:"wrap"}}>
-                  {SCALE_OPTIONS.map(s=>{
-                    const pro=s.value==="8k"||s.value==="12k";
-                    return(
-                      <button key={s.value} className={`sc ${exportScale===s.value?"on":""}`} onClick={()=>setExportScale(s.value)} style={{minWidth:"64px"}}>
-                        <div style={{fontSize:"15px",fontWeight:700,color:exportScale===s.value?"#6c63ff":pro?"#c4b5fd":"#666",marginBottom:"2px"}}>{s.label}</div>
-                        <div style={{fontSize:"9px",color:"#bbb"}}>{s.desc}</div>
-                        {pro&&<div style={{fontSize:"9px",color:"#a78bfa",marginTop:"1px",fontWeight:600}}>PRO</div>}
-                      </button>
-                    );
-                  })}
-                </div>
-                {natW>0&&(
-                  <div style={{marginTop:"10px",padding:"10px 14px",background:"#f8f8fd",borderRadius:"8px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                    <span style={{fontSize:"12px",color:"#aaa"}}>Output size</span>
-                    <span style={{fontSize:"13px",fontWeight:600,color:"#6c63ff"}}>{previewW.toLocaleString()} × {previewH.toLocaleString()}px</span>
-                  </div>
-                )}
-              </div>
-              <button className="btn" onClick={handleExport} disabled={exporting}
-                style={{width:"100%",padding:"14px",background:exportDone?"#f0fff4":"linear-gradient(135deg,#6c63ff,#a78bfa)",color:exportDone?"#16a34a":"#fff",fontSize:"14px",fontWeight:700,borderRadius:"12px",boxShadow:exportDone?"none":"0 4px 14px rgba(108,99,255,.35)"}}>
-                {exporting
-                  ? <span style={{display:"flex",alignItems:"center",justifyContent:"center",gap:"10px"}}><span style={{display:"inline-block",width:"14px",height:"14px",border:"2px solid rgba(255,255,255,.3)",borderTopColor:"#fff",borderRadius:"50%",animation:"spin .7s linear infinite"}}/>Processing...</span>
-                  : exportDone?`✓ Saved — ${exportInfo||""}`:`↓ Export ${EXPORT_FORMATS.find(f=>f.id===exportFormat)?.label} · ${exportScale.toString().toUpperCase()}`}
-              </button>
-            </>)}
-
-            {exportTab==="facebook"&&(<>
-              <div style={{marginBottom:"18px",padding:"14px",background:"#eff6ff",border:"1.5px solid #bfdbfe",borderRadius:"10px"}}>
-                <div style={{fontSize:"12px",fontWeight:600,color:"#1d4ed8",marginBottom:"6px"}}>Why this matters</div>
-                <div style={{fontSize:"12px",color:"#3b82f6",lineHeight:1.6}}>Facebook compresses photos that are the wrong size. These presets use exact dimensions, JPEG 75%, and sRGB to prevent their compression algorithm from ruining your photo.</div>
-              </div>
-              <div style={{marginBottom:"18px"}}>
-                <div style={{fontSize:"11px",fontWeight:600,color:"#888",letterSpacing:".08em",textTransform:"uppercase",marginBottom:"10px"}}>Post Type</div>
-                {FB_MODES.map(mode=>(
-                  <button key={mode.id} onClick={()=>setFbMode(mode.id)}
-                    style={{width:"100%",padding:"13px 14px",border:`1.5px solid ${fbMode===mode.id?"#1877f2":"#eee"}`,background:fbMode===mode.id?"#eff6ff":"#fff",borderRadius:"10px",textAlign:"left",cursor:"pointer",transition:"all .18s",marginBottom:"7px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              {/* Format */}
+              <Label>Format</Label>
+              <div style={{display:"flex",flexDirection:"column",gap:"6px",marginBottom:"18px"}}>
+                {EXPORT_FORMATS.map(f=>(
+                  <button key={f.id} onClick={()=>setExportFormat(f.id)}
+                    style={{padding:"11px 14px",border:`1.5px solid ${exportFormat===f.id?"#6c63ff":"#eee"}`,background:exportFormat===f.id?"#faf9ff":"#fff",borderRadius:"10px",textAlign:"left",cursor:"pointer",transition:"all .18s",display:"flex",justifyContent:"space-between",alignItems:"center",fontFamily:"inherit"}}>
                     <div>
-                      <div style={{fontSize:"13px",fontWeight:600,color:fbMode===mode.id?"#1877f2":"#444",marginBottom:"2px"}}>{mode.label}</div>
-                      <div style={{fontSize:"12px",color:fbMode===mode.id?"#3b82f6":"#aaa"}}>{mode.desc}</div>
+                      <span style={{fontSize:"13px",fontWeight:600,color:exportFormat===f.id?"#6c63ff":"#444"}}>{f.label}</span>
+                      <span style={{fontSize:"11px",color:"#bbb",marginLeft:"10px"}}>{f.desc}</span>
                     </div>
-                    <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:"4px"}}>
-                      {fbMode===mode.id&&<span style={{color:"#1877f2",fontSize:"18px"}}>✓</span>}
-                      <span style={{fontSize:"10px",color:"#bbb",background:"#f2f2f8",padding:"2px 7px",borderRadius:"4px",fontWeight:500}}>JPEG 75%</span>
-                    </div>
+                    {exportFormat===f.id&&<span style={{color:"#6c63ff",fontSize:"18px"}}>✓</span>}
                   </button>
                 ))}
               </div>
-              <button className="btn" onClick={handleFbExport} disabled={fbExporting}
-                style={{width:"100%",padding:"14px",background:fbDone?"#f0fff4":fbExporting?"#e0edff":"#1877f2",color:fbDone?"#16a34a":"#fff",fontSize:"14px",fontWeight:700,borderRadius:"12px",boxShadow:fbDone||fbExporting?"none":"0 4px 14px rgba(24,119,242,.35)",display:"flex",alignItems:"center",justifyContent:"center",gap:"10px"}}>
-                {fbExporting
-                  ? <><span style={{display:"inline-block",width:"14px",height:"14px",border:"2px solid rgba(255,255,255,.3)",borderTopColor:"#fff",borderRadius:"50%",animation:"spin .7s linear infinite"}}/>Optimising for Facebook...</>
-                  : fbDone?`✓ Saved — ${exportInfo||""}`
-                  : <><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>Export for Facebook · {FB_MODES.find(m=>m.id===fbMode)?.desc}</>}
-              </button>
+
+              {exportFormat!=="png"&&(<>
+                <div style={{display:"flex",justifyContent:"space-between",marginBottom:"6px"}}>
+                  <Label>Quality</Label><span style={{fontSize:"13px",fontWeight:700,color:"#6c63ff"}}>{exportQuality}%</span>
+                </div>
+                <input type="range" className="sl" min={70} max={100} step={1} value={exportQuality}
+                  style={{"--v":`${((exportQuality-70)/30)*100}%`,marginBottom:"18px"}}
+                  onChange={e=>setExportQuality(+e.target.value)}/>
+              </>)}
+
+              {/* Scale */}
+              <Label>Resolution</Label>
+              <div style={{display:"flex",gap:"6px",marginBottom:"6px",flexWrap:"wrap"}}>
+                {[1,2,3,4,"8k","12k"].map(s=>{
+                  const isPro = s==="8k"||s==="12k";
+                  const label = s==="8k"?"8K":s==="12k"?"12K":`${s}×`;
+                  const desc  = s===1?"Original":s===2?"Double":s===3?"3×":s===4?"4×":s==="8k"?"7680px":s==="12k"?"12288px":"";
+                  return(
+                    <button key={s} onClick={()=>setExportScale(s)}
+                      style={{flex:"1 1 60px",padding:"10px 4px",border:`1.5px solid ${exportScale===s?"#6c63ff":isPro?"#e0d8ff":"#eee"}`,background:exportScale===s?"#faf9ff":isPro?"#faf8ff":"#fff",borderRadius:"10px",textAlign:"center",cursor:"pointer",transition:"all .18s",fontFamily:"inherit"}}>
+                      <div style={{fontSize:"14px",fontWeight:700,color:exportScale===s?"#6c63ff":isPro?"#a78bfa":"#555",marginBottom:"2px"}}>{label}</div>
+                      <div style={{fontSize:"9px",color:"#bbb"}}>{desc}</div>
+                      {isPro&&<div style={{fontSize:"8px",color:"#a78bfa",fontWeight:700,marginTop:"1px"}}>PRO</div>}
+                    </button>
+                  );
+                })}
+              </div>
+              <p style={{fontSize:"10px",color:"#bbb",marginBottom:"14px",lineHeight:1.5}}>
+                {(exportScale==="8k"||exportScale==="12k") ? "⚡ Large exports may take 10–30s. Uses fast CSS rendering at this size." : ""}
+              </p>
+              {natW>0&&(
+                <div style={{padding:"10px 14px",background:"#f8f8fd",borderRadius:"8px",display:"flex",justifyContent:"space-between",marginBottom:"18px"}}>
+                  <span style={{fontSize:"12px",color:"#bbb"}}>Output</span>
+                  <span style={{fontSize:"13px",fontWeight:600,color:"#6c63ff"}}>{exportW.toLocaleString()} × {exportH.toLocaleString()}px</span>
+                </div>
+              )}
+
+              {exportInfo&&(
+                <div style={{padding:"10px 14px",background:exportDone?"#f0fff4":"#fff8e7",borderRadius:"8px",marginBottom:"12px",fontSize:"12px",color:exportDone?"#16a34a":"#92400e",fontWeight:500}}>
+                  {exportDone?`✓ Saved — ${exportInfo}`:exportInfo}
+                </div>
+              )}
+
+              <Btn onClick={handleExport} disabled={exporting} color={exportDone?"#f0fff4":"purple"}
+                textColor={exportDone?"#16a34a":"#fff"} style={{width:"100%",padding:"15px",fontSize:"15px",fontWeight:700}}>
+                {exporting?<Row><Spin/>Processing...</Row>
+                 :exportDone?"✓ Saved!"
+                 :`↓ Download ${EXPORT_FORMATS.find(f=>f.id===exportFormat)?.label} · ${exportScale}×`}
+              </Btn>
+              <p style={{fontSize:"11px",color:"#bbb",textAlign:"center",marginTop:"8px"}}>
+                iOS: tap Share → Save to Photos after download
+              </p>
+            </>)}
+
+            {exportTab==="facebook"&&(<>
+              <div style={{padding:"13px",background:"#eff6ff",border:"1.5px solid #bfdbfe",borderRadius:"10px",marginBottom:"18px"}}>
+                <div style={{fontSize:"12px",fontWeight:600,color:"#1d4ed8",marginBottom:"5px"}}>Optimised for Facebook</div>
+                <div style={{fontSize:"12px",color:"#3b82f6",lineHeight:1.6}}>Exact dimensions + JPEG 82% to avoid Facebook's compression algorithm.</div>
+              </div>
+              <Label>Post Type</Label>
+              {FB_MODES.map(m=>(
+                <button key={m.id} onClick={()=>setFbMode(m.id)}
+                  style={{width:"100%",padding:"12px 14px",border:`1.5px solid ${fbMode===m.id?"#1877f2":"#eee"}`,background:fbMode===m.id?"#eff6ff":"#fff",borderRadius:"10px",textAlign:"left",cursor:"pointer",transition:"all .18s",marginBottom:"7px",display:"flex",justifyContent:"space-between",alignItems:"center",fontFamily:"inherit"}}>
+                  <div>
+                    <div style={{fontSize:"13px",fontWeight:600,color:fbMode===m.id?"#1877f2":"#444",marginBottom:"2px"}}>{m.label}</div>
+                    <div style={{fontSize:"12px",color:"#bbb"}}>{m.desc}</div>
+                  </div>
+                  {fbMode===m.id&&<span style={{color:"#1877f2",fontSize:"18px"}}>✓</span>}
+                </button>
+              ))}
+
+              {exportInfo&&fbDone&&(
+                <div style={{padding:"10px 14px",background:"#f0fff4",borderRadius:"8px",marginBottom:"12px",fontSize:"12px",color:"#16a34a",fontWeight:500}}>
+                  ✓ Saved — {exportInfo}
+                </div>
+              )}
+
+              <Btn onClick={handleFbExport} disabled={fbExporting} color={fbDone?"#f0fff4":"#1877f2"}
+                textColor={fbDone?"#16a34a":"#fff"} style={{width:"100%",padding:"15px",fontSize:"15px",fontWeight:700}}>
+                {fbExporting?<Row><Spin color="rgba(255,255,255,.7)"/>Exporting...</Row>
+                 :fbDone?"✓ Saved!"
+                 :`↓ Export for Facebook · ${FB_MODES.find(m=>m.id===fbMode)?.desc}`}
+              </Btn>
+              <p style={{fontSize:"11px",color:"#bbb",textAlign:"center",marginTop:"8px"}}>
+                iOS: tap Share → Save to Photos after download
+              </p>
             </>)}
           </div>
         </div>
@@ -751,3 +740,120 @@ export default function App(){
     </div>
   );
 }
+
+// ── Photo Preview ─────────────────────────────────────────────────────────────
+function PhotoPreview({ image,dragging,setDragging,loadImage,fileInputRef,imgRef,splitRef,activeTab,bgResult,bgMode,showBefore,setShowBefore,showSplit,splitPos,setSplitPos,setIsDraggingSplit,cssFilter,tempColor,tempAlpha,filters,isEdited,setImage,setAutoMsg,setBgStatus,setBgSubjectUrl,setBgResult,isMobile }) {
+  const maxH = isMobile ? "48vh" : "calc(100vh - 140px)";
+
+  if (!image) return (
+    <div className={`drop ${dragging?"on":""}`}
+      style={{width:"100%",maxWidth:"480px",aspectRatio:"4/3",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",background:"#fff",boxShadow:"0 2px 16px rgba(0,0,0,.06)",cursor:"pointer"}}
+      onDragOver={e=>{e.preventDefault();setDragging(true);}} onDragLeave={()=>setDragging(false)}
+      onDrop={e=>{e.preventDefault();setDragging(false);loadImage(e.dataTransfer.files[0]);}}
+      onClick={()=>fileInputRef.current?.click()}>
+      <input ref={fileInputRef} type="file" accept="image/*" style={{display:"none"}} onChange={e=>loadImage(e.target.files[0])}/>
+      <div style={{fontSize:"44px",marginBottom:"14px",animation:"pulse 2.5s infinite"}}>🖼</div>
+      <div style={{fontSize:"16px",fontWeight:600,color:"#555",marginBottom:"6px"}}>{isMobile?"Tap to select photo":"Drop photo here"}</div>
+      {!isMobile&&<div style={{fontSize:"13px",color:"#bbb",marginBottom:"20px"}}>or click to browse</div>}
+      <div style={{display:"flex",gap:"8px"}}>
+        {["JPG","PNG","WEBP","HEIC"].map(x=>(
+          <span key={x} style={{padding:"3px 10px",background:"#f2f2f8",borderRadius:"20px",fontSize:"11px",fontWeight:500,color:"#999"}}>{x}</span>
+        ))}
+      </div>
+    </div>
+  );
+
+  return (
+    <>
+      {/* Controls top-right */}
+      {activeTab==="edit" && !showSplit && (
+        <div style={{position:"absolute",top:"12px",right:"12px",display:"flex",background:"#fff",border:"1.5px solid #eee",zIndex:10,borderRadius:"10px",padding:"3px",gap:"2px",boxShadow:"0 2px 8px rgba(0,0,0,.08)"}}>
+          {["After","Before"].map(l=>(
+            <button key={l} onClick={()=>setShowBefore(l==="Before")}
+              style={{padding:"5px 14px",fontSize:"12px",fontWeight:600,border:"none",cursor:"pointer",background:(l==="Before")===showBefore?"linear-gradient(135deg,#6c63ff,#a78bfa)":"transparent",color:(l==="Before")===showBefore?"#fff":"#999",borderRadius:"7px",transition:"all .18s"}}>
+              {l}
+            </button>
+          ))}
+        </div>
+      )}
+      {showSplit && (
+        <div style={{position:"absolute",top:"12px",right:"12px",zIndex:10,padding:"5px 12px",background:"rgba(108,99,255,.9)",borderRadius:"20px",fontSize:"11px",fontWeight:600,color:"#fff"}}>
+          ← Drag to compare →
+        </div>
+      )}
+      {activeTab==="tools"&&bgResult&&(
+        <div style={{position:"absolute",top:"12px",right:"12px",padding:"4px 12px",background:"#f0fff4",border:"1.5px solid #86efac",borderRadius:"20px",fontSize:"11px",fontWeight:600,color:"#16a34a",zIndex:10}}>✓ BG Removed</div>
+      )}
+
+      {/* Image container */}
+      <div ref={splitRef}
+        style={{position:"relative",maxWidth:"100%",maxHeight:maxH,lineHeight:0,borderRadius:"14px",overflow:"hidden",boxShadow:"0 8px 40px rgba(0,0,0,.12)",cursor:showSplit?"ew-resize":"default",userSelect:"none"}}>
+
+        {activeTab==="tools"&&bgResult ? (
+          <>
+            {bgMode==="transparent"&&<div className="checker" style={{position:"absolute",inset:0}}/>}
+            <img src={bgResult} alt="result" style={{maxWidth:"100%",maxHeight:maxH,objectFit:"contain",display:"block",position:"relative"}}/>
+          </>
+        ) : showSplit ? (
+          <>
+            {/* After (full, clipped) */}
+            <img ref={imgRef} src={image} alt="after"
+              style={{maxWidth:"100%",maxHeight:maxH,objectFit:"contain",display:"block",filter:cssFilter}}/>
+            {/* Warmth/vignette overlays — clipped to after side */}
+            {filters.temperature!==0&&<div style={{position:"absolute",inset:0,background:tempColor,mixBlendMode:"overlay",pointerEvents:"none",clipPath:`inset(0 ${100-splitPos}% 0 0)`}}/>}
+            {filters.vignette>0&&<div style={{position:"absolute",inset:0,background:`radial-gradient(ellipse at center,transparent 38%,rgba(0,0,0,${filters.vignette/100}) 100%)`,pointerEvents:"none",clipPath:`inset(0 ${100-splitPos}% 0 0)`}}/>}
+            {/* Before side overlay */}
+            <div style={{position:"absolute",inset:0,clipPath:`inset(0 0 0 ${splitPos}%)`}}>
+              <img src={image} alt="before" style={{maxWidth:"100%",maxHeight:maxH,objectFit:"contain",display:"block",filter:"none"}}/>
+            </div>
+            {/* Divider */}
+            <div onMouseDown={e=>{e.preventDefault();setIsDraggingSplit(true);}} onTouchStart={e=>{e.preventDefault();setIsDraggingSplit(true);}}
+              style={{position:"absolute",top:0,bottom:0,left:`${splitPos}%`,transform:"translateX(-50%)",width:"44px",zIndex:20,display:"flex",alignItems:"center",justifyContent:"center",cursor:"ew-resize"}}>
+              <div style={{width:"2px",height:"100%",background:"#fff",boxShadow:"0 0 6px rgba(0,0,0,.5)"}}/>
+              <div style={{position:"absolute",width:"38px",height:"38px",borderRadius:"50%",background:"#fff",boxShadow:"0 2px 12px rgba(0,0,0,.25)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"16px",color:"#6c63ff",fontWeight:700}}>⇄</div>
+            </div>
+            <div style={{position:"absolute",bottom:"12px",left:"12px",padding:"3px 10px",background:"rgba(108,99,255,.85)",borderRadius:"20px",fontSize:"11px",fontWeight:700,color:"#fff"}}>AFTER</div>
+            <div style={{position:"absolute",bottom:"12px",right:"12px",padding:"3px 10px",background:"rgba(0,0,0,.5)",borderRadius:"20px",fontSize:"11px",fontWeight:700,color:"#fff"}}>BEFORE</div>
+          </>
+        ) : (
+          <>
+            <img ref={imgRef} src={image} alt="photo"
+              style={{maxWidth:"100%",maxHeight:maxH,objectFit:"contain",display:"block",filter:showBefore||activeTab==="tools"?"none":cssFilter,transition:"filter .08s ease"}}/>
+            {!showBefore&&activeTab==="edit"&&filters.temperature!==0&&<div style={{position:"absolute",inset:0,background:tempColor,mixBlendMode:"overlay",pointerEvents:"none"}}/>}
+            {!showBefore&&activeTab==="edit"&&filters.fade>0&&<div style={{position:"absolute",inset:0,background:`rgba(255,255,255,${filters.fade/180})`,mixBlendMode:"screen",pointerEvents:"none"}}/>}
+            {!showBefore&&activeTab==="edit"&&filters.vignette>0&&<div style={{position:"absolute",inset:0,background:`radial-gradient(ellipse at center,transparent 38%,rgba(0,0,0,${filters.vignette/100}) 100%)`,pointerEvents:"none"}}/>}
+          </>
+        )}
+      </div>
+
+      <div style={{position:"absolute",bottom:"12px",left:"50%",transform:"translateX(-50%)"}}>
+        <button onClick={()=>{setImage(null);setAutoMsg(null);setBgStatus("idle");setBgSubjectUrl(null);setBgResult(null);}}
+          style={{background:"#fff",color:"#999",padding:"6px 14px",border:"1.5px solid #eee",borderRadius:"8px",fontSize:"12px",fontWeight:500,cursor:"pointer",boxShadow:"0 1px 4px rgba(0,0,0,.06)"}}>
+          ← New Photo
+        </button>
+      </div>
+    </>
+  );
+}
+
+// ── Tiny helpers ─────────────────────────────────────────────────────────────
+const Label    = ({children,style={}})=><div style={{fontSize:"11px",fontWeight:600,color:"#aaa",letterSpacing:".08em",textTransform:"uppercase",marginBottom:"8px",...style}}>{children}</div>;
+const SubLabel = ({children})=><div style={{fontSize:"11px",fontWeight:600,color:"#aaa",textTransform:"uppercase",letterSpacing:".06em",marginBottom:"8px"}}>{children}</div>;
+const Empty    = ({children})=><div style={{fontSize:"12px",color:"#bbb",textAlign:"center",padding:"20px",border:"2px dashed #eee",borderRadius:"10px"}}>{children}</div>;
+const Row      = ({children})=><span style={{display:"flex",alignItems:"center",justifyContent:"center",gap:"8px"}}>{children}</span>;
+const Spin     = ({color="#fff"})=><span style={{display:"inline-block",width:"14px",height:"14px",border:`2px solid ${color}44`,borderTopColor:color,borderRadius:"50%",animation:"spin .8s linear infinite",flexShrink:0}}/>;
+const Bar      = ({value})=><div style={{height:"4px",background:"#f0f0f8",borderRadius:"2px",margin:"8px 0 12px",overflow:"hidden"}}><div style={{height:"100%",width:`${value}%`,background:"linear-gradient(90deg,#6c63ff,#a78bfa)",transition:"width .3s",borderRadius:"2px"}}/></div>;
+
+function Btn({children,onClick,disabled,color="purple",textColor="#fff",style={}}) {
+  const bg = color==="purple" ? "linear-gradient(135deg,#6c63ff,#a78bfa)" : color;
+  const shadow = color==="purple" ? "0 2px 10px rgba(108,99,255,.3)" : "none";
+  return(
+    <button onClick={onClick} disabled={disabled}
+      style={{border:"none",cursor:disabled?"not-allowed":"pointer",borderRadius:"10px",fontSize:"13px",fontWeight:600,fontFamily:"inherit",transition:"all .18s",display:"flex",alignItems:"center",justifyContent:"center",gap:"6px",background:disabled?"#f0f0f0":bg,color:disabled?"#bbb":textColor,boxShadow:disabled?"none":shadow,padding:"12px 16px",...style}}>
+      {children}
+    </button>
+  );
+}
+
+const subPanel = {padding:"13px",background:"#f8f8fd",border:"1.5px solid #e8e8f0",borderRadius:"10px",marginBottom:"8px"};
+const toolOpt  = {width:"100%",padding:"11px 14px",marginBottom:"7px",borderRadius:"10px",textAlign:"left",cursor:"pointer",display:"flex",alignItems:"center",gap:"10px",transition:"all .18s",fontFamily:"inherit",fontSize:"inherit",border:"none"};
