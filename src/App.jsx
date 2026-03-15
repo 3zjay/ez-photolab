@@ -219,6 +219,15 @@ export default function App() {
   const [bgBlur,       setBgBlur]       = useState(14);
   const [bgResult,     setBgResult]     = useState(null);
   const [isMobile,     setIsMobile]     = useState(false);
+  // Replicate AI
+  const [replicateKey,    setReplicateKey]    = useState(() => { try { return localStorage.getItem("replicateKey")||""; } catch(e){ return ""; } });
+  const [showKeyInput,    setShowKeyInput]    = useState(false);
+  const [aiBeautyStatus,  setAiBeautyStatus]  = useState("idle");
+  const [aiBeautyUrl,     setAiBeautyUrl]     = useState(null);
+  const [aiBeautyMsg,     setAiBeautyMsg]     = useState("");
+  const [aiEnhanceStatus, setAiEnhanceStatus] = useState("idle");
+  const [aiEnhanceUrl,    setAiEnhanceUrl]    = useState(null);
+  const [aiEnhanceMsg,    setAiEnhanceMsg]    = useState("");
 
   const fileInputRef = useRef(null);
   const imgRef       = useRef(null);
@@ -282,7 +291,136 @@ export default function App() {
     }, 30);
   };
 
-  // ── Background removal ────────────────────────────────────────────────────
+  // ── AI Beauty via Replicate (CodeFormer face restore + enhance) ───────────
+  const handleAIBeauty = async () => {
+    if (!image) return;
+    if (!replicateKey.trim()) { setShowKeyInput(true); return; }
+    setAiBeautyStatus("loading"); setAiBeautyMsg("Sending to AI..."); setAiBeautyUrl(null);
+
+    try {
+      // Convert base64 image to blob URL-safe data URI
+      const base64 = image; // already a data URI
+
+      // Call Replicate — CodeFormer: best-in-class face restoration & beauty
+      const startRes = await fetch("https://api.replicate.com/v1/predictions", {
+        method: "POST",
+        headers: {
+          "Authorization": `Token ${replicateKey.trim()}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          version: "7de2ea26c616d5bf2245ad0d5e24f0ff9a6204578a5c876db53a4a93d4e1eb5d",
+          input: {
+            image: base64,
+            codeformer_fidelity: 0.75, // 0=max smoothing, 1=max fidelity — 0.75 is beauty sweet spot
+            background_enhance: true,
+            face_upsample: true,
+            upscale: 2,
+          }
+        })
+      });
+
+      if (startRes.status === 401) {
+        setAiBeautyMsg("Invalid API key. Get a free key at replicate.com");
+        setAiBeautyStatus("error"); return;
+      }
+
+      const prediction = await startRes.json();
+      if (prediction.error) { setAiBeautyMsg(prediction.error); setAiBeautyStatus("error"); return; }
+
+      // Poll for completion
+      let result = prediction;
+      let attempts = 0;
+      while (result.status !== "succeeded" && result.status !== "failed" && attempts < 60) {
+        await new Promise(r => setTimeout(r, 2000));
+        attempts++;
+        setAiBeautyMsg(`AI enhancing faces... (${attempts * 2}s)`);
+        const pollRes = await fetch(`https://api.replicate.com/v1/predictions/${result.id}`, {
+          headers: { "Authorization": `Token ${replicateKey.trim()}` }
+        });
+        result = await pollRes.json();
+      }
+
+      if (result.status === "succeeded" && result.output) {
+        // Fetch the output image and convert to object URL
+        const imgRes = await fetch(result.output);
+        const blob   = await imgRes.blob();
+        const url    = URL.createObjectURL(blob);
+        setAiBeautyUrl(url);
+        setAiBeautyMsg("✓ AI Beauty complete! Tap below to view & save.");
+        setAiBeautyStatus("done");
+      } else {
+        setAiBeautyMsg("AI processing failed. Try again.");
+        setAiBeautyStatus("error");
+      }
+    } catch(e) {
+      setAiBeautyMsg(`Error: ${e.message}`);
+      setAiBeautyStatus("error");
+    }
+  };
+
+  const saveAiBeautyResult = async () => {
+    if (!aiBeautyUrl) return;
+    const blob = await (await fetch(aiBeautyUrl)).blob();
+    await saveFile(blob, "photolab_ai_beauty.png");
+  };
+
+  // ── AI Enhance via Real-ESRGAN (full photo upscale + denoise + sharpen) ───
+  const handleAIEnhance = async () => {
+    if (!image) return;
+    if (!replicateKey.trim()) { setShowKeyInput(true); return; }
+    setAiEnhanceStatus("loading"); setAiEnhanceMsg("Sending to AI..."); setAiEnhanceUrl(null);
+    try {
+      const startRes = await fetch("https://api.replicate.com/v1/predictions", {
+        method: "POST",
+        headers: { "Authorization": `Token ${replicateKey.trim()}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          version: "42fed1c4974146d4d2414e2be2c5277c7fcf05fcc3a73abf41610695738c1d7b",
+          input: {
+            image: image,
+            scale: 2,
+            face_enhance: true,   // also run GFPGAN on faces while upscaling
+          }
+        })
+      });
+
+      if (startRes.status === 401) { setAiEnhanceMsg("Invalid API key."); setAiEnhanceStatus("error"); return; }
+      const prediction = await startRes.json();
+      if (prediction.error) { setAiEnhanceMsg(prediction.error); setAiEnhanceStatus("error"); return; }
+
+      let result = prediction;
+      let attempts = 0;
+      while (result.status !== "succeeded" && result.status !== "failed" && attempts < 60) {
+        await new Promise(r => setTimeout(r, 2000));
+        attempts++;
+        setAiEnhanceMsg(`Enhancing full photo... (${attempts * 2}s)`);
+        const poll = await fetch(`https://api.replicate.com/v1/predictions/${result.id}`, {
+          headers: { "Authorization": `Token ${replicateKey.trim()}` }
+        });
+        result = await poll.json();
+      }
+
+      if (result.status === "succeeded" && result.output) {
+        const imgRes = await fetch(result.output);
+        const blob   = await imgRes.blob();
+        const url    = URL.createObjectURL(blob);
+        setAiEnhanceUrl(url);
+        setAiEnhanceMsg("✓ Full photo enhanced! Tap below to save.");
+        setAiEnhanceStatus("done");
+      } else {
+        setAiEnhanceMsg("Enhancement failed — try again.");
+        setAiEnhanceStatus("error");
+      }
+    } catch(e) { setAiEnhanceMsg(`Error: ${e.message}`); setAiEnhanceStatus("error"); }
+  };
+
+  const saveAiEnhanceResult = async () => {
+    if (!aiEnhanceUrl) return;
+    const blob = await (await fetch(aiEnhanceUrl)).blob();
+    await saveFile(blob, "photolab_ai_enhanced.png");
+  };
+
+  // ── Auto enhance (CSS-based, instant) ─────────────────────────────────────
   const handleRemoveBg = async () => {
     if (!image || bgStatus==="loading") return;
     setBgStatus("loading"); setBgProgress(0); setBgSubjectUrl(null); setBgResult(null);
@@ -449,17 +587,77 @@ export default function App() {
       {/* EDIT */}
       {activeTab==="edit"&&(<>
         {image && !isMobileInline &&(
-          <div>
-            <Label>Auto Enhance & Beauty Filter</Label>
-            <Btn onClick={handleAutoEnhance} disabled={autoLoading} color="purple" textColor="#fff"
-              style={{marginBottom:"8px"}}>
-              {autoLoading?<Row><Spin color="#fff"/>Analysing...</Row>:"✨ Auto-Enhance & Beauty Filter"}
-            </Btn>
-            {autoMsg&&(
-              <div style={{padding:"10px 12px",background:"#f0f0ff",border:"1.5px solid #d8d4ff",borderRadius:"8px",animation:"fadein .3s"}}>
-                <div style={{fontSize:"12px",color:"#555",lineHeight:1.5}}>{autoMsg}</div>
+          <div style={{display:"flex",flexDirection:"column",gap:"10px"}}>
+
+            {/* ── AI Beauty (Replicate) ── */}
+            <div style={{background:"linear-gradient(135deg,#fff0fb,#f0f0ff)",border:"1.5px solid #e0c8f8",borderRadius:"12px",padding:"14px"}}>
+              <div style={{fontSize:"13px",fontWeight:700,color:"#7c3aed",marginBottom:"3px"}}>🪄 AI Beauty Filter</div>
+              <div style={{fontSize:"11px",color:"#9d6fb5",marginBottom:"10px",lineHeight:1.5}}>Real AI face restoration — smooths skin, sharpens eyes, enhances detail using CodeFormer.</div>
+
+              {/* Key input */}
+              {showKeyInput && (
+                <div style={{marginBottom:"10px"}}>
+                  <input
+                    type="password"
+                    placeholder="r8_... (free at replicate.com)"
+                    value={replicateKey}
+                    onChange={e=>{ setReplicateKey(e.target.value); localStorage.setItem("replicateKey",e.target.value); }}
+                    style={{width:"100%",padding:"9px 12px",border:"1.5px solid #d8b4fe",borderRadius:"8px",fontSize:"12px",fontFamily:"inherit",outline:"none",background:"#fff",color:"#333",marginBottom:"6px"}}/>
+                  <div style={{fontSize:"10px",color:"#a78bfa",lineHeight:1.5}}>
+                    Get a free key at <a href="https://replicate.com/signin" target="_blank" rel="noreferrer" style={{color:"#7c3aed",fontWeight:600}}>replicate.com</a> — free credits included
+                  </div>
+                </div>
+              )}
+
+              <div style={{display:"flex",gap:"8px"}}>
+                <button onClick={handleAIBeauty} disabled={aiBeautyStatus==="loading"}
+                  style={{flex:1,padding:"11px",background:aiBeautyStatus==="loading"?"#f3e8ff":"linear-gradient(135deg,#7c3aed,#a78bfa)",color:aiBeautyStatus==="loading"?"#a78bfa":"#fff",border:"none",borderRadius:"9px",fontSize:"12px",fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:"6px",fontFamily:"inherit"}}>
+                  {aiBeautyStatus==="loading"
+                    ? <><Spin color="#a78bfa"/>Enhancing...</>
+                    : aiBeautyStatus==="done" ? "🪄 Enhance Again" : "🪄 Enhance with AI"}
+                </button>
+                <button onClick={()=>setShowKeyInput(v=>!v)}
+                  style={{padding:"11px 12px",background:"#f3e8ff",border:"1.5px solid #d8b4fe",borderRadius:"9px",fontSize:"13px",cursor:"pointer",color:"#7c3aed"}}>
+                  🔑
+                </button>
               </div>
-            )}
+
+              {aiBeautyMsg && (
+                <div style={{marginTop:"8px",fontSize:"11px",color:aiBeautyStatus==="error"?"#ef4444":aiBeautyStatus==="done"?"#16a34a":"#7c3aed",lineHeight:1.5}}>
+                  {aiBeautyMsg}
+                </div>
+              )}
+
+              {aiBeautyStatus==="done" && aiBeautyUrl && (
+                <div style={{marginTop:"10px"}}>
+                  <img src={aiBeautyUrl} alt="AI enhanced" style={{width:"100%",borderRadius:"8px",border:"1.5px solid #d8b4fe",display:"block",marginBottom:"8px"}}/>
+                  <button onClick={saveAiBeautyResult}
+                    style={{width:"100%",padding:"10px",background:"linear-gradient(135deg,#7c3aed,#a78bfa)",color:"#fff",border:"none",borderRadius:"9px",fontSize:"12px",fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>
+                    ↓ Save AI Enhanced Photo
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* ── AI Enhance (Real-ESRGAN) ── */}
+            <div style={{background:"linear-gradient(135deg,#f0fff8,#f0f8ff)",border:"1.5px solid #a7f3d0",borderRadius:"12px",padding:"14px"}}>
+              <div style={{fontSize:"13px",fontWeight:700,color:"#047857",marginBottom:"3px"}}>🔍 AI Photo Enhance</div>
+              <div style={{fontSize:"11px",color:"#059669",marginBottom:"10px",lineHeight:1.5}}>Real-ESRGAN — removes noise, sharpens detail, upscales 2× the entire photo. Works great on old or blurry photos.</div>
+              <button onClick={handleAIEnhance} disabled={aiEnhanceStatus==="loading"}
+                style={{width:"100%",padding:"11px",background:aiEnhanceStatus==="loading"?"#d1fae5":"linear-gradient(135deg,#059669,#34d399)",color:aiEnhanceStatus==="loading"?"#059669":"#fff",border:"none",borderRadius:"9px",fontSize:"12px",fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:"6px",fontFamily:"inherit",marginBottom:"6px"}}>
+                {aiEnhanceStatus==="loading"?<><Spin color="#059669"/>Enhancing...</>:aiEnhanceStatus==="done"?"🔍 Enhance Again":"🔍 AI Enhance Full Photo"}
+              </button>
+              {aiEnhanceMsg&&<div style={{fontSize:"11px",color:aiEnhanceStatus==="error"?"#ef4444":aiEnhanceStatus==="done"?"#047857":"#059669",lineHeight:1.5,marginBottom:aiEnhanceStatus==="done"?"8px":"0"}}>{aiEnhanceMsg}</div>}
+              {aiEnhanceStatus==="done"&&aiEnhanceUrl&&(
+                <>
+                  <img src={aiEnhanceUrl} alt="AI enhanced" style={{width:"100%",borderRadius:"8px",border:"1.5px solid #a7f3d0",display:"block",marginBottom:"8px"}}/>
+                  <button onClick={saveAiEnhanceResult}
+                    style={{width:"100%",padding:"10px",background:"linear-gradient(135deg,#059669,#34d399)",color:"#fff",border:"none",borderRadius:"9px",fontSize:"12px",fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>
+                    ↓ Save AI Enhanced Photo
+                  </button>
+                </>
+              )}
+            </div>
           </div>
         )}
 
@@ -592,15 +790,57 @@ export default function App() {
           <div style={{flex:1,overflowY:"auto",background:"#fff",WebkitOverflowScrolling:"touch"}}>
             {/* Quick action bar — always pinned at top of controls */}
             {image && (
-              <div style={{display:"flex",gap:"8px",padding:"10px 14px",borderBottom:"1px solid #f0f0f4",background:"#fff",position:"sticky",top:0,zIndex:10}}>
-                <button onClick={handleAutoEnhance} disabled={autoLoading}
-                  style={{flex:1,padding:"9px",background:"linear-gradient(135deg,#6c63ff,#a78bfa)",color:"#fff",border:"none",borderRadius:"9px",fontSize:"12px",fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:"6px"}}>
-                  {autoLoading?<><Spin/>Enhancing...</>:"✨ Auto-Enhance"}
+              <div style={{display:"flex",gap:"7px",padding:"10px 14px",borderBottom:"1px solid #f0f0f4",background:"#fff",position:"sticky",top:0,zIndex:10}}>
+                <button onClick={handleAIBeauty} disabled={aiBeautyStatus==="loading"||aiEnhanceStatus==="loading"}
+                  style={{flex:1,padding:"9px",background:aiBeautyStatus==="loading"?"#f3e8ff":"linear-gradient(135deg,#7c3aed,#a78bfa)",color:aiBeautyStatus==="loading"?"#a78bfa":"#fff",border:"none",borderRadius:"9px",fontSize:"11px",fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:"5px",fontFamily:"inherit"}}>
+                  {aiBeautyStatus==="loading"?<><Spin color="#a78bfa"/>...</>:"🪄 Beauty"}
                 </button>
+                <button onClick={handleAIEnhance} disabled={aiEnhanceStatus==="loading"||aiBeautyStatus==="loading"}
+                  style={{flex:1,padding:"9px",background:aiEnhanceStatus==="loading"?"#d1fae5":"linear-gradient(135deg,#059669,#34d399)",color:aiEnhanceStatus==="loading"?"#059669":"#fff",border:"none",borderRadius:"9px",fontSize:"11px",fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:"5px",fontFamily:"inherit"}}>
+                  {aiEnhanceStatus==="loading"?<><Spin color="#059669"/>...</>:"🔍 Enhance"}
+                </button>
+                <button onClick={()=>setShowKeyInput(v=>!v)}
+                  style={{padding:"9px 10px",background:"#f3e8ff",border:"1.5px solid #d8b4fe",borderRadius:"9px",fontSize:"13px",cursor:"pointer",color:"#7c3aed"}}>🔑</button>
                 <button onClick={()=>{setFilters(DEFAULT_STATE);setAutoMsg(null);}}
-                  style={{padding:"9px 14px",background:"#f2f2f8",border:"none",borderRadius:"9px",fontSize:"12px",fontWeight:600,color:"#888",cursor:"pointer"}}>
-                  Reset
+                  style={{padding:"9px 10px",background:"#f2f2f8",border:"none",borderRadius:"9px",fontSize:"11px",fontWeight:600,color:"#888",cursor:"pointer"}}>Reset</button>
+              </div>
+            )}
+            {/* Status messages */}
+            {(aiBeautyStatus==="loading"||aiEnhanceStatus==="loading") && (
+              <div style={{margin:"8px 14px 0",padding:"8px 12px",background:aiBeautyStatus==="loading"?"#f3e8ff":"#d1fae5",borderRadius:"8px",fontSize:"11px",color:aiBeautyStatus==="loading"?"#7c3aed":"#047857"}}>
+                {aiBeautyStatus==="loading"?aiBeautyMsg:aiEnhanceMsg}
+              </div>
+            )}
+            {/* AI Beauty result */}
+            {aiBeautyStatus==="done"&&aiBeautyUrl&&(
+              <div style={{margin:"10px 14px 0",padding:"12px",background:"linear-gradient(135deg,#fff0fb,#f0f0ff)",border:"1.5px solid #d8b4fe",borderRadius:"10px"}}>
+                <div style={{fontSize:"12px",fontWeight:700,color:"#7c3aed",marginBottom:"8px"}}>🪄 AI Beauty Result</div>
+                <img src={aiBeautyUrl} alt="AI beauty" style={{width:"100%",borderRadius:"8px",marginBottom:"8px",display:"block"}}/>
+                <button onClick={saveAiBeautyResult}
+                  style={{width:"100%",padding:"10px",background:"linear-gradient(135deg,#7c3aed,#a78bfa)",color:"#fff",border:"none",borderRadius:"9px",fontSize:"12px",fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>
+                  ↓ Save AI Beauty Photo
                 </button>
+              </div>
+            )}
+            {/* AI Enhance result */}
+            {aiEnhanceStatus==="done"&&aiEnhanceUrl&&(
+              <div style={{margin:"10px 14px 0",padding:"12px",background:"linear-gradient(135deg,#f0fff8,#f0f8ff)",border:"1.5px solid #a7f3d0",borderRadius:"10px"}}>
+                <div style={{fontSize:"12px",fontWeight:700,color:"#047857",marginBottom:"8px"}}>🔍 AI Enhanced Result</div>
+                <img src={aiEnhanceUrl} alt="AI enhanced" style={{width:"100%",borderRadius:"8px",marginBottom:"8px",display:"block"}}/>
+                <button onClick={saveAiEnhanceResult}
+                  style={{width:"100%",padding:"10px",background:"linear-gradient(135deg,#059669,#34d399)",color:"#fff",border:"none",borderRadius:"9px",fontSize:"12px",fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>
+                  ↓ Save Enhanced Photo
+                </button>
+              </div>
+            )}
+            {showKeyInput && (
+              <div style={{margin:"8px 14px 0",padding:"12px",background:"#fff0fb",border:"1.5px solid #d8b4fe",borderRadius:"10px"}}>
+                <div style={{fontSize:"11px",color:"#7c3aed",fontWeight:600,marginBottom:"6px"}}>🔑 Replicate API Key</div>
+                <input type="password" placeholder="r8_... (free at replicate.com)"
+                  value={replicateKey}
+                  onChange={e=>{setReplicateKey(e.target.value);localStorage.setItem("replicateKey",e.target.value);}}
+                  style={{width:"100%",padding:"9px 12px",border:"1.5px solid #d8b4fe",borderRadius:"8px",fontSize:"12px",fontFamily:"inherit",outline:"none",marginBottom:"6px"}}/>
+                <div style={{fontSize:"10px",color:"#a78bfa"}}>Free at <a href="https://replicate.com/signin" target="_blank" rel="noreferrer" style={{color:"#7c3aed",fontWeight:600}}>replicate.com</a></div>
               </div>
             )}
             {autoMsg&&image&&(
