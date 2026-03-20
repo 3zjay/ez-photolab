@@ -1,12 +1,1384 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>PHOTOlab</title>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.jsx"></script>
-  </body>
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>HOOP CULTURE — GTA Basketball Network</title>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Barlow+Condensed:wght@400;600;700;900&family=Barlow:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+<style>
+:root{
+  --bg:#080808;--bg2:#101010;--bg3:#181818;--bg4:#202020;
+  --orange:#ff4500;--orange2:#ff6a00;--gold:#f0a500;
+  --white:#f0f0f0;--grey:#999;--mid:#555;--dim:#333;
+  --green:#16c784;--red:#e53935;--blue:#1877f2;
+  --border:#1c1c1c;--border2:#282828;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+html{scroll-behavior:smooth;}
+body{background:var(--bg);color:var(--white);font-family:'Barlow',sans-serif;overflow-x:hidden;}
+
+/* TOPBAR */
+.topbar{background:#000;border-bottom:1px solid var(--border);padding:7px 0;}
+.ti{max-width:1360px;margin:0 auto;padding:0 28px;display:flex;align-items:center;justify-content:space-between;}
+.tl{font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:600;letter-spacing:2px;text-transform:uppercase;color:var(--mid);}
+.tl em{color:var(--orange);font-style:normal;}
+.ts{display:flex;gap:14px;}
+.ts a{font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--mid);text-decoration:none;transition:color .15s;}
+.ts a:hover{color:var(--orange);}
+
+/* NAV */
+nav{background:#000;border-bottom:3px solid var(--orange);position:sticky;top:0;z-index:1000;}
+.ni{max-width:1360px;margin:0 auto;padding:0 28px;display:flex;align-items:center;justify-content:space-between;height:56px;}
+.logo{font-family:'Anton',sans-serif;font-size:26px;letter-spacing:1px;text-decoration:none;color:var(--white);line-height:1;}
+.logo em{color:var(--orange);font-style:normal;}
+.nl{display:flex;list-style:none;height:100%;}
+.nl a{font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--mid);text-decoration:none;padding:0 15px;height:100%;display:flex;align-items:center;border-bottom:3px solid transparent;margin-bottom:-3px;transition:all .15s;}
+.nl a:hover,.nl a.act{color:var(--white);border-bottom-color:var(--orange);}
+.nr{display:flex;gap:8px;align-items:center;}
+.nbtn{font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;padding:8px 16px;border:none;cursor:pointer;transition:all .2s;text-decoration:none;display:inline-flex;align-items:center;gap:6px;white-space:nowrap;}
+.nbtn.or{background:var(--orange);color:#fff;}
+.nbtn.or:hover{background:var(--orange2);}
+.nbtn.gh{background:transparent;color:var(--mid);border:1px solid var(--border2);}
+.nbtn.gh:hover{color:var(--white);border-color:var(--mid);}
+
+/* LIVE BANNER */
+#liveBanner{display:none;background:var(--red);}
+#liveBanner.show{display:block;}
+.lbi{max-width:1360px;margin:0 auto;padding:10px 28px;display:flex;align-items:center;gap:16px;overflow-x:auto;}
+.live-label{font-family:'Anton',sans-serif;font-size:18px;letter-spacing:2px;color:#fff;flex-shrink:0;}
+.live-pill{display:flex;align-items:center;gap:8px;background:rgba(0,0,0,.3);padding:8px 16px;cursor:pointer;flex-shrink:0;transition:background .2s;}
+.live-pill:hover{background:rgba(0,0,0,.5);}
+.lpulse{width:8px;height:8px;border-radius:50%;background:#fff;animation:pulse 1.2s ease-in-out infinite;flex-shrink:0;}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1);}50%{opacity:.4;transform:scale(1.4);}}
+.live-txt{font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#fff;}
+
+/* TICKER */
+.ticker{background:var(--orange);overflow:hidden;padding:7px 0;}
+.tw{display:flex;align-items:center;}
+.ttag{background:#000;color:var(--orange);font-family:'Anton',sans-serif;font-size:11px;letter-spacing:1px;padding:0 16px;height:100%;display:flex;align-items:center;white-space:nowrap;align-self:stretch;flex-shrink:0;}
+.tt{display:inline-flex;animation:tick 36s linear infinite;white-space:nowrap;}
+.ti2{font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#000;padding:0 40px;}
+@keyframes tick{0%{transform:translateX(0)}100%{transform:translateX(-50%)}}
+
+/* LAYOUT */
+.wrap{max-width:1360px;margin:0 auto;padding:0 28px;}
+.sec{padding:28px 0;}
+.sh{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;}
+.st{font-family:'Anton',sans-serif;font-size:20px;color:var(--white);display:flex;align-items:center;gap:10px;}
+.st::before{content:'';width:4px;height:20px;background:var(--orange);}
+.sa{font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--orange);text-decoration:none;cursor:pointer;}
+
+/* CAT PILLS */
+.pills{display:flex;gap:6px;padding:14px 0;border-bottom:1px solid var(--border);overflow-x:auto;}
+.pill{font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;padding:7px 15px;background:var(--bg3);color:var(--mid);cursor:pointer;transition:all .2s;white-space:nowrap;border:1px solid transparent;}
+.pill:hover,.pill.on{background:var(--orange);color:#fff;border-color:var(--orange);}
+
+/* HERO FEATURED */
+.hero-wrap{display:grid;grid-template-columns:1fr 300px;gap:3px;margin-bottom:3px;}
+.hero-main{position:relative;cursor:pointer;overflow:hidden;background:var(--bg2);}
+.hero-main:hover .play-big{transform:translate(-50%,-50%) scale(1.08);}
+.hero-thumb{width:100%;aspect-ratio:16/9;position:relative;overflow:hidden;}
+.hero-thumb img{width:100%;height:100%;object-fit:cover;display:block;}
+.hero-ph{width:100%;height:100%;background:linear-gradient(160deg,#1a0800,#080808);display:flex;align-items:center;justify-content:center;font-size:64px;opacity:.3;}
+.hero-ov{position:absolute;inset:0;background:linear-gradient(to top,rgba(0,0,0,.92) 0%,rgba(0,0,0,.1) 55%,transparent 100%);}
+.play-big{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:68px;height:68px;background:var(--orange);border-radius:50%;display:flex;align-items:center;justify-content:center;transition:transform .25s;z-index:2;}
+.play-big svg{margin-left:4px;}
+.hero-info{position:absolute;bottom:0;left:0;right:0;padding:22px 26px;z-index:2;}
+.hero-cat{font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:700;letter-spacing:3px;text-transform:uppercase;color:var(--orange);background:rgba(255,69,0,.12);border:1px solid rgba(255,69,0,.25);padding:3px 10px;display:inline-block;margin-bottom:8px;}
+.hero-title{font-family:'Anton',sans-serif;font-size:clamp(18px,2.8vw,32px);line-height:1.05;color:var(--white);}
+.hero-meta{margin-top:7px;font-family:'Barlow Condensed',sans-serif;font-size:11px;letter-spacing:1.5px;text-transform:uppercase;color:rgba(255,255,255,.4);}
+.hero-meta strong{color:rgba(255,255,255,.65);}
+
+/* HERO STACK */
+.hero-stack{display:flex;flex-direction:column;gap:3px;}
+.sc{background:var(--bg2);cursor:pointer;position:relative;overflow:hidden;flex:1;display:flex;align-items:flex-end;min-height:130px;transition:background .2s;}
+.sc:hover{background:var(--bg3);}
+.sc-bg{position:absolute;inset:0;}
+.sc-bg img{width:100%;height:100%;object-fit:cover;display:block;opacity:.4;}
+.sc-ov{position:absolute;inset:0;background:linear-gradient(to top,rgba(0,0,0,.88) 0%,rgba(0,0,0,.1) 60%,transparent 100%);}
+.sc-play{position:absolute;top:8px;right:8px;width:28px;height:28px;background:var(--orange);border-radius:50%;display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .2s;}
+.sc:hover .sc-play{opacity:1;}
+.sc-play svg{margin-left:2px;}
+.sc-body{position:relative;z-index:1;padding:10px 12px;}
+.sc-cat{font-family:'Barlow Condensed',sans-serif;font-size:9px;font-weight:700;letter-spacing:3px;text-transform:uppercase;color:var(--orange);margin-bottom:3px;}
+.sc-title{font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;line-height:1.25;color:var(--white);}
+.sc-meta{font-size:10px;color:rgba(255,255,255,.35);margin-top:2px;}
+
+/* VIDEO GRID */
+.vgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;}
+.vc{background:var(--bg2);cursor:pointer;overflow:hidden;transition:transform .2s;}
+.vc:hover{transform:translateY(-3px);}
+.vc:hover .vthumb-img{transform:scale(1.04);}
+.vc:hover .vplay{opacity:1;}
+.vt{width:100%;aspect-ratio:16/9;position:relative;overflow:hidden;}
+.vt-ph{width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:26px;}
+.vthumb-img{width:100%;height:100%;object-fit:cover;display:block;transition:transform .35s;}
+.vplay{position:absolute;inset:0;background:rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .2s;}
+.vplay-btn{width:42px;height:42px;background:var(--orange);border-radius:50%;display:flex;align-items:center;justify-content:center;}
+.vplay-btn svg{margin-left:3px;}
+.vdur{position:absolute;bottom:5px;right:6px;background:rgba(0,0,0,.85);font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:700;color:var(--white);padding:2px 5px;}
+.vlive{position:absolute;top:6px;left:6px;background:var(--red);font-family:'Barlow Condensed',sans-serif;font-size:9px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#fff;padding:3px 7px;display:flex;align-items:center;gap:4px;}
+.vtag{position:absolute;top:6px;left:6px;font-family:'Barlow Condensed',sans-serif;font-size:9px;font-weight:700;letter-spacing:2px;text-transform:uppercase;padding:3px 7px;}
+.vtag-v{background:var(--red);color:#fff;}
+.vtag-p{background:#1565c0;color:#fff;}
+.vtag-e{background:#2e7d32;color:#fff;}
+.vbody{padding:11px 12px 13px;}
+.vcat{font-family:'Barlow Condensed',sans-serif;font-size:9px;font-weight:700;letter-spacing:2.5px;text-transform:uppercase;color:var(--orange);margin-bottom:4px;}
+.vtitle{font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;line-height:1.3;color:var(--white);margin-bottom:5px;}
+.vmeta{font-size:10px;color:var(--mid);}
+
+/* NEWS GRID */
+.news-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;}
+.nc{background:var(--bg2);cursor:pointer;overflow:hidden;transition:background .2s;display:flex;flex-direction:column;}
+.nc:hover{background:var(--bg3);}
+.nc:hover .nc-title{color:var(--orange);}
+.nc-img{width:100%;aspect-ratio:16/9;overflow:hidden;position:relative;}
+.nc-img img{width:100%;height:100%;object-fit:cover;display:block;transition:transform .3s;}
+.nc:hover .nc-img img{transform:scale(1.04);}
+.nc-img-ph{width:100%;height:100%;background:linear-gradient(135deg,var(--bg3),var(--bg4));display:flex;align-items:center;justify-content:center;font-size:28px;}
+.nc-body{padding:14px 16px;flex:1;display:flex;flex-direction:column;}
+.nc-cat{font-family:'Barlow Condensed',sans-serif;font-size:9px;font-weight:700;letter-spacing:3px;text-transform:uppercase;color:var(--orange);margin-bottom:5px;}
+.nc-title{font-family:'Barlow Condensed',sans-serif;font-size:16px;font-weight:700;line-height:1.3;color:var(--white);margin-bottom:6px;transition:color .15s;flex:1;}
+.nc-meta{font-size:10px;color:var(--mid);}
+
+/* EVENTS */
+.events-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;}
+.ec{background:var(--bg2);padding:20px;cursor:pointer;transition:background .2s;border-left:3px solid var(--orange);}
+.ec:hover{background:var(--bg3);}
+.ec-date{font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:700;letter-spacing:3px;text-transform:uppercase;color:var(--orange);margin-bottom:6px;}
+.ec-name{font-family:'Barlow Condensed',sans-serif;font-size:17px;font-weight:700;color:var(--white);line-height:1.25;margin-bottom:5px;}
+.ec-place{font-size:12px;color:var(--mid);}
+.ec-desc{font-size:12px;color:var(--dim);margin-top:8px;line-height:1.5;}
+
+/* CONNECT SCREEN */
+.connect-screen{background:var(--bg2);border:2px dashed rgba(255,69,0,.2);padding:80px 40px;text-align:center;}
+.cs-icon{font-size:52px;display:block;margin-bottom:18px;}
+.cs-title{font-family:'Anton',sans-serif;font-size:clamp(28px,4vw,42px);color:var(--white);margin-bottom:12px;}
+.cs-title em{color:var(--orange);font-style:normal;}
+.cs-desc{font-size:14px;color:var(--grey);line-height:1.8;max-width:480px;margin:0 auto 28px;}
+
+/* SHIMMER */
+.shim{background:linear-gradient(90deg,var(--bg2) 25%,var(--bg3) 50%,var(--bg2) 75%);background-size:200%;animation:shim 1.4s infinite;}
+@keyframes shim{0%{background-position:200% 0}100%{background-position:-200% 0}}
+
+/* VIDEO MODAL */
+#vmod{position:fixed;inset:0;z-index:2000;background:rgba(0,0,0,.97);display:none;align-items:center;justify-content:center;padding:20px;}
+#vmod.open{display:flex;}
+.vm-close{position:fixed;top:18px;right:22px;font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#555;background:var(--bg3);border:1px solid var(--border2);padding:7px 14px;cursor:pointer;transition:all .2s;}
+.vm-close:hover{color:var(--white);}
+.vm-wrap{width:100%;max-width:500px;}
+.vm-embed{width:100%;padding-bottom:177.77%;position:relative;background:#000;}
+.vm-embed iframe{position:absolute;top:0;left:0;width:100%;height:100%;border:none;}
+.vm-info{padding:12px 0 0;display:flex;gap:14px;align-items:flex-start;}
+.vm-title{font-family:'Barlow Condensed',sans-serif;font-size:20px;font-weight:700;color:var(--white);flex:1;}
+.vm-meta{font-size:11px;color:#555;margin-top:3px;}
+.vm-fblink{font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;background:var(--blue);color:#fff;padding:8px 14px;border:none;cursor:pointer;text-decoration:none;white-space:nowrap;}
+
+/* LEAGUES */
+.lg-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:2px;}
+.lc{background:var(--bg2);padding:24px 28px;transition:background .2s;position:relative;overflow:hidden;text-decoration:none;display:block;color:inherit;}
+.lc::after{content:'';position:absolute;bottom:0;left:0;right:0;height:2px;background:var(--orange);transform:scaleX(0);transform-origin:left;transition:transform .3s;}
+.lc:hover::after{transform:scaleX(1);}
+.lc:hover{background:var(--bg3);}
+.lnum{font-family:'Anton',sans-serif;font-size:46px;color:rgba(255,69,0,.06);line-height:1;margin-bottom:6px;}
+.lname{font-family:'Barlow Condensed',sans-serif;font-size:18px;font-weight:700;color:var(--white);margin-bottom:3px;}
+.lloc{font-size:11px;color:var(--mid);margin-bottom:10px;}
+.ltags{display:flex;flex-wrap:wrap;gap:4px;}
+.ltag{font-family:'Barlow Condensed',sans-serif;font-size:8px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;padding:3px 7px;background:rgba(255,255,255,.04);color:var(--mid);}
+.ltag.on{background:rgba(255,69,0,.1);color:var(--orange);}
+.ltag.fb{background:rgba(24,119,242,.1);color:#6fa3ef;}
+
+/* SUBMIT BANNER */
+.sub-banner{background:linear-gradient(135deg,var(--orange),#ff2200);padding:32px 0;margin-top:20px;}
+.sbi{display:flex;align-items:center;justify-content:space-between;gap:20px;}
+.sbi h2{font-family:'Anton',sans-serif;font-size:clamp(20px,2.5vw,32px);color:#fff;line-height:1.1;margin-bottom:5px;}
+.sbi p{font-size:13px;color:rgba(255,255,255,.75);}
+.sbi-btns{display:flex;gap:8px;flex-shrink:0;}
+.btn-w{font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;background:#fff;color:var(--orange);padding:11px 22px;border:none;cursor:pointer;text-decoration:none;display:inline-block;}
+.btn-ow{font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;background:transparent;color:#fff;padding:10px 22px;border:2px solid rgba(255,255,255,.5);cursor:pointer;}
+
+/* PASSWORD GATE */
+.overlay{display:none;position:fixed;inset:0;z-index:5000;background:rgba(0,0,0,.95);backdrop-filter:blur(8px);overflow-y:auto;}
+.overlay.open{display:flex;justify-content:center;align-items:flex-start;padding:36px 20px;}
+.obox{background:var(--bg2);border:1px solid var(--border2);width:100%;padding:40px;}
+.otop{display:flex;align-items:center;justify-content:space-between;margin-bottom:28px;}
+.otitle{font-family:'Anton',sans-serif;font-size:28px;color:var(--white);}
+.otitle em{color:var(--orange);font-style:normal;}
+.oclose{background:none;border:none;color:#555;font-size:24px;cursor:pointer;line-height:1;}
+.oclose:hover{color:var(--white);}
+.osec{margin-bottom:28px;}
+.osect{font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:700;letter-spacing:3px;text-transform:uppercase;color:var(--orange);margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid var(--border);}
+.oi{width:100%;background:var(--bg3);border:1px solid var(--border2);color:var(--white);padding:12px 14px;font-family:'Barlow',sans-serif;font-size:14px;outline:none;transition:border-color .2s;margin-bottom:8px;}
+.oi:focus{border-color:var(--orange);}
+.oi::placeholder{color:#3a3a3a;}
+.olbl{font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#555;margin-bottom:6px;display:block;}
+.ob{font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;padding:12px 20px;border:none;cursor:pointer;transition:all .2s;white-space:nowrap;display:inline-flex;align-items:center;gap:6px;}
+.ob.or{background:var(--orange);color:#fff;}
+.ob.or:hover{background:var(--orange2);}
+.ob.gy{background:var(--bg3);color:#666;border:1px solid var(--border2);}
+.ob.gy:hover{color:var(--white);}
+.ob.rd{background:rgba(229,57,53,.08);color:#f87171;border:1px solid rgba(229,57,53,.2);}
+.ob.rd:hover{background:rgba(229,57,53,.18);}
+.omsg{font-size:12px;padding:10px 14px;margin-top:8px;display:none;line-height:1.5;}
+.omsg.ok{background:rgba(22,199,132,.06);color:#86efac;border:1px solid rgba(22,199,132,.2);display:block;}
+.omsg.er{background:rgba(229,57,53,.06);color:#fca5a5;border:1px solid rgba(229,57,53,.2);display:block;}
+.omsg.in{background:rgba(74,158,255,.06);color:#93c5fd;border:1px solid rgba(74,158,255,.2);display:block;}
+.hint{font-size:12px;color:#444;line-height:1.65;margin-bottom:12px;}
+.hint strong{color:var(--mid);}
+.hint a{color:var(--orange);}
+.status-bar{background:rgba(22,199,132,.06);border:1px solid rgba(22,199,132,.2);padding:12px 16px;display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px;}
+.status-bar.hidden{display:none;}
+.sb-text{font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;color:var(--green);}
+.sb-sub{font-size:11px;color:#555;margin-top:2px;}
+.token-steps{background:var(--bg3);border:1px solid var(--border2);padding:16px 18px;margin-bottom:16px;}
+.step-row{display:flex;gap:10px;align-items:flex-start;font-size:12px;color:var(--grey);margin-bottom:10px;}
+.step-row:last-child{margin-bottom:0;}
+.step-num{background:var(--orange);color:#fff;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:11px;padding:1px 7px;flex-shrink:0;margin-top:1px;}
+.step-row a{color:var(--orange);text-decoration:none;}
+.step-row strong{color:var(--white);}
+.step-row code{background:var(--bg4);padding:1px 5px;color:var(--orange);font-size:11px;}
+
+/* FOOTER */
+footer{background:#000;border-top:3px solid var(--orange);margin-top:40px;}
+.fi{max-width:1360px;margin:0 auto;padding:44px 28px 28px;}
+.fg{display:grid;grid-template-columns:240px 1fr 1fr 1fr;gap:40px;margin-bottom:36px;}
+.flogo{font-family:'Anton',sans-serif;font-size:22px;color:var(--white);margin-bottom:8px;}
+.flogo em{color:var(--orange);font-style:normal;}
+.ftagline{font-size:11px;color:#333;line-height:1.7;max-width:190px;margin-bottom:16px;}
+.fsoc{display:flex;gap:5px;}
+.fsoca{font-family:'Barlow Condensed',sans-serif;font-size:9px;font-weight:700;letter-spacing:2px;text-transform:uppercase;background:var(--bg2);color:#333;padding:6px 10px;text-decoration:none;transition:all .2s;}
+.fsoca:hover{background:var(--orange);color:#fff;}
+.fct{font-family:'Barlow Condensed',sans-serif;font-size:9px;font-weight:700;letter-spacing:3px;text-transform:uppercase;color:#222;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid #111;}
+.fl{list-style:none;display:flex;flex-direction:column;gap:7px;}
+.fl a{font-size:11px;color:#333;text-decoration:none;transition:color .15s;font-family:'Barlow Condensed',sans-serif;font-weight:600;}
+.fl a:hover{color:var(--orange);}
+.fbot{display:flex;align-items:center;justify-content:space-between;border-top:1px solid #111;padding-top:18px;font-size:10px;color:#222;}
+.fbot em{color:var(--orange);font-style:normal;}
+
+/* SUBMIT MODAL */
+.mov{position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:3000;display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity .25s;}
+.mov.open{opacity:1;pointer-events:all;}
+.mbox{background:var(--bg2);border:1px solid var(--border2);max-width:480px;width:90%;padding:36px;transform:translateY(16px);transition:transform .25s;position:relative;}
+.mov.open .mbox{transform:translateY(0);}
+.mclose{position:absolute;top:14px;right:14px;background:none;border:none;color:#555;font-size:22px;cursor:pointer;}
+.mclose:hover{color:var(--white);}
+.mtitle{font-family:'Anton',sans-serif;font-size:28px;color:var(--white);margin-bottom:6px;}
+.msub{font-size:12px;color:var(--mid);margin-bottom:20px;line-height:1.6;}
+.mi{width:100%;background:var(--bg3);border:1px solid var(--border2);color:var(--white);padding:11px 13px;font-family:'Barlow',sans-serif;font-size:13px;margin-bottom:8px;outline:none;transition:border-color .2s;}
+.mi:focus{border-color:var(--orange);}
+
+.fu{opacity:0;transform:translateY(16px);transition:opacity .55s ease,transform .55s ease;}
+.fu.vis{opacity:1;transform:translateY(0);}
+.d1{transition-delay:.07s}.d2{transition-delay:.14s}.d3{transition-delay:.21s}
+
+.league-admin-row{background:var(--bg3);padding:12px 16px;display:flex;align-items:center;justify-content:space-between;gap:10px;}
+.lar-name{font-family:'Barlow Condensed',sans-serif;font-size:15px;font-weight:700;color:var(--white);}
+.lar-sub{font-size:11px;color:var(--mid);margin-top:2px;}
+.home-badge{font-family:'Barlow Condensed',sans-serif;font-size:9px;font-weight:700;letter-spacing:2px;text-transform:uppercase;background:rgba(255,69,0,.15);color:var(--orange);padding:1px 7px;margin-left:6px;}
+.always-on-lbl{font-family:'Barlow Condensed',sans-serif;font-size:10px;color:var(--mid);}
+@media(max-width:1100px){.hero-wrap{grid-template-columns:1fr;}.vgrid{grid-template-columns:repeat(2,1fr);}.news-grid,.events-grid{grid-template-columns:1fr 1fr;}.fg{grid-template-columns:1fr 1fr;gap:24px;}}
+@media(max-width:768px){.topbar{display:none;}.nl{display:none;}.vgrid{grid-template-columns:1fr;}.news-grid,.events-grid,.lg-grid{grid-template-columns:1fr;}.sbi{flex-direction:column;}.wrap{padding:0 16px;}.hero-wrap{grid-template-columns:1fr;}.fg{grid-template-columns:1fr;}}
+</style>
+</head>
+<body>
+
+<!-- Facebook SDK -->
+<div id="fb-root"></div>
+<script>
+window.fbAsyncInit = function() {
+  FB.init({ appId: '1519191979811970', cookie: true, xfbml: false, version: 'v18.0' });
+  FB.getLoginStatus(function(r) {
+    if (r.status === 'connected') onFBLogin(r.authResponse);
+  });
+};
+(function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0];if(d.getElementById(id))return;js=d.createElement(s);js.id=id;js.src='https://connect.facebook.net/en_US/sdk.js';fjs.parentNode.insertBefore(js,fjs);}(document,'script','facebook-jssdk'));
+</script>
+
+<!-- TOPBAR -->
+<div class="topbar">
+  <div class="ti">
+    <div class="tl">GTA Basketball Network · <em id="topDate"></em></div>
+    <div class="ts">
+      <a href="https://www.facebook.com/profile.php?id=294854097041647" target="_blank">Facebook</a>
+      <a href="#">Instagram</a><a href="#">YouTube</a><a href="#">TikTok</a>
+    </div>
+  </div>
+</div>
+
+<!-- NAV -->
+<nav>
+  <div class="ni">
+    <a class="logo" href="#"><em>HOOP</em> CULTURE</a>
+    <ul class="nl">
+      <li><a href="#videos" class="act">Videos</a></li>
+      <li><a href="#posts">News</a></li>
+      <li><a href="#events">Events</a></li>
+      <li><a href="#leagues">Leagues</a></li>
+      <li><a href="network.html" target="_blank">Hoop Network</a></li>
+      <li><a href="#" id="liveNavLink" style="display:none;color:var(--red);">🔴 Live</a></li>
+    </ul>
+    <div class="nr">
+      <span id="connectedDot" style="display:none;font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--green);">● Connected</span>
+      <button class="nbtn gh" onclick="openAdmin()">⚙ Admin</button>
+      <button class="nbtn or" onclick="openSubmit()">Submit Clip</button>
+    </div>
+  </div>
+</nav>
+
+<!-- LIVE BANNER -->
+<div id="liveBanner">
+  <div class="lbi" id="liveInner"><span class="live-label">🔴 LIVE NOW:</span></div>
+</div>
+
+<!-- TICKER -->
+<div class="ticker">
+  <div class="tw">
+    <div class="ttag">BREAKING</div>
+    <div class="tt" id="tickerTrack">
+      <span class="ti2">DMC THURSDAY NIGHT BASKETBALL — Season 2025 🏀</span>
+      <span class="ti2">6IX SIDE PBL — Now on the Hoop Network</span>
+      <span class="ti2">TUESDAY NIGHT BASKETBALL LEAGUE — Join the network</span>
+      <span class="ti2">HOOP NETWORK — More leagues joining 2025</span>
+      <span class="ti2">EZ LIVE PLATFORM — Scoreboard and OBS overlays for all leagues</span>
+      <span class="ti2">DMC THURSDAY NIGHT BASKETBALL — Season 2025 🏀</span>
+      <span class="ti2">6IX SIDE PBL — Now on the Hoop Network</span>
+      <span class="ti2">TUESDAY NIGHT BASKETBALL LEAGUE — Join the network</span>
+      <span class="ti2">HOOP NETWORK — More leagues joining 2025</span>
+      <span class="ti2">EZ LIVE PLATFORM — Scoreboard and OBS overlays for all leagues</span>
+    </div>
+  </div>
+</div>
+
+<!-- VIDEOS -->
+<div id="videos" style="padding-top:4px;">
+  <div class="wrap">
+    <div class="sec">
+      <div class="sh">
+        <div class="st">Videos & Highlights</div>
+        <span class="sa" id="refreshBtn" onclick="fetchAll()">↻ Refresh</span>
+      </div>
+      <div class="pills">
+        <div class="pill on" onclick="filterCat('all',this)">All</div>
+        <div class="pill" onclick="filterCat('video',this)">🎬 Videos</div>
+        <div class="pill" onclick="filterCat('live',this)">🔴 Live</div>
+      </div>
+      <div style="margin-top:16px;" id="videoArea"></div>
+    </div>
+  </div>
+</div>
+
+<!-- POSTS / NEWS -->
+<div id="posts" style="border-top:1px solid var(--border);">
+  <div class="wrap">
+    <div class="sec">
+      <div class="sh">
+        <div class="st">News & Announcements</div>
+      </div>
+      <div id="postsArea"></div>
+    </div>
+  </div>
+</div>
+
+<!-- EVENTS -->
+<div id="events" style="border-top:1px solid var(--border);background:var(--bg2);">
+  <div class="wrap">
+    <div class="sec">
+      <div class="sh">
+        <div class="st">Upcoming Events</div>
+      </div>
+      <div id="eventsArea"></div>
+    </div>
+  </div>
+</div>
+
+<!-- LEAGUES -->
+<div id="leagues" style="padding:28px 0;">
+  <div class="wrap">
+    <div class="sh">
+      <div class="st">Leagues</div>
+      <a class="sa" href="network.html">All Leagues →</a>
+    </div>
+    <div class="lg-grid">
+      <a class="lc" href="https://www.facebook.com/profile.php?id=294854097041647" target="_blank">
+        <div class="lnum">01</div>
+        <div class="lname">DMC Thursday Night Basketball</div>
+        <div class="lloc">📍 Toronto, ON</div>
+        <div class="ltags"><span class="ltag on">Founding</span><span class="ltag fb">📘 FB</span><span class="ltag">Thursday</span></div>
+      </a>
+      <a class="lc" href="https://www.facebook.com/6sidePBL" target="_blank">
+        <div class="lnum">02</div>
+        <div class="lname">6ix Side PBL</div>
+        <div class="lloc">📍 Toronto, ON</div>
+        <div class="ltags"><span class="ltag on">Active</span><span class="ltag fb">📘 FB</span></div>
+      </a>
+      <a class="lc" href="https://www.facebook.com/groups/1046761720100181" target="_blank">
+        <div class="lnum">03</div>
+        <div class="lname">Tuesday Night Basketball League</div>
+        <div class="lloc">📍 Toronto, ON</div>
+        <div class="ltags"><span class="ltag on">Active</span><span class="ltag fb">📘 FB</span><span class="ltag">Tuesday</span></div>
+      </a>
+    </div>
+  </div>
+</div>
+
+<!-- SUBMIT BANNER -->
+<div class="sub-banner">
+  <div class="wrap">
+    <div class="sbi">
+      <div>
+        <h2>GOT GAME FOOTAGE?<br>SUBMIT YOUR CLIP.</h2>
+        <p>We post highlights, recaps, dunks — anything Hoop Network. Just bring the heat.</p>
+      </div>
+      <div class="sbi-btns">
+        <a class="btn-w" href="#" onclick="openSubmit();return false;">Submit Clip</a>
+        <button class="btn-ow" onclick="openAdmin()">Admin</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- FOOTER -->
+<footer>
+  <div class="fi">
+    <div class="fg">
+      <div>
+        <div class="flogo"><em>HOOP</em> CULTURE</div>
+        <p class="ftagline">GTA's source for basketball videos, news, and culture.</p>
+        <div class="fsoc">
+          <a class="fsoca" href="https://www.facebook.com/profile.php?id=294854097041647" target="_blank">FB</a>
+          <a class="fsoca" href="#">IG</a><a class="fsoca" href="#">YT</a><a class="fsoca" href="#">TK</a>
+        </div>
+      </div>
+      <div>
+        <div class="fct">Content</div>
+        <ul class="fl"><li><a href="#videos">Videos</a></li><li><a href="#posts">News</a></li><li><a href="#events">Events</a></li><li><a href="#leagues">Leagues</a></li></ul>
+      </div>
+      <div>
+        <div class="fct">Network</div>
+        <ul class="fl"><li><a href="network.html">Hoop Network</a></li><li><a href="https://web-production-614a5.up.railway.app" target="_blank">Stats Platform</a></li><li><a href="https://basketball-scoreboard-o0c7.onrender.com" target="_blank">EZ Live</a></li></ul>
+      </div>
+      <div>
+        <div class="fct">Leagues</div>
+        <ul class="fl">
+          <li><a href="https://www.facebook.com/profile.php?id=294854097041647" target="_blank">DMC Thursday Night</a></li>
+          <li><a href="https://www.facebook.com/6sidePBL" target="_blank">6ix Side PBL</a></li>
+          <li><a href="https://www.facebook.com/groups/1046761720100181" target="_blank">Tuesday Night Basketball</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="fbot">
+      <div>© 2026 <em>Hoop Culture</em> — GTA Basketball Network. All rights reserved.</div>
+      <div>Built by the community 🏀</div>
+    </div>
+  </div>
+</footer>
+
+<!-- VIDEO MODAL -->
+<div id="vmod" onclick="if(event.target===this)closeV()">
+  <button class="vm-close" onclick="closeV()">✕ Close</button>
+  <div class="vm-wrap">
+    <div class="vm-embed" id="vmbed"></div>
+    <div class="vm-info">
+      <div><div class="vm-title" id="vmtitle"></div><div class="vm-meta" id="vmmeta"></div></div>
+      <a id="vmfblink" class="vm-fblink" href="#" target="_blank">View on Facebook →</a>
+    </div>
+  </div>
+</div>
+
+<!-- PASSWORD GATE -->
+<div class="overlay" id="pwGate" onclick="if(event.target===this)closeGate()">
+  <div class="obox" style="max-width:420px;">
+    <div class="otop">
+      <div class="otitle"><em>ADMIN</em> ACCESS</div>
+      <button class="oclose" onclick="closeGate()">✕</button>
+    </div>
+    <p style="font-size:13px;color:var(--grey);margin-bottom:20px;line-height:1.7;">This area is restricted to the Hoop Culture admin only. Invite-only.</p>
+    <label class="olbl">Admin Password</label>
+    <input class="oi" id="pwInput" type="password" placeholder="Enter password..." onkeydown="if(event.key==='Enter')checkPw()"/>
+    <div style="display:flex;gap:8px;margin-top:4px;">
+      <button class="ob or" onclick="checkPw()" style="flex:1;justify-content:center;">Enter</button>
+      <button class="ob gy" onclick="closeGate()">Cancel</button>
+    </div>
+    <div class="omsg" id="pwMsg"></div>
+  </div>
+</div>
+
+<!-- ADMIN PANEL -->
+<div class="overlay" id="adminPanel" onclick="if(event.target===this)closeAdmin()">
+  <div class="obox" style="max-width:700px;">
+    <div class="otop">
+      <div class="otitle"><em>HOOP</em> CULTURE — Admin</div>
+      <button class="oclose" onclick="closeAdmin()">✕</button>
+    </div>
+
+    <!-- LEAGUES -->
+    <div class="osec">
+      <div class="osect">🏀 Leagues on Site (<span id="leagueCount">0</span>)</div>
+      <div id="adminLeagueList" style="display:flex;flex-direction:column;gap:6px;margin-bottom:16px;"></div>
+      <div style="background:var(--bg3);border:1px solid var(--border2);padding:16px 18px;">
+        <div style="font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:700;letter-spacing:3px;text-transform:uppercase;color:var(--orange);margin-bottom:10px;">➕ Add a New League</div>
+        <label class="olbl">League Name (optional)</label>
+        <input class="oi" id="newLeagueName" type="text" placeholder="e.g. 6ix Side PBL" style="margin-bottom:8px;"/>
+        <button class="ob or" onclick="addLeagueFlow()" style="width:100%;justify-content:center;font-size:13px;padding:12px;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="white" style="flex-shrink:0;"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
+          Login with Facebook
+        </button>
+        <div id="pagePicker" style="display:none;margin-top:12px;">
+          <label class="olbl">Select the league's Facebook page</label>
+          <select class="oi" id="pageDropdown" style="cursor:pointer;margin-bottom:8px;"><option value="">Choose a page...</option></select>
+          <button class="ob or" onclick="confirmPage()" style="width:100%;justify-content:center;">Add This League →</button>
+        </div>
+      </div>
+      <div class="omsg" id="tokenMsg"></div>
+    </div>
+
+    <!-- CLOUD SYNC -->
+    <div class="osec">
+      <div class="osect">☁ Cloud Sync — All Visitors See Changes Instantly</div>
+      <div id="gistStatus" style="margin-bottom:12px;font-size:12px;color:var(--grey);"></div>
+      <p style="font-size:12px;color:var(--grey);line-height:1.7;margin-bottom:6px;">
+        Paste a free <strong style="color:var(--white);">GitHub token</strong> once to enable live sync. After that, every league you add or remove goes live for all visitors instantly — no re-uploading, no editing files.
+      </p>
+      <p style="font-size:11px;color:var(--mid);line-height:1.6;margin-bottom:12px;">
+        👉 <a href="https://github.com/settings/tokens/new?scopes=gist&description=HoopCulture" target="_blank" style="color:var(--orange);">Click here to generate a free GitHub token</a> — check the <strong style="color:var(--white);">gist</strong> box only, then copy it below.
+      </p>
+      <div style="display:grid;grid-template-columns:1fr auto;gap:8px;">
+        <input class="oi" id="githubTokenInput" type="password" placeholder="ghp_xxxxxxxxxxxxxxxx" style="margin-bottom:0;font-size:12px;font-family:monospace;"/>
+        <button class="ob or" onclick="saveGithubToken()" style="height:44px;white-space:nowrap;">Connect</button>
+      </div>
+      <div class="omsg" id="githubMsg"></div>
+    </div>
+
+    <!-- CONTENT STATUS -->
+    <div class="osec">
+      <div class="osect">⏱ Content Status</div>
+      <p style="font-size:12px;color:var(--grey);line-height:1.6;margin-bottom:10px;">
+        Auto-refreshes every <strong style="color:var(--white);">30 min</strong>. Last fetch: <span id="lastFetch" style="color:var(--orange);">Never</span>
+      </p>
+      <button class="ob gy" onclick="fetchAll()" style="font-size:11px;padding:9px 16px;">↻ Fetch Now</button>
+      <div class="omsg" id="syncMsg"></div>
+    </div>
+
+    <!-- PASSWORD -->
+    <div class="osec">
+      <div class="osect">🔑 Change Admin Password</div>
+      <div style="display:grid;grid-template-columns:1fr auto;gap:8px;">
+        <input class="oi" id="newPwInput" type="password" placeholder="New password (min 6 chars)" style="margin-bottom:0;"/>
+        <button class="ob gy" onclick="changePw()" style="height:44px;">Update</button>
+      </div>
+      <div class="omsg" id="pwChangeMsg"></div>
+    </div>
+
+    <button class="ob gy" onclick="closeAdmin()">Close</button>
+  </div>
+</div>
+
+<!-- SUBMIT MODAL -->
+<div class="mov" id="submitMod" onclick="if(event.target===this)closeSubmit()">
+  <div class="mbox">
+    <button class="mclose" onclick="closeSubmit()">✕</button>
+    <div class="mtitle">Submit a Clip</div>
+    <div class="msub">Send us your game footage. We'll post it on Hoop Culture.</div>
+    <input class="mi" type="text" placeholder="Your Name"/>
+    <input class="mi" type="text" placeholder="League / Team"/>
+    <input class="mi" type="url" placeholder="YouTube or Facebook Video URL"/>
+    <input class="mi" type="email" placeholder="Your Email"/>
+    <button class="ob or" style="width:100%;justify-content:center;margin-top:4px;" onclick="doSubmit()">Submit</button>
+  </div>
+</div>
+
+<script>
+// ── CONSTANTS ─────────────────────────────────────────────────────────
+const DMC_PAGE_ID = '294854097041647';
+const STORE       = 'hc_data_v3';
+const PW_KEY      = 'hc_admin_pw';
+const TOKEN_KEY   = 'hc_page_token';
+const PAGE_ID_KEY = 'hc_page_id';
+const PAGE_NAME_KEY = 'hc_page_name';
+const DEFAULT_PW  = 'hoopcultureadmin';
+const APP_ID      = '1519191979811970';
+const APP_SECRET  = 'ba7ef969198894f9fcc33dea81b5315d';
+
+// ── HARDCODED PAGE CONFIG ──────────────────────────────────────────────
+// ── SITE CONFIG (hardcoded after admin setup) ─────────────────────────
+// After connecting leagues in the Admin panel, click "Copy Config",
+// then paste the value between the quotes below and re-upload this file.
+// That's it — every visitor will see content automatically.
+const SITE_CONFIG = '';
+
+// ── GITHUB GIST CLOUD SYNC ────────────────────────────────────────────
+// Admin enters GitHub token once → leagues save to a public Gist →
+// every visitor reads from that Gist automatically. No HTML editing ever.
+const GH_TOKEN_KEY = 'hc_gh_token';
+const GH_GIST_KEY  = 'hc_gh_gist';
+const HARDCODED_GIST_ID = '2f96b611a4e56518479f311dbbc50c8c'; // your Hoop Culture gist
+const GIST_FILE    = 'hoop-culture-config.json';
+
+function getGhToken(){ return localStorage.getItem(GH_TOKEN_KEY)||''; }
+function getGistId(){  return localStorage.getItem(GH_GIST_KEY)||HARDCODED_GIST_ID;  }
+
+async function saveGithubToken(){
+  const tok = document.getElementById('githubTokenInput').value.trim();
+  if(!tok){ showMsg('githubMsg','er','Paste your GitHub token first.'); return; }
+  showMsg('githubMsg','in','Verifying token...');
+  // Verify token is valid
+  try{
+    const r = await fetch('https://api.github.com/user', {
+      headers:{ 'Authorization':'token '+tok, 'Accept':'application/vnd.github.v3+json' }
+    });
+    if(!r.ok) throw new Error('Invalid token — make sure you copied it correctly');
+    localStorage.setItem(GH_TOKEN_KEY, tok);
+    document.getElementById('githubTokenInput').value = '';
+    showMsg('githubMsg','ok','Token verified! Syncing leagues to cloud...');
+    await pushLeaguesToGist();
+    updateGistStatus();
+  } catch(e){ showMsg('githubMsg','er', e.message); }
+}
+
+// Push current LEAGUES to GitHub Gist (creates gist on first run)
+async function pushLeaguesToGist(){
+  const tok    = getGhToken();
+  if(!tok) return;
+  const gistId = getGistId();
+  const body   = JSON.stringify({
+    description: 'Hoop Culture — League Config (auto-managed)',
+    public: true,
+    files:{ [GIST_FILE]:{ content: JSON.stringify({ leagues: LEAGUES }) } }
+  });
+  try{
+    let r;
+    if(gistId){
+      r = await fetch(`https://api.github.com/gists/${gistId}`, {
+        method:'PATCH',
+        headers:{ 'Authorization':'token '+tok, 'Content-Type':'application/json', 'Accept':'application/vnd.github.v3+json' },
+        body
+      });
+    } else {
+      r = await fetch('https://api.github.com/gists', {
+        method:'POST',
+        headers:{ 'Authorization':'token '+tok, 'Content-Type':'application/json', 'Accept':'application/vnd.github.v3+json' },
+        body
+      });
+    }
+    const d = await r.json();
+    if(d.id){
+      localStorage.setItem(GH_GIST_KEY, d.id);
+      console.log('Gist synced:', d.html_url);
+    } else throw new Error(JSON.stringify(d));
+  } catch(e){ console.warn('Gist push failed:', e.message); }
+}
+
+// Pull LEAGUES from GitHub Gist (runs for ALL visitors — public gist, no auth)
+async function pullLeaguesFromGist(gistId){
+  if(!gistId) return false;
+  try{
+    const r = await fetch(`https://api.github.com/gists/${gistId}`, {
+      headers:{ 'Accept':'application/vnd.github.v3+json' }
+    });
+    const d = await r.json();
+    const content = d.files?.[GIST_FILE]?.content;
+    if(!content) return false;
+    const parsed = JSON.parse(content);
+    if(parsed?.leagues?.length){
+      LEAGUES = parsed.leagues;
+      saveLeaguesLocal();
+      syncActiveToken();
+      return true;
+    }
+  } catch(e){ console.warn('Gist pull failed:', e.message); }
+  return false;
+}
+
+function updateGistStatus(){
+  const el = document.getElementById('gistStatus');
+  if(!el) return;
+  const gistId = getGistId();
+  const tok    = getGhToken();
+  if(tok && gistId){
+    el.innerHTML = `<span style="color:#86efac;">✅ Cloud sync active</span> — <a href="https://gist.github.com/${gistId}" target="_blank" style="color:var(--orange);font-size:11px;">View Gist</a>`;
+  } else if(tok){
+    el.innerHTML = `<span style="color:var(--orange);">⚡ Token saved — syncing...</span>`;
+  } else {
+    el.innerHTML = `<span style="color:#f87171;">○ Not connected</span> — enter GitHub token below to enable cloud sync.`;
+  }
+}
+
+// ── LEAGUES STATE ─────────────────────────────────────────────────────
+let LEAGUES = [
+  { id: 'dmc',
+    name: 'DMC Thursday Night Basketball',
+    pageId: '294854097041647',
+    fbUrl: 'https://www.facebook.com/profile.php?id=294854097041647',
+    token: null }
+];
+
+// ── LOAD LEAGUES ──────────────────────────────────────────────────────
+// Priority: 1) GitHub Gist (all visitors) 2) localStorage (admin browser)
+async function loadLeagues(){
+  const gistId = getGistId();
+  if(gistId){
+    const ok = await pullLeaguesFromGist(gistId);
+    if(ok) return;
+  }
+  // Fallback: localStorage
+  try{
+    const saved = localStorage.getItem('hc_leagues');
+    if(saved){ const p=JSON.parse(saved); if(p?.length){ LEAGUES=p; syncActiveToken(); } }
+  } catch(e){}
+}
+
+function saveLeaguesLocal(){
+  localStorage.setItem('hc_leagues', JSON.stringify(LEAGUES));
+}
+
+// Save locally AND push to Gist if token exists
+async function saveLeagues(){
+  saveLeaguesLocal();
+  syncActiveToken();
+  if(getGhToken()) await pushLeaguesToGist();
+}
+
+// Sync first league-with-token into localStorage so getToken() works
+function syncActiveToken(){
+  const active = LEAGUES.find(l => l.token);
+  if(active){
+    localStorage.setItem(TOKEN_KEY, active.token);
+    localStorage.setItem(PAGE_ID_KEY, active.pageId);
+    localStorage.setItem(PAGE_NAME_KEY, active.name);
+  } else {
+    localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(PAGE_ID_KEY);
+    localStorage.removeItem(PAGE_NAME_KEY);
+  }
+}
+// ── STATE ─────────────────────────────────────────────────────────────
+function loadData(){
+  try{ return JSON.parse(localStorage.getItem(STORE))||{videos:[],liveStreams:[],posts:[],events:[],lastFetch:null}; }
+  catch{ return {videos:[],liveStreams:[],posts:[],events:[],lastFetch:null}; }
+}
+function saveData(d){ localStorage.setItem(STORE, JSON.stringify(d)); }
+let D = loadData();
+
+function getToken(){ return localStorage.getItem(TOKEN_KEY)||null; }
+function getPageId(){ return localStorage.getItem(PAGE_ID_KEY)||DMC_PAGE_ID; }
+function getPageName(){ return localStorage.getItem(PAGE_NAME_KEY)||'DMC Thursday Night Basketball'; }
+function getAdminPw(){ return localStorage.getItem(PW_KEY)||DEFAULT_PW; }
+
+// ── GRAPH API ─────────────────────────────────────────────────────────
+async function gq(path, params=''){
+  const token = getToken();
+  if(!token) return null;
+  const url = `https://graph.facebook.com/v18.0/${path}?access_token=${encodeURIComponent(token)}&${params}`;
+  const r = await fetch(url);
+  const d = await r.json();
+  if(d.error) throw new Error(d.error.message);
+  return d;
+}
+
+// ── FETCH ALL ─────────────────────────────────────────────────────────
+async function fetchAll(){
+  const activeLeagues = LEAGUES.filter(l => l.token);
+  if(!activeLeagues.length){ showMsg('syncMsg','er','No leagues connected yet.'); return; }
+
+  const btn = document.getElementById('refreshBtn');
+  if(btn){ btn.textContent = '⏳ Fetching...'; btn.style.opacity='.5'; btn.style.pointerEvents='none'; }
+  showMsg('syncMsg','in','Fetching content...');
+
+  const league  = activeLeagues[0];
+  const pageId  = league.pageId;
+  const token   = league.token;
+  // Always keep localStorage in sync
+  localStorage.setItem(TOKEN_KEY, token);
+
+  let errorMsgs = [];
+
+  // Videos — try dedicated videos endpoint first, fall back to posts with video attachments
+  try{
+    const v = await gq(pageId+'/videos',
+      'fields=id,title,description,picture,created_time,length,permalink_url&limit=20');
+    if(v && v.data && v.data.length){
+      D.videos = v.data.map(vid => ({
+        ...vid,
+        title: vid.title || vid.description?.split('\n')[0] || 'DMC Video'
+      }));
+    } else {
+      // Fallback: get video posts from the page feed
+      const vp = await gq(pageId+'/published_posts',
+        'fields=id,message,created_time,full_picture,permalink_url,attachments{type,media,title,description}&limit=20');
+      if(vp && vp.data){
+        D.videos = vp.data
+          .filter(p => p.attachments?.data?.some(a => a.type==='video_inline'||a.type==='video_autoplay'||a.type==='video'))
+          .map(p => {
+            const att = p.attachments?.data?.[0];
+            return {
+              id: p.id, permalink_url: p.permalink_url,
+              title: att?.title || p.message?.split('\n')[0] || 'DMC Video',
+              picture: att?.media?.image?.src || p.full_picture || '',
+              created_time: p.created_time, length: 0
+            };
+          });
+      }
+      if(v?.error) errorMsgs.push('Videos: ' + v.error.message);
+    }
+  } catch(e){ errorMsgs.push('Videos: ' + e.message); }
+
+  // Live streams
+  try{
+    const l = await gq(pageId+'/live_videos',
+      'fields=id,title,embed_html,status,created_time,permalink_url&limit=5');
+    if(l && l.data) D.liveStreams = l.data;
+    else if(l?.error) errorMsgs.push('Live: ' + l.error.message);
+  } catch(e){ errorMsgs.push('Live: ' + e.message); }
+
+  // Posts
+  try{
+    const p = await gq(pageId+'/posts',
+      'fields=id,message,story,created_time,full_picture,permalink_url&limit=12');
+    if(p && p.data) D.posts = p.data.filter(x=>x.message);
+    else if(p?.error) errorMsgs.push('Posts: ' + p.error.message);
+  } catch(e){ errorMsgs.push('Posts: ' + e.message); }
+
+  // Events
+  try{
+    const ev = await gq(pageId+'/events',
+      'fields=id,name,start_time,end_time,place,description,cover&limit=9');
+    if(ev && ev.data) D.events = ev.data;
+    else if(ev?.error) errorMsgs.push('Events: ' + ev.error.message);
+  } catch(e){ errorMsgs.push('Events: ' + e.message); }
+
+  D.lastFetch = new Date().toISOString();
+  saveData(D);
+
+  if(btn){ btn.textContent = '↻ Refresh'; btn.style.opacity='1'; btn.style.pointerEvents='auto'; }
+
+  const live  = D.liveStreams.filter(v=>v.status==='LIVE').length;
+  const total = D.videos.length + D.posts.length + D.events.length;
+
+  if(errorMsgs.length && !total){
+    showMsg('syncMsg','er', '⚠ API error: ' + errorMsgs[0]);
+    const el = document.getElementById('gistStatus');
+    if(el) el.innerHTML = '<span style="color:#fca5a5;">⚠ API errors: ' + errorMsgs.map(m=>`<code style="font-size:11px;">${m}</code>`).join(', ') + '</span>';
+  } else if(errorMsgs.length){
+    showMsg('syncMsg','er', `Partial: ${total} items loaded. Failed: ${errorMsgs[0]}`);
+  } else {
+    showMsg('syncMsg','ok', `✓ ${D.videos.length} videos · ${D.posts.length} posts · ${D.events.length} events · ${live} live`);
+  }
+
+  renderAll();
+  updateLastFetch();
+}
+
+// ── RENDER LEAGUE FEEDS OVERVIEW ─────────────────────────────────────
+function renderLeagueFeeds() {
+  // Update the leagues section at the bottom
+  const connected = LEAGUES.filter(l => l.token);
+  // Update nav connected dot
+  document.getElementById('connectedDot').style.display = connected.length ? 'inline' : 'none';
+  // Trigger video refresh if we have content
+  renderVideos();
+  renderPosts();
+  renderEvents();
+}
+
+// ── RENDER VIDEOS ─────────────────────────────────────────────────────
+let currentCat = 'all';
+function filterCat(cat, el){
+  currentCat = cat;
+  document.querySelectorAll('.pill').forEach(p=>p.classList.remove('on'));
+  el.classList.add('on');
+  renderVideos();
+}
+
+function renderVideos(){
+  const area = document.getElementById('videoArea');
+  const hasContent = D.videos.length || D.liveStreams.length || D.posts.length;
+  if(!getToken() && !hasContent){
+    area.innerHTML = `
+      <div style="background:var(--bg2);border:1px solid var(--border2);padding:60px 40px;text-align:center;">
+        <div style="font-size:52px;margin-bottom:18px;">🏀</div>
+        <div style="font-family:'Anton',sans-serif;font-size:clamp(22px,3vw,34px);color:var(--white);margin-bottom:10px;">
+          <span style="color:var(--orange);">One-Time</span> Setup Required
+        </div>
+        <p style="font-family:'Barlow Condensed',sans-serif;font-size:14px;color:var(--grey);line-height:1.9;max-width:500px;margin:0 auto 24px;">
+          Open the Admin panel, click <strong style="color:var(--white);">Connect →</strong> next to DMC, and log in with Facebook. Content loads instantly for every visitor after that.
+        </p>
+        <button onclick="openAdmin()"
+          style="font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:700;letter-spacing:2px;text-transform:uppercase;background:var(--orange);color:#fff;padding:13px 30px;border:none;cursor:pointer;">
+          ⚙ Open Admin Panel
+        </button>
+      </div>`;
+    return;
+  }
+
+  const lives = D.liveStreams.filter(v=>v.status==='LIVE');
+  // Use videos if available, otherwise fall back to posts as media items
+  let videoItems = currentCat==='live' ? D.liveStreams
+    : currentCat==='video' ? D.videos
+    : [...lives, ...D.videos];
+
+  // If no dedicated videos, pull video-like posts into the feed
+  if(!videoItems.length && D.posts.length && currentCat !== 'live'){
+    videoItems = D.posts.slice(0, 16).map(p => ({
+      id: p.id, permalink_url: p.permalink_url,
+      title: p.message?.split('\n')[0] || 'DMC Post',
+      picture: p.full_picture || '',
+      created_time: p.created_time, isPost: true
+    }));
+  }
+
+  if(!videoItems.length){
+    area.innerHTML = `<div style="text-align:center;padding:48px 0;color:var(--mid);"><div style="font-size:36px;margin-bottom:12px;">📹</div><div style="font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;letter-spacing:2px;text-transform:uppercase;">No content yet<br><span style="font-size:10px;color:#333;margin-top:6px;display:block;">Click ↻ Refresh in the Admin panel</span></div></div>`;
+    return;
+  }
+
+  const featured = videoItems[0];
+  const stack = videoItems.slice(1, 4);
+  const grid  = videoItems.slice(4, 16);
+
+  const featTitle = featured.title || featured.message?.split('\n')[0] || 'DMC League';
+  const featThumb = featured.picture || '';
+  const featLive  = featured.status === 'LIVE';
+  const featId    = featured.id || '';
+  const featUrl   = featured.permalink_url || `https://www.facebook.com/video/${featId}`;
+
+  const heroHtml = `
+    <div class="hero-wrap" style="margin-bottom:14px;">
+      <div class="hero-main" onclick="playVideo('${featId}','${esc(featTitle)}','DMC League · ${fmtDate(featured.created_time)}',${featLive},'${featUrl}')">
+        <div class="hero-thumb">
+          ${featThumb
+            ? `<img src="${featThumb}" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"/><div class="hero-ph" style="display:none;">🏀</div>`
+            : `<div class="hero-ph">🏀</div>`}
+          <div class="hero-ov"></div>
+        </div>
+        <div class="play-big"><svg width="24" height="24" viewBox="0 0 24 24" fill="white"><path d="M8 5v14l11-7z"/></svg></div>
+        <div class="hero-info">
+          <div class="hero-cat">${featLive ? '🔴 LIVE NOW' : featured.isPost ? '📣 Latest Post' : '▶ Latest Video'}</div>
+          <div class="hero-title">${trunc(featTitle,80)}</div>
+          <div class="hero-meta">DMC League · <strong>${fmtDate(featured.created_time)}</strong></div>
+        </div>
+      </div>
+      ${stack.length ? `<div class="hero-stack">${stack.map(v=>{
+        const t=v.title||v.message?.split('\n')[0]||'DMC Content';
+        const thumb=v.picture||'';
+        const id=v.id||'';
+        const url=v.permalink_url||`https://www.facebook.com/video/${id}`;
+        return `<div class="sc" onclick="playVideo('${id}','${esc(t)}','DMC League',${v.status==='LIVE'},'${url}')">
+          <div class="sc-bg">${thumb?`<img src="${thumb}" alt=""/>`:'🏀'}</div>
+          <div class="sc-ov"></div>
+          <div class="sc-play"><svg width="11" height="11" viewBox="0 0 24 24" fill="white"><path d="M8 5v14l11-7z"/></svg></div>
+          <div class="sc-body">
+            <div class="sc-cat">${v.isPost?'📣 Post':'▶ Video'}</div>
+            <div class="sc-title">${trunc(t,50)}</div>
+            <div class="sc-meta">${fmtDate(v.created_time)}</div>
+          </div>
+        </div>`}).join('')}</div>` : ''}
+    </div>`;
+
+  const gridHtml = grid.length ? `<div class="vgrid">${grid.map(v=>{
+    const t=v.title||v.message?.split('\n')[0]||'DMC Content';
+    const thumb=v.picture||v.full_picture||'';
+    const isLive=v.status==='LIVE';
+    const id=v.id||'';
+    const url=v.permalink_url||`https://www.facebook.com/video/${id}`;
+    const bg=['linear-gradient(135deg,#1a0800,#080808)','linear-gradient(135deg,#00050a,#080808)','linear-gradient(135deg,#0a0500,#080808)','linear-gradient(135deg,#0a000a,#080808)'][Math.floor(Math.random()*4)];
+    return `<div class="vc" onclick="playVideo('${id}','${esc(t)}','DMC League · ${fmtDate(v.created_time)}',${isLive},'${url}')">
+      <div class="vt">
+        ${thumb?`<img class="vthumb-img" src="${thumb}" alt="" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"/><div class="vt-ph" style="display:none;background:${bg};">🏀</div>`:`<div class="vt-ph" style="background:${bg};">🏀</div>`}
+        ${isLive?`<div class="vlive"><span class="lpulse"></span>LIVE</div>`:v.isPost?`<div class="vtag vtag-p">POST</div>`:`<div class="vtag vtag-v">VIDEO</div>`}
+        ${v.length?`<div class="vdur">${fmtDur(v.length)}</div>`:''}
+        <div class="vplay"><div class="vplay-btn"><svg width="16" height="16" viewBox="0 0 24 24" fill="white"><path d="M8 5v14l11-7z"/></svg></div></div>
+      </div>
+      <div class="vbody">
+        <div class="vcat">DMC League</div>
+        <div class="vtitle">${trunc(t,60)}</div>
+        <div class="vmeta">${fmtDate(v.created_time)}</div>
+      </div>
+    </div>`}).join('')}</div>` : '';
+
+  area.innerHTML = heroHtml + gridHtml;
+}
+
+// ── RENDER POSTS ──────────────────────────────────────────────────────
+function renderPosts(){
+  const area = document.getElementById('postsArea');
+  if(!getToken() && !D.posts.length) return;
+  if(!D.posts.length){
+    area.innerHTML = `<div style="color:var(--mid);font-size:13px;padding:20px 0;">No posts yet — click Refresh to fetch from your DMC page.</div>`;
+    return;
+  }
+  area.innerHTML = `<div class="news-grid">${D.posts.slice(0,6).map(p=>{
+    const title = p.message.split('\n')[0];
+    const deck  = p.message.split('\n').slice(1).join(' ').slice(0,140);
+    const img   = p.full_picture||'';
+    const url   = p.permalink_url||`https://www.facebook.com/${DMC_PAGE_ID}`;
+    return `<div class="nc" onclick="window.open('${url}','_blank')">
+      <div class="nc-img">${img?`<img src="${img}" alt="" loading="lazy"/>`:`<div class="nc-img-ph">📣</div>`}</div>
+      <div class="nc-body">
+        <div class="nc-cat">Announcement</div>
+        <div class="nc-title">${trunc(title,70)}</div>
+        ${deck?`<div class="nc-meta" style="color:var(--mid);font-size:11px;margin-top:4px;line-height:1.5;">${trunc(deck,120)}</div>`:''}
+        <div class="nc-meta" style="margin-top:8px;">${fmtDate(p.created_time)}</div>
+      </div>
+    </div>`}).join('')}
+  </div>`;
+}
+
+// ── RENDER EVENTS ─────────────────────────────────────────────────────
+function renderEvents(){
+  const area = document.getElementById('eventsArea');
+  if(!getToken() && !D.events.length) return;
+  if(!D.events.length){
+    area.innerHTML = `<div style="color:var(--mid);font-size:13px;padding:20px 0;">No events found — add events to your DMC Facebook page and click Refresh.</div>`;
+    return;
+  }
+  area.innerHTML = `<div class="events-grid">${D.events.map(e=>`
+    <div class="ec" onclick="window.open('https://www.facebook.com/events/${e.id}','_blank')">
+      <div class="ec-date">${fmtDate(e.start_time)}</div>
+      <div class="ec-name">${e.name}</div>
+      <div class="ec-place">${e.place?.name||'DMC League'}</div>
+      ${e.description?`<div class="ec-desc">${trunc(e.description,120)}</div>`:''}
+    </div>`).join('')}
+  </div>`;
+}
+
+// ── RENDER LIVE BANNER ────────────────────────────────────────────────
+function renderLive(){
+  const banner = document.getElementById('liveBanner');
+  const inner  = document.getElementById('liveInner');
+  const navLink = document.getElementById('liveNavLink');
+  const liveNow = D.liveStreams.filter(v=>v.status==='LIVE');
+  if(!liveNow.length){ banner.classList.remove('show'); navLink.style.display='none'; return; }
+  banner.classList.add('show');
+  navLink.style.display = 'flex';
+  inner.innerHTML = `<span class="live-label">🔴 LIVE NOW:</span>` +
+    liveNow.map(v=>`<div class="live-pill" onclick="playVideo('${v.id}','${esc(v.title||'DMC Live')}','DMC League',true,'${v.permalink_url||''}')"><div class="lpulse"></div><div class="live-txt">${trunc(v.title||'DMC League — Watch Live',50)}</div></div>`).join('');
+}
+
+// ── VIDEO PLAYER ──────────────────────────────────────────────────────
+function playVideo(id, title, meta, isLive, fbUrl){
+  document.getElementById('vmtitle').textContent = title;
+  document.getElementById('vmmeta').textContent  = meta + (isLive?' · 🔴 LIVE':'');
+  const link = document.getElementById('vmfblink');
+  link.href  = fbUrl || `https://www.facebook.com/video/${id}`;
+  if(id){
+    // Use permalink_url directly — most reliable embed format
+    const videoHref = (fbUrl && fbUrl.includes('facebook.com') && !fbUrl.includes('undefined'))
+      ? fbUrl
+      : `https://www.facebook.com/${getPageId()}/videos/${id}/`;
+    const src = `https://www.facebook.com/plugins/video.php?href=${encodeURIComponent(videoHref)}&show_text=false&autoplay=0&allowfullscreen=true`;
+    document.getElementById('vmbed').innerHTML = `<iframe src="${src}" style="position:absolute;top:0;left:0;width:100%;height:100%;border:none;" scrolling="no" frameborder="0" allowfullscreen allow="autoplay;clipboard-write;encrypted-media;picture-in-picture;web-share"></iframe>`;
+  } else {
+    document.getElementById('vmbed').innerHTML = `<div style="width:100%;height:100%;background:#0d0d0d;display:flex;align-items:center;justify-content:center;color:var(--mid);font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;letter-spacing:2px;text-transform:uppercase;">No video ID</div>`;
+  }
+  document.getElementById('vmod').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+function closeV(){
+  document.getElementById('vmod').classList.remove('open');
+  document.getElementById('vmbed').innerHTML = '';
+  document.body.style.overflow = '';
+}
+
+// ── PASSWORD GATE ─────────────────────────────────────────────────────
+function openAdmin(){
+  document.getElementById('pwGate').classList.add('open');
+  document.getElementById('pwInput').value = '';
+  document.getElementById('pwMsg').className = 'omsg';
+  document.getElementById('pwMsg').textContent = '';
+  document.body.style.overflow = 'hidden';
+  setTimeout(()=>document.getElementById('pwInput').focus(), 100);
+}
+function checkPw(){
+  if(document.getElementById('pwInput').value === getAdminPw()){
+    document.getElementById('pwGate').classList.remove('open');
+    document.getElementById('adminPanel').classList.add('open');
+    updateAdminUI();
+  } else {
+    showMsg('pwMsg','er','Incorrect password.');
+    document.getElementById('pwInput').value = '';
+    document.getElementById('pwInput').focus();
+  }
+}
+function closeGate(){
+  document.getElementById('pwGate').classList.remove('open');
+  document.body.style.overflow = '';
+}
+function closeAdmin(){
+  document.getElementById('adminPanel').classList.remove('open');
+  document.body.style.overflow = '';
+}
+function changePw(){
+  const np = document.getElementById('newPwInput').value.trim();
+  if(!np || np.length < 6){ showMsg('pwChangeMsg','er','Password must be at least 6 characters.'); return; }
+  localStorage.setItem(PW_KEY, np);
+  document.getElementById('newPwInput').value = '';
+  showMsg('pwChangeMsg','ok','Password updated successfully.');
+}
+
+// ── LEAGUE MANAGEMENT (ADMIN) ─────────────────────────────────────────
+// ── LEAGUE MANAGEMENT (ADMIN) ─────────────────────────────────────────
+
+function addLeagueFlow() {
+  const name = document.getElementById('newLeagueName').value.trim();
+  if(!name){ showMsg('tokenMsg','er','Enter the league name first.'); return; }
+  showMsg('tokenMsg','in','Opening Facebook login...');
+  FB.login(function(r) {
+    if(r.status !== 'connected'){
+      showMsg('tokenMsg','er','Login cancelled.');
+      return;
+    }
+    showMsg('tokenMsg','in','Getting pages...');
+    FB.api('/me/accounts', { access_token: r.authResponse.accessToken }, function(data) {
+      if(!data || data.error || !data.data?.length){
+        showMsg('tokenMsg','er','No pages found. The league admin must be an admin of their Facebook page.');
+        return;
+      }
+      const pages = data.data;
+      const dd = document.getElementById('pageDropdown');
+      dd.innerHTML = '<option value="">Choose a page...</option>';
+      pages.forEach(p => {
+        const opt = document.createElement('option');
+        opt.value = p.id;
+        opt.textContent = p.name;
+        opt.dataset.token = p.access_token;
+        dd.appendChild(opt);
+      });
+      document.getElementById('pagePicker').style.display = 'block';
+      showMsg('tokenMsg','in','Select the league page below.');
+    });
+  }, { scope: 'pages_show_list,pages_read_engagement,pages_read_user_content' });
+}
+
+function confirmPage() {
+  const dd  = document.getElementById('pageDropdown');
+  const opt = dd.options[dd.selectedIndex];
+  if(!opt || !opt.value){ showMsg('tokenMsg','er','Please select a page.'); return; }
+
+  // If this picker was opened from connectLeague(), update existing league
+  const existingLeagueId = opt.dataset.leagueId;
+  if(existingLeagueId){
+    const league = LEAGUES.find(l => l.id === existingLeagueId);
+    if(league){
+      // Update pageId too in case it was different
+      league.pageId = opt.value;
+      league.fbUrl  = 'https://www.facebook.com/' + opt.value;
+      document.getElementById('pagePicker').style.display = 'none';
+      applyTokenToLeague(league, opt.dataset.token);
+      return;
+    }
+  }
+
+  // Otherwise this is a brand new league being added
+  const name = document.getElementById('newLeagueName').value.trim() || opt.textContent;
+  if(LEAGUES.find(l => l.pageId === opt.value)){
+    showMsg('tokenMsg','er','This page is already connected.');
+    return;
+  }
+  const league = {
+    id:       'lg_' + Date.now(),
+    name:     name,
+    pageId:   opt.value,
+    fbUrl:    'https://www.facebook.com/' + opt.value,
+    token:    opt.dataset.token
+  };
+  LEAGUES.push(league);
+  document.getElementById('newLeagueName').value = '';
+  document.getElementById('pagePicker').style.display = 'none';
+  saveLeagues();
+  showMsg('tokenMsg','ok',`"${name}" added! Loading content...`);
+  renderAdminLeagueList();
+  showAdminStatus();
+  fetchAll().then(()=>{
+    showMsg('tokenMsg','ok',`"${name}" loaded! Click ⬇ Download Updated index.html to go live for all visitors.`);
+  });
+}
+
+// Connect a Facebook token to an EXISTING league (e.g. DMC already in the list)
+function connectLeague(id) {
+  const league = LEAGUES.find(l => l.id === id);
+  if(!league) return;
+  showMsg('tokenMsg','in',`Opening Facebook login for "${league.name}"...`);
+  FB.login(function(r){
+    if(r.status !== 'connected'){
+      showMsg('tokenMsg','er','Login cancelled.');
+      return;
+    }
+    showMsg('tokenMsg','in','Getting pages...');
+    FB.api('/me/accounts', { access_token: r.authResponse.accessToken }, async function(data){
+      if(!data || data.error || !data.data?.length){
+        showMsg('tokenMsg','er','No pages found. Make sure you are the admin of this Facebook page.');
+        return;
+      }
+      // Try to auto-match by page ID, otherwise show picker
+      const match = data.data.find(p => p.id === league.pageId);
+      if(match){
+        await applyTokenToLeague(league, match.access_token);
+      } else {
+        // Show picker — the page might be listed under a different ID
+        const dd = document.getElementById('pageDropdown');
+        dd.innerHTML = '<option value="">Choose a page...</option>';
+        data.data.forEach(p => {
+          const opt = document.createElement('option');
+          opt.value = p.id;
+          opt.textContent = p.name;
+          opt.dataset.token = p.access_token;
+          opt.dataset.leagueId = id;
+          dd.appendChild(opt);
+        });
+        document.getElementById('pagePicker').style.display = 'block';
+        showMsg('tokenMsg','in','Select the page below, then click Add.');
+      }
+    });
+  }, { scope: 'pages_show_list,pages_read_engagement,pages_read_user_content' });
+}
+
+async function applyTokenToLeague(league, shortToken){
+  showMsg('tokenMsg','in','Getting permanent token...');
+  try {
+    // Step 1: Exchange short-lived token for long-lived user token (60 days)
+    const llRes = await fetch(
+      `https://graph.facebook.com/v18.0/oauth/access_token?grant_type=fb_exchange_token&client_id=${APP_ID}&client_secret=${APP_SECRET}&fb_exchange_token=${encodeURIComponent(shortToken)}`
+    );
+    const llData = await llRes.json();
+    if(llData.error) throw new Error(llData.error.message);
+    const longToken = llData.access_token;
+
+    // Step 2: Get permanent page token using long-lived user token
+    const accRes = await fetch(
+      `https://graph.facebook.com/v18.0/me/accounts?access_token=${encodeURIComponent(longToken)}`
+    );
+    const accData = await accRes.json();
+    if(accData.error) throw new Error(accData.error.message);
+    const pages = accData.data || [];
+    const match = pages.find(p => p.id === league.pageId) || pages[0];
+    if(!match) throw new Error('No pages found.');
+
+    // Page tokens from long-lived user tokens never expire
+    league.token  = match.access_token;
+    league.pageId = match.id;
+    saveLeagues();
+    showMsg('tokenMsg','ok',`Permanent token saved — will never expire.`);
+    renderAdminLeagueList();
+    showAdminStatus();
+    await fetchAll();
+    showMsg('tokenMsg','ok',`"${league.name}" is now live for all visitors.`);
+  } catch(e) {
+    // Fallback: use the short-lived token
+    console.warn('Exchange failed:', e.message);
+    league.token = shortToken;
+    saveLeagues();
+    showMsg('tokenMsg','er',`Using short-lived token (expires in ~1hr). Error: ${e.message}`);
+    renderAdminLeagueList();
+    await fetchAll();
+  }
+}
+
+async function removeLeague(id) {
+  const league = LEAGUES.find(l => l.id === id);
+  if(!confirm(`Remove "${league?.name}" from the site?`)) return;
+  LEAGUES = LEAGUES.filter(l => l.id !== id);
+  saveLeagues();
+  renderAdminLeagueList();
+  showAdminStatus();
+  renderAll();
+  showMsg('tokenMsg','ok','League removed. Click ⬇ Download Updated index.html and re-upload to update the live site.');
+}
+
+function renderAdminLeagueList() {
+  const list  = document.getElementById('adminLeagueList');
+  const count = document.getElementById('leagueCount');
+  if(!list) return;
+  count.textContent = LEAGUES.length;
+  list.innerHTML = LEAGUES.map(l => `
+    <div class="league-admin-row">
+      <div style="flex:1;">
+        <div class="lar-name">${l.name}</div>
+        <div class="lar-sub">
+          ${l.token
+            ? '<span style="color:#86efac;">● Connected — content loading automatically</span>'
+            : '<span style="color:#f87171;">○ Not connected — click Connect to activate</span>'}
+          &middot; Page ID: ${l.pageId}
+        </div>
+      </div>
+      <div style="display:flex;gap:6px;align-items:center;flex-shrink:0;">
+        ${!l.token
+          ? `<button class="ob or" style="padding:7px 14px;font-size:10px;" onclick="connectLeague('${l.id}')">Connect →</button>`
+          : ''}
+        <button class="ob rd" style="padding:7px 12px;font-size:10px;" onclick="removeLeague('${l.id}')">Remove</button>
+      </div>
+    </div>`).join('');
+}
+
+function showAdminStatus(){
+  // No longer needed — gistStatus div handles cloud sync status
+  // Keep function to avoid errors from existing calls
+}
+
+function updateAdminUI(){
+  renderAdminLeagueList();
+  updateGistStatus();
+}
+
+function updateNavUI(){
+  document.getElementById('connectedDot').style.display = getToken() ? 'inline' : 'none';
+}
+
+function updateLastFetch(){
+  const el = document.getElementById('lastFetch');
+  if(D.lastFetch){
+    const d = new Date(D.lastFetch);
+    el.textContent = d.toLocaleTimeString('en-CA',{hour:'2-digit',minute:'2-digit'}) + ' · ' + d.toLocaleDateString('en-CA',{month:'short',day:'numeric'});
+  }
+}
+
+// ── AUTO REFRESH EVERY 30 MIN ─────────────────────────────────────────
+setInterval(()=>{
+  if(!getToken()) return;
+  const last = D.lastFetch ? new Date(D.lastFetch) : null;
+  if(!last || (new Date()-last)/60000 >= 30) fetchAll();
+}, 60000);
+
+// ── RENDER ALL ────────────────────────────────────────────────────────
+function renderAll(){
+  renderLive();
+  renderVideos();
+  renderPosts();
+  renderEvents();
+}
+
+// ── HELPERS ───────────────────────────────────────────────────────────
+function showMsg(id,t,txt){const e=document.getElementById(id);if(!e)return;e.className='omsg '+t;e.textContent=txt;}
+function trunc(s,n){return s&&s.length>n?s.slice(0,n)+'…':(s||'');}
+function esc(s){return(s||'').replace(/'/g,"\\'").replace(/"/g,'&quot;').replace(/\n/g,' ');}
+function fmtDate(iso){if(!iso)return'';try{return new Date(iso).toLocaleDateString('en-CA',{month:'short',day:'numeric',year:'numeric'});}catch{return'';}}
+function fmtDur(s){const m=Math.floor(s/60),sec=Math.round(s%60);return m+':'+(sec<10?'0':'')+sec;}
+function openSubmit(){document.getElementById('submitMod').classList.add('open');document.body.style.overflow='hidden';}
+function closeSubmit(){document.getElementById('submitMod').classList.remove('open');document.body.style.overflow='';}
+function doSubmit(){alert('Thanks! We will review your clip. 🏀');closeSubmit();}
+
+// ── SCROLL ────────────────────────────────────────────────────────────
+const obs=new IntersectionObserver(e=>e.forEach(x=>{if(x.isIntersecting)x.target.classList.add('vis');}),{threshold:.08});
+document.querySelectorAll('.fu').forEach(el=>obs.observe(el));
+window.addEventListener('scroll',()=>{
+  let c='';
+  ['videos','posts','events','leagues'].forEach(id=>{const s=document.getElementById(id);if(s&&window.scrollY>=s.offsetTop-70)c=id;});
+  document.querySelectorAll('.nl a').forEach(a=>a.classList.toggle('act',a.getAttribute('href')==='#'+c));
+});
+
+// ── INIT ──────────────────────────────────────────────────────────────
+document.getElementById('topDate').textContent = new Date().toLocaleDateString('en-CA',{weekday:'short',month:'short',day:'numeric',year:'numeric'});
+
+(async function init(){
+  await loadLeagues();   // loads from Gist (all visitors) or localStorage (admin)
+  renderAll();
+  updateNavUI();
+  if(getToken()){
+    const noContent = !D.videos.length && !D.liveStreams.length && !D.posts.length;
+    const last = D.lastFetch ? new Date(D.lastFetch) : null;
+    const mins = last ? (new Date()-last)/60000 : 999;
+    if(noContent || mins >= 30) setTimeout(fetchAll, 500);
+  }
+})();
+</script>
+</body>
 </html>
