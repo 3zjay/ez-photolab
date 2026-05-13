@@ -202,42 +202,97 @@ async function saveFile(blob, name) {
 }
 function canvasToBlob(c,mime,q){ return new Promise(r=>{ if(c.toBlob){c.toBlob(r,mime,q);return;} const d=c.toDataURL(mime,q),a=d.split(","),b=atob(a[1]);let n=b.length;const u=new Uint8Array(n);while(n--)u[n]=b.charCodeAt(n);r(new Blob([u],{type:mime}));});}
 
-async function renderFinal(imgEl, cssFilterStr, filters, rotation, flipH, flipV, texts, targetW, targetH) {
-  const MAX=16_000_000;
-  let W=targetW, H=targetH;
-  if(W*H>MAX){const s=Math.sqrt(MAX/(W*H));W=Math.floor(W*s);H=Math.floor(H*s);}
-  const canvas=document.createElement("canvas"); canvas.width=W; canvas.height=H;
-  const ctx=canvas.getContext("2d");
-  ctx.save();
-  ctx.translate(W/2,H/2);
-  ctx.rotate(rotation*Math.PI/180);
-  ctx.scale(flipH?-1:1, flipV?-1:1);
-  ctx.imageSmoothingEnabled=true; ctx.imageSmoothingQuality="high";
-  ctx.filter=cssFilterStr;
-  ctx.drawImage(imgEl,-W/2,-H/2,W,H);
-  ctx.restore();
-  ctx.filter="none";
-  if(filters.temperature!==0){const a=Math.abs(filters.temperature)/300;ctx.globalCompositeOperation="overlay";ctx.fillStyle=filters.temperature>0?`rgba(255,140,0,${a})`:`rgba(100,149,237,${a})`;ctx.fillRect(0,0,W,H);ctx.globalCompositeOperation="source-over";}
-  if(filters.fade>0){ctx.globalCompositeOperation="screen";ctx.fillStyle=`rgba(255,255,255,${filters.fade/180})`;ctx.fillRect(0,0,W,H);ctx.globalCompositeOperation="source-over";}
-  if(filters.vignette>0){const g=ctx.createRadialGradient(W/2,H/2,W*0.3,W/2,H/2,W*0.85);g.addColorStop(0,"rgba(0,0,0,0)");g.addColorStop(1,`rgba(0,0,0,${filters.vignette/100})`);ctx.globalCompositeOperation="multiply";ctx.fillStyle=g;ctx.fillRect(0,0,W,H);ctx.globalCompositeOperation="source-over";}
-  if(filters.grain>0){
-    const grainCanvas=document.createElement("canvas"); grainCanvas.width=W; grainCanvas.height=H;
-    const gc=grainCanvas.getContext("2d"); const id=gc.createImageData(W,H); const d=id.data;
-    for(let i=0;i<d.length;i+=4){const v=(Math.random()-0.5)*filters.grain*2.5;d[i]=d[i+1]=d[i+2]=128+v;d[i+3]=255;}
-    gc.putImageData(id,0,0);
-    ctx.globalCompositeOperation="overlay"; ctx.globalAlpha=0.35;
-    ctx.drawImage(grainCanvas,0,0); ctx.globalCompositeOperation="source-over"; ctx.globalAlpha=1;
-  }
-  texts.forEach(t=>{
-    if(!t.content.trim()) return;
-    const sz=Math.round(t.fontSize*(W/800));
-    ctx.font=`${t.bold?"bold ":""}${t.italic?"italic ":""}${sz}px ${FONT_MAP[t.font]||FONT_MAP.System}`;
-    ctx.textAlign="center"; ctx.textBaseline="middle";
-    const x=t.x/100*W, y=t.y/100*H;
-    if(t.stroke){ctx.strokeStyle="rgba(0,0,0,0.6)";ctx.lineWidth=sz*0.08;ctx.strokeText(t.content,x,y);}
-    ctx.fillStyle=t.color; ctx.fillText(t.content,x,y);
+// Load an image from a src string (data URL or blob URL) reliably
+function loadImageFromSrc(src) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error('Image failed to load for export'));
+    img.src = src;
   });
-  return {canvas,W,H};
+}
+
+async function renderFinal(imageSrc, cssFilterStr, filters, rotation, flipH, flipV, texts, targetW, targetH) {
+  // Always load a fresh Image to avoid canvas taint and stale DOM refs
+  const imgEl = await loadImageFromSrc(imageSrc);
+  const natW = imgEl.naturalWidth;
+  const natH = imgEl.naturalHeight;
+  if (!natW || !natH) throw new Error('Image has zero dimensions — cannot export');
+
+  const MAX = 16_000_000;
+  let W = targetW || natW;
+  let H = targetH || natH;
+  if (W * H > MAX) { const s = Math.sqrt(MAX / (W * H)); W = Math.floor(W * s); H = Math.floor(H * s); }
+
+  const canvas = document.createElement('canvas');
+  canvas.width = W; canvas.height = H;
+  const ctx = canvas.getContext('2d');
+
+  // Apply rotation + flip
+  ctx.save();
+  ctx.translate(W / 2, H / 2);
+  ctx.rotate(rotation * Math.PI / 180);
+  ctx.scale(flipH ? -1 : 1, flipV ? -1 : 1);
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+
+  // Apply CSS filters via ctx.filter (supported in all modern browsers)
+  if (cssFilterStr && cssFilterStr !== 'none' && cssFilterStr.trim() !== '') {
+    ctx.filter = cssFilterStr;
+  }
+  ctx.drawImage(imgEl, -W / 2, -H / 2, W, H);
+  ctx.restore();
+  ctx.filter = 'none';
+
+  // Warmth overlay
+  if (filters.temperature !== 0) {
+    const a = Math.abs(filters.temperature) / 300;
+    ctx.globalCompositeOperation = 'overlay';
+    ctx.fillStyle = filters.temperature > 0 ? `rgba(255,140,0,${a})` : `rgba(100,149,237,${a})`;
+    ctx.fillRect(0, 0, W, H);
+    ctx.globalCompositeOperation = 'source-over';
+  }
+  // Fade
+  if (filters.fade > 0) {
+    ctx.globalCompositeOperation = 'screen';
+    ctx.fillStyle = `rgba(255,255,255,${filters.fade / 180})`;
+    ctx.fillRect(0, 0, W, H);
+    ctx.globalCompositeOperation = 'source-over';
+  }
+  // Vignette
+  if (filters.vignette > 0) {
+    const g = ctx.createRadialGradient(W/2, H/2, W*0.3, W/2, H/2, W*0.85);
+    g.addColorStop(0, 'rgba(0,0,0,0)');
+    g.addColorStop(1, `rgba(0,0,0,${filters.vignette / 100})`);
+    ctx.globalCompositeOperation = 'multiply';
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, W, H);
+    ctx.globalCompositeOperation = 'source-over';
+  }
+  // Grain
+  if (filters.grain > 0) {
+    const gC = document.createElement('canvas'); gC.width = W; gC.height = H;
+    const gc = gC.getContext('2d'); const id = gc.createImageData(W, H); const d = id.data;
+    for (let i = 0; i < d.length; i += 4) {
+      const v = (Math.random() - 0.5) * filters.grain * 2.5;
+      d[i] = d[i+1] = d[i+2] = 128 + v; d[i+3] = 255;
+    }
+    gc.putImageData(id, 0, 0);
+    ctx.globalCompositeOperation = 'overlay'; ctx.globalAlpha = 0.35;
+    ctx.drawImage(gC, 0, 0);
+    ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
+  }
+  // Text overlays
+  texts.forEach(t => {
+    if (!t.content.trim()) return;
+    const sz = Math.round(t.fontSize * (W / 800));
+    ctx.font = `${t.bold ? 'bold ' : ''}${t.italic ? 'italic ' : ''}${sz}px ${FONT_MAP[t.font] || FONT_MAP.System}`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    const x = t.x / 100 * W, y = t.y / 100 * H;
+    if (t.stroke) { ctx.strokeStyle = 'rgba(0,0,0,0.6)'; ctx.lineWidth = sz * 0.08; ctx.strokeText(t.content, x, y); }
+    ctx.fillStyle = t.color; ctx.fillText(t.content, x, y);
+  });
+  return { canvas, W, H };
 }
 
 function getExportDims(natW,natH,scaleVal){
@@ -337,6 +392,11 @@ export default function App() {
   const [aiMaskReady,      setAiMaskReady]      = useState(false);
   const [aiActiveFeature,  setAiActiveFeature]  = useState(null); // 'upscale'|'beauty'|'remove'
   const [aiScale,          setAiScale]          = useState(4);
+  const [aiUpscaleProgress, setAiUpscaleProgress] = useState(0);
+  const [aiUpscaleResultSize, setAiUpscaleResultSize] = useState('');
+  const [aiBeautySmooth,   setAiBeautySmooth]   = useState(6);
+  const [aiBeautyClarity,  setAiBeautyClarity]  = useState(5);
+  const [aiBeautyGlow,     setAiBeautyGlow]     = useState(3);
   // Batch preview
   const [batchPreviewIdx,     setBatchPreviewIdx]     = useState(null);
   const [batchPreviewOrigUrl, setBatchPreviewOrigUrl] = useState(null);
@@ -479,36 +539,47 @@ export default function App() {
   const {W:expW,H:expH}=natW?getExportDims(natW,natH,exportScale):{W:0,H:0};
 
   const handleExport=async()=>{
-    const img=imgRef.current; if(!img) return;
-    setExporting(true); setExportDone(false); setExportInfo("");
+    const src = bgResult || image;  // use bg-removed version if available
+    if(!src){ setExportInfo("No image loaded."); return; }
+    setExporting(true); setExportDone(false); setExportInfo("Preparing…");
     try{
-      const{W,H}=getExportDims(img.naturalWidth,img.naturalHeight,exportScale);
-      const{canvas,W:rW,H:rH}=await renderFinal(img,cssFilter,filters,rotation,flipH,flipV,texts,W,H);
+      // Load fresh image to get real dimensions
+      const tmpImg = await loadImageFromSrc(src);
+      const {W,H}=getExportDims(tmpImg.naturalWidth,tmpImg.naturalHeight,exportScale);
+      setExportInfo(`Rendering ${W.toLocaleString()}×${H.toLocaleString()}px…`);
+      const{canvas,W:rW,H:rH}=await renderFinal(src,cssFilter,filters,rotation,flipH,flipV,texts,W,H);
       const fmts={jpg:{mime:"image/jpeg",ext:"jpg"},png:{mime:"image/png",ext:"png"},webp:{mime:"image/webp",ext:"webp"}};
       const{mime,ext}=fmts[exportFmt];
       const q=exportFmt==="png"?undefined:exportQ/100;
       const blob=await canvasToBlob(canvas,mime,q);
+      if(!blob || blob.size===0) throw new Error("Canvas produced empty blob — check image source.");
       const kb=Math.round(blob.size/1024);
       setExportInfo(`${rW.toLocaleString()}×${rH.toLocaleString()}px · ${kb>1024?(kb/1024).toFixed(1)+"MB":kb+"KB"}`);
       await saveFile(blob,`photolab.${ext}`);
       setExportDone(true); setTimeout(()=>setExportDone(false),4000);
-    }catch(e){console.error(e);setExportInfo("Export failed — try lower scale.");}
+    }catch(e){
+      console.error("Export error:",e);
+      setExportInfo("Export failed: "+e.message);
+    }
     setExporting(false);
   };
   const handleFbExport=async()=>{
-    const img=imgRef.current; if(!img) return;
-    setFbExporting(true); setFbDone(false);
+    const src = bgResult || image;
+    if(!src) return;
+    setFbExporting(true); setFbDone(false); setExportInfo("Preparing…");
     try{
+      const tmpImg = await loadImageFromSrc(src);
       const mode=FB_MODES.find(m=>m.id===fbMode);
-      let tW=mode.w,tH=mode.h;
-      if(!tH){const sc=Math.min(1,tW/Math.max(img.naturalWidth,img.naturalHeight));tW=Math.round(img.naturalWidth*sc);tH=Math.round(img.naturalHeight*sc);}
-      const{canvas,W,H}=await renderFinal(img,cssFilter,filters,rotation,flipH,flipV,texts,tW,tH);
+      let tW=mode.w, tH=mode.h;
+      if(!tH){ const sc=Math.min(1,tW/Math.max(tmpImg.naturalWidth,tmpImg.naturalHeight)); tW=Math.round(tmpImg.naturalWidth*sc); tH=Math.round(tmpImg.naturalHeight*sc); }
+      const{canvas,W,H}=await renderFinal(src,cssFilter,filters,rotation,flipH,flipV,texts,tW,tH);
       const blob=await canvasToBlob(canvas,"image/jpeg",0.82);
+      if(!blob || blob.size===0) throw new Error("Empty blob");
       const kb=Math.round(blob.size/1024);
       setExportInfo(`${W}×${H}px · ${kb>1024?(kb/1024).toFixed(1)+"MB":kb+"KB"}`);
       await saveFile(blob,`facebook_${mode.id}.jpg`);
       setFbDone(true); setTimeout(()=>setFbDone(false),4000);
-    }catch(e){console.error(e);}
+    }catch(e){ console.error("FB export error:",e); setExportInfo("Export failed: "+e.message); }
     setFbExporting(false);
   };
 
@@ -940,33 +1011,161 @@ export default function App() {
     if (!aiMaskReady) { alert('Paint over the area to remove first.'); return; }
     const mc = maskCanvasRef.current;
     if (!mc) return;
-    if (!falApiKey.trim()) { alert('Enter your fal.ai API key first.'); return; }
+    if (!falApiKey.trim()) { alert('Enter your Claid.ai API key first.'); return; }
     if (!image) return;
-    setAiRemoveStatus('loading'); setAiRemoveResult(null); setAiRemoveLog('Preparing image and mask…');
+    setAiRemoveStatus('loading'); setAiRemoveResult(null); setAiRemoveLog('Preparing image…');
     try {
-      // Source image — base64 data URI
-      const srcImg = imgRef.current;
+      // Draw source image to canvas → blob
+      const srcImg = await loadImageFromSrc(image);
       const tmpCanvas = document.createElement('canvas');
       tmpCanvas.width = srcImg.naturalWidth; tmpCanvas.height = srcImg.naturalHeight;
-      tmpCanvas.getContext('2d').drawImage(srcImg, 0, 0);
-      const imageUrl = canvasToDataUrl(tmpCanvas, 0.92);
-      // Mask — base64 PNG (white = remove, black = keep)
-      const maskUrl = mc.toDataURL('image/png');
-      const result = await falRun(
-        'fal-ai/lama-cleaner/lama',
-        { image_url: imageUrl, mask_url: maskUrl },
-        msg => setAiRemoveLog(msg)
-      );
-      const outUrl = result?.image?.url
-        || result?.output_image_url
-        || result?.images?.[0]?.url;
-      if (!outUrl) throw new Error(`No image URL in response: ${JSON.stringify(result).slice(0,300)}`);
+      const tCtx = tmpCanvas.getContext('2d');
+      tCtx.filter = toCSSFilter(filters);
+      tCtx.drawImage(srcImg, 0, 0);
+      tCtx.filter = 'none';
+
+      // Mask canvas → PNG blob
+      const [imgBlob, maskBlob] = await Promise.all([
+        canvasToBlob(tmpCanvas, 'image/jpeg', 0.95),
+        canvasToBlob(mc, 'image/png'),
+      ]);
+
+      setAiRemoveLog('Uploading to Claid.ai…');
+      // Claid.ai inpainting — multipart form
+      const form = new FormData();
+      form.append('image', imgBlob, 'photo.jpg');
+      form.append('mask', maskBlob, 'mask.png');
+      form.append('operations', JSON.stringify([{ operation: 'inpaint' }]));
+
+      const res = await fetch('https://api.claid.ai/v1-beta1/image/edit', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${falApiKey.trim()}` },
+        body: form,
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.message || data?.error || `Claid error ${res.status}`);
+      const outUrl = data?.data?.output?.tmp_url || data?.data?.output?.url;
+      if (!outUrl) throw new Error(`No URL in response: ${JSON.stringify(data).slice(0,200)}`);
       setAiRemoveResult(outUrl); setAiRemoveStatus('done'); setAiRemoveLog('');
     } catch(e) {
       console.error(e); setAiRemoveStatus('error');
-      setAiRemoveLog(e?.message || 'Failed. Check API key and try again.');
+      setAiRemoveLog(e?.message || 'Failed. Check your Claid.ai API key.');
     }
-  }, [aiMaskReady, falApiKey, image, canvasToDataUrl, falRun]);
+  }, [aiMaskReady, falApiKey, image, filters]);
+
+  // ── Free browser-based AI functions ─────────────────────────────────────
+
+  // Multi-pass bicubic upscale with unsharp mask between passes
+  const runBrowserUpscale = useCallback(async () => {
+    if (!image) return;
+    setAiUpscaleStatus('loading'); setAiUpscaleResult(null); setAiUpscaleLog('Loading image…'); setAiUpscaleProgress(10);
+    try {
+      const src = bgResult || image;
+      const srcImg = await loadImageFromSrc(src);
+      const natW = srcImg.naturalWidth, natH = srcImg.naturalHeight;
+      const targetW = natW * aiScale, targetH = natH * aiScale;
+      const passes = aiScale; // one pass per scale factor for quality
+
+      setAiUpscaleLog(`Upscaling ${natW}×${natH} → ${targetW}×${targetH} in ${passes} passes…`);
+
+      let currentCanvas = document.createElement('canvas');
+      currentCanvas.width = natW; currentCanvas.height = natH;
+      const initCtx = currentCanvas.getContext('2d');
+      initCtx.filter = toCSSFilter(filters);
+      initCtx.drawImage(srcImg, 0, 0, natW, natH);
+      initCtx.filter = 'none';
+
+      for (let pass = 0; pass < passes; pass++) {
+        const passW = Math.round(natW * ((pass + 1) / passes) * aiScale);
+        const passH = Math.round(natH * ((pass + 1) / passes) * aiScale);
+        const nextCanvas = document.createElement('canvas');
+        nextCanvas.width = passW; nextCanvas.height = passH;
+        const ctx = nextCanvas.getContext('2d');
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+        ctx.drawImage(currentCanvas, 0, 0, passW, passH);
+        // Unsharp mask between passes for sharpness retention
+        if (pass < passes - 1) {
+          applyUnsharpMask(nextCanvas, ctx, passW, passH, 0.6, 1.2);
+        } else {
+          // Final pass — slightly stronger sharpen
+          applyUnsharpMask(nextCanvas, ctx, passW, passH, 0.9, 1.5);
+        }
+        currentCanvas = nextCanvas;
+        setAiUpscaleProgress(Math.round(((pass + 1) / passes) * 90) + 5);
+        await new Promise(r => setTimeout(r, 10)); // let UI breathe
+      }
+
+      setAiUpscaleProgress(98); setAiUpscaleLog('Encoding result…');
+      const resultUrl = currentCanvas.toDataURL('image/jpeg', 0.95);
+      const W = currentCanvas.width, H = currentCanvas.height;
+      const approxKb = Math.round((resultUrl.length * 0.75) / 1024);
+      setAiUpscaleResultSize(`${W.toLocaleString()}×${H.toLocaleString()}px · ~${approxKb > 1024 ? (approxKb/1024).toFixed(1)+'MB' : approxKb+'KB'}`);
+      setAiUpscaleResult(resultUrl);
+      setAiUpscaleStatus('done'); setAiUpscaleLog(''); setAiUpscaleProgress(100);
+    } catch(e) {
+      console.error('Upscale error:', e);
+      setAiUpscaleStatus('error'); setAiUpscaleLog(e.message || 'Upscale failed');
+    }
+  }, [image, bgResult, filters, aiScale]);
+
+  // Canvas-based portrait beauty pipeline
+  const runBrowserBeauty = useCallback(async () => {
+    if (!image) return;
+    setAiBeautyStatus('loading'); setAiBeautyResult(null); setAiBeautyLog('Processing…');
+    try {
+      const src = bgResult || image;
+      const srcImg = await loadImageFromSrc(src);
+      const W = srcImg.naturalWidth, H = srcImg.naturalHeight;
+      const canvas = document.createElement('canvas');
+      canvas.width = W; canvas.height = H;
+      const ctx = canvas.getContext('2d');
+
+      // 1. Draw with current filters
+      ctx.filter = toCSSFilter(filters);
+      ctx.drawImage(srcImg, 0, 0, W, H);
+      ctx.filter = 'none';
+
+      // 2. Skin smoothing (adaptive denoise)
+      if (aiBeautySmooth > 0) {
+        applyNoiseReduction(canvas, ctx, W, H, aiBeautySmooth * 0.5);
+      }
+
+      // 3. Auto levels for consistent white balance
+      applyAutoLevels(ctx, W, H);
+
+      // 4. Subtle warmth overlay (portrait feel)
+      ctx.globalCompositeOperation = 'overlay';
+      ctx.fillStyle = `rgba(255,200,150,${aiBeautyGlow * 0.012})`;
+      ctx.fillRect(0, 0, W, H);
+      ctx.globalCompositeOperation = 'source-over';
+
+      // 5. Clarity / edge sharpening
+      if (aiBeautyClarity > 0) {
+        applyUnsharpMask(canvas, ctx, W, H, aiBeautyClarity * 0.15, 1.2);
+      }
+
+      // 6. Gentle screen glow for luminosity lift
+      if (aiBeautyGlow > 0) {
+        const glowCanvas = document.createElement('canvas');
+        glowCanvas.width = W; glowCanvas.height = H;
+        const gCtx = glowCanvas.getContext('2d');
+        gCtx.filter = `blur(${Math.round(aiBeautyGlow * 3)}px) brightness(1.15)`;
+        gCtx.drawImage(canvas, 0, 0);
+        gCtx.filter = 'none';
+        ctx.globalCompositeOperation = 'screen';
+        ctx.globalAlpha = aiBeautyGlow * 0.025;
+        ctx.drawImage(glowCanvas, 0, 0);
+        ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
+      }
+
+      setAiBeautyResult(canvas.toDataURL('image/jpeg', 0.95));
+      setAiBeautyStatus('done'); setAiBeautyLog('');
+    } catch(e) {
+      console.error('Beauty error:', e);
+      setAiBeautyStatus('error'); setAiBeautyLog(e.message || 'Beauty filter failed');
+    }
+  }, [image, bgResult, filters, aiBeautySmooth, aiBeautyClarity, aiBeautyGlow]);
 
   // ── PANEL ─────────────────────────────────────────────────────────────────
   const dm = darkMode;
@@ -1032,27 +1231,15 @@ export default function App() {
           {/* ── AI Features ── */}
           <div style={{display:"flex",flexDirection:"column",gap:"12px"}}>
 
-            {/* API Key */}
-            <div style={{padding:"12px 14px",background:dm?'#1e1a2e':'#f5f3ff',border:`1.5px solid ${falApiKey?'#6c63ff':'#c4b5fd'}`,borderRadius:"12px"}}>
-              <div style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:"8px"}}>
-                <span style={{fontSize:"14px"}}>🔑</span>
-                <span style={{fontSize:"12px",fontWeight:700,color:"#7c3aed"}}>fal.ai API Key</span>
-                {falApiKey&&<span style={{marginLeft:"auto",fontSize:"11px",fontWeight:700,color:"#16a34a"}}>✓ Saved</span>}
-              </div>
-              <input
-                type="password"
-                value={falApiKey}
-                onChange={e=>saveFalKey(e.target.value)}
-                placeholder="key-xxxxxxxxxxxxxxxx"
-                style={{width:"100%",padding:"8px 10px",border:`1px solid ${cardBdr}`,borderRadius:"8px",fontSize:"12px",fontFamily:"monospace",outline:"none",background:dm?'#0e0e1a':'#fff',color:dm?'#ddd':'#333'}}/>
-              <p style={{fontSize:"10px",color:"#a78bfa",marginTop:"5px",lineHeight:1.5}}>
-                Get a free key at <strong>fal.ai</strong> → Settings → API Keys. Stored locally in your browser.
-              </p>
+            {/* Free badge */}
+            <div style={{display:"flex",alignItems:"center",gap:"8px",padding:"8px 12px",background:dm?'#0f2a1a':'#f0fff4',border:"1.5px solid #86efac",borderRadius:"10px"}}>
+              <span style={{fontSize:"14px"}}>✅</span>
+              <span style={{fontSize:"12px",fontWeight:600,color:"#16a34a"}}>Upscale & Beauty run 100% free in your browser — no API key needed.</span>
             </div>
 
             {/* Feature selector */}
             <div style={{display:"flex",gap:"6px"}}>
-              {[{id:'upscale',icon:'⬆️',label:'AI Upscale'},{id:'beauty',icon:'✨',label:'AI Beauty'},{id:'remove',icon:'🧹',label:'Remove Object'}].map(f=>(
+              {[{id:'upscale',icon:'⬆️',label:'Smart Upscale'},{id:'beauty',icon:'✨',label:'Beauty Filter'},{id:'remove',icon:'🧹',label:'Remove Object'}].map(f=>(
                 <button key={f.id} onClick={()=>setAiActiveFeature(aiActiveFeature===f.id?null:f.id)}
                   style={{flex:1,padding:"10px 4px",border:`1.5px solid ${aiActiveFeature===f.id?'#6c63ff':cardBdr}`,
                     background:aiActiveFeature===f.id?(dm?'#1e1a3a':'#faf9ff'):dm?'#252525':'#fff',
@@ -1065,11 +1252,14 @@ export default function App() {
 
             {!image&&<Empty>Upload a photo to use AI features</Empty>}
 
-            {/* ── AI UPSCALE ── */}
+            {/* ── SMART UPSCALE (free, in-browser) ── */}
             {aiActiveFeature==='upscale'&&image&&(
               <div style={{padding:"14px",background:cardBg,border:`1.5px solid ${cardBdr}`,borderRadius:"12px",display:"flex",flexDirection:"column",gap:"10px"}}>
-                <SL>AI Upscale — Real-ESRGAN</SL>
-                <p style={{fontSize:"11px",color:"#aaa",lineHeight:1.5}}>Upscale up to 4× using AI super-resolution. Best for photos and textures.</p>
+                <div style={{display:"flex",alignItems:"center",gap:"8px"}}>
+                  <SL>Smart Upscale</SL>
+                  <span style={{fontSize:"10px",fontWeight:700,padding:"2px 8px",background:"#f0fff4",color:"#16a34a",borderRadius:"20px",border:"1px solid #86efac",marginBottom:"8px"}}>FREE • In-Browser</span>
+                </div>
+                <p style={{fontSize:"11px",color:"#aaa",lineHeight:1.5}}>Multi-pass bicubic upscaling with unsharp mask sharpening between each pass. Produces far sharper results than a single resize — runs entirely in your browser.</p>
                 <div>
                   <div style={{display:"flex",justifyContent:"space-between",marginBottom:"5px"}}>
                     <span style={{fontSize:"12px",color:dm?'#ccc':'#555'}}>Scale factor</span>
@@ -1087,25 +1277,22 @@ export default function App() {
                     ))}
                   </div>
                 </div>
-                <AB onClick={()=>runFalModel(
-                    'fal-ai/esrgan',
-                    {scale:aiScale,face_enhance:false},
-                    setAiUpscaleStatus,setAiUpscaleResult,setAiUpscaleLog
-                  )}
-                  disabled={aiUpscaleStatus==='loading'||!falApiKey}
+                <AB onClick={runBrowserUpscale}
+                  disabled={aiUpscaleStatus==='loading'}
                   color={aiUpscaleStatus==='done'?'#f0fff4':'purple'}
                   textColor={aiUpscaleStatus==='done'?'#16a34a':'#fff'}
                   style={{width:"100%",padding:"11px"}}>
-                  {aiUpscaleStatus==='loading'?<Row><Spin/>Processing…</Row>
+                  {aiUpscaleStatus==='loading'?<Row><Spin/>Upscaling…</Row>
                    :aiUpscaleStatus==='done'?'✓ Done — Run Again'
                    :'⬆️ Upscale Image'}
                 </AB>
                 {aiUpscaleLog&&<p style={{fontSize:"11px",color:aiUpscaleStatus==='error'?'#ef4444':'#a78bfa',lineHeight:1.4}}>{aiUpscaleLog}</p>}
-                {aiUpscaleStatus==='loading'&&<PBar value={50}/>}
+                {aiUpscaleStatus==='loading'&&<PBar value={aiUpscaleProgress}/>}
                 {aiUpscaleResult&&(
                   <div style={{display:"flex",flexDirection:"column",gap:"8px"}}>
-                    <div style={{borderRadius:"8px",overflow:"hidden",border:`1px solid ${cardBdr}`}}>
+                    <div style={{borderRadius:"8px",overflow:"hidden",border:`1px solid ${cardBdr}`,position:"relative"}}>
                       <img src={aiUpscaleResult} alt="upscaled" style={{width:"100%",display:"block"}}/>
+                      <div style={{position:"absolute",bottom:"6px",right:"6px",padding:"3px 8px",background:"rgba(0,0,0,.6)",borderRadius:"12px",fontSize:"10px",fontWeight:600,color:"#fff"}}>{aiUpscaleResultSize}</div>
                     </div>
                     <div style={{display:"flex",gap:"7px"}}>
                       <AB onClick={()=>applyAiResult(aiUpscaleResult)} color={dm?'#252525':'#f2f2f8'} textColor={dm?'#ccc':'#555'} style={{flex:1,padding:"9px",fontSize:"12px"}}>← Apply to Editor</AB>
@@ -1116,26 +1303,50 @@ export default function App() {
               </div>
             )}
 
-            {/* ── AI BEAUTY ── */}
+            {/* ── BEAUTY FILTER (free, in-browser) ── */}
             {aiActiveFeature==='beauty'&&image&&(
               <div style={{padding:"14px",background:cardBg,border:`1.5px solid ${cardBdr}`,borderRadius:"12px",display:"flex",flexDirection:"column",gap:"10px"}}>
-                <SL>AI Beauty — Face Enhancement</SL>
-                <p style={{fontSize:"11px",color:"#aaa",lineHeight:1.5}}>Enhances facial features, smooths skin, and sharpens details using GFPGAN face restoration.</p>
-                <AB onClick={()=>runFalModel(
-                    'fal-ai/esrgan',
-                    {scale:2,face_enhance:true},
-                    setAiBeautyStatus,setAiBeautyResult,setAiBeautyLog
-                  )}
-                  disabled={aiBeautyStatus==='loading'||!falApiKey}
+                <div style={{display:"flex",alignItems:"center",gap:"8px"}}>
+                  <SL>Beauty Filter</SL>
+                  <span style={{fontSize:"10px",fontWeight:700,padding:"2px 8px",background:"#f0fff4",color:"#16a34a",borderRadius:"20px",border:"1px solid #86efac",marginBottom:"8px"}}>FREE • In-Browser</span>
+                </div>
+                <p style={{fontSize:"11px",color:"#aaa",lineHeight:1.5}}>Portrait retouching pipeline: adaptive skin smoothing, edge sharpening, auto white balance, subtle warmth + clarity boost. All runs locally.</p>
+                <div style={{display:"flex",flexDirection:"column",gap:"8px"}}>
+                  <div>
+                    <div style={{display:"flex",justifyContent:"space-between",marginBottom:"4px"}}>
+                      <span style={{fontSize:"12px",color:dm?'#ccc':'#555'}}>Smooth</span>
+                      <span style={{fontSize:"12px",fontWeight:700,color:"#6c63ff"}}>{aiBeautySmooth}</span>
+                    </div>
+                    <input type="range" className="sl" min={0} max={10} step={1} value={aiBeautySmooth}
+                      style={{"--v":`${(aiBeautySmooth/10)*100}%`}} onChange={e=>setAiBeautySmooth(+e.target.value)}/>
+                  </div>
+                  <div>
+                    <div style={{display:"flex",justifyContent:"space-between",marginBottom:"4px"}}>
+                      <span style={{fontSize:"12px",color:dm?'#ccc':'#555'}}>Clarity</span>
+                      <span style={{fontSize:"12px",fontWeight:700,color:"#6c63ff"}}>{aiBeautyClarity}</span>
+                    </div>
+                    <input type="range" className="sl" min={0} max={10} step={1} value={aiBeautyClarity}
+                      style={{"--v":`${(aiBeautyClarity/10)*100}%`}} onChange={e=>setAiBeautyClarity(+e.target.value)}/>
+                  </div>
+                  <div>
+                    <div style={{display:"flex",justifyContent:"space-between",marginBottom:"4px"}}>
+                      <span style={{fontSize:"12px",color:dm?'#ccc':'#555'}}>Glow</span>
+                      <span style={{fontSize:"12px",fontWeight:700,color:"#6c63ff"}}>{aiBeautyGlow}</span>
+                    </div>
+                    <input type="range" className="sl" min={0} max={10} step={1} value={aiBeautyGlow}
+                      style={{"--v":`${(aiBeautyGlow/10)*100}%`}} onChange={e=>setAiBeautyGlow(+e.target.value)}/>
+                  </div>
+                </div>
+                <AB onClick={runBrowserBeauty}
+                  disabled={aiBeautyStatus==='loading'}
                   color={aiBeautyStatus==='done'?'#f0fff4':'purple'}
                   textColor={aiBeautyStatus==='done'?'#16a34a':'#fff'}
                   style={{width:"100%",padding:"11px"}}>
                   {aiBeautyStatus==='loading'?<Row><Spin/>Processing…</Row>
                    :aiBeautyStatus==='done'?'✓ Done — Run Again'
-                   :'✨ Enhance Faces'}
+                   :'✨ Apply Beauty Filter'}
                 </AB>
                 {aiBeautyLog&&<p style={{fontSize:"11px",color:aiBeautyStatus==='error'?'#ef4444':'#a78bfa',lineHeight:1.4}}>{aiBeautyLog}</p>}
-                {aiBeautyStatus==='loading'&&<PBar value={50}/>}
                 {aiBeautyResult&&(
                   <div style={{display:"flex",flexDirection:"column",gap:"8px"}}>
                     <div style={{borderRadius:"8px",overflow:"hidden",border:`1px solid ${cardBdr}`}}>
@@ -1150,12 +1361,25 @@ export default function App() {
               </div>
             )}
 
-            {/* ── OBJECT REMOVAL ── */}
+            {/* ── OBJECT REMOVAL (Claid.ai — 50 free credits) ── */}
             {aiActiveFeature==='remove'&&image&&(
               <div style={{padding:"14px",background:cardBg,border:`1.5px solid ${cardBdr}`,borderRadius:"12px",display:"flex",flexDirection:"column",gap:"10px"}}>
-                <SL>Object Removal — LaMa</SL>
-                <p style={{fontSize:"11px",color:"#aaa",lineHeight:1.5}}>Paint over the object you want removed. LaMa fills it in with context-aware inpainting.</p>
-                {/* Brush size */}
+                <div style={{display:"flex",alignItems:"center",gap:"8px"}}>
+                  <SL>Object Removal — LaMa Inpainting</SL>
+                  <span style={{fontSize:"10px",fontWeight:700,padding:"2px 8px",background:"#fff8e7",color:"#b45309",borderRadius:"20px",border:"1px solid #fcd34d",marginBottom:"8px"}}>50 FREE CREDITS</span>
+                </div>
+                <div style={{padding:"10px 12px",background:dm?'#1e2a10':'#f0fdf4',border:"1px solid #86efac",borderRadius:"8px",fontSize:"11px",color:dm?'#86efac':'#166534',lineHeight:1.6}}>
+                  🎁 Sign up free at <strong>claid.ai</strong> → you get <strong>50 free credits</strong> (50 removals). No credit card needed. Get your API key from Settings → API.
+                </div>
+                {/* Claid API Key */}
+                <div>
+                  <div style={{fontSize:"11px",fontWeight:600,color:"#aaa",textTransform:"uppercase",letterSpacing:".05em",marginBottom:"5px"}}>Claid.ai API Key</div>
+                  <input type="password" value={falApiKey} onChange={e=>saveFalKey(e.target.value)}
+                    placeholder="your-claid-api-key"
+                    style={{width:"100%",padding:"8px 10px",border:`1px solid ${falApiKey?'#6c63ff':cardBdr}`,borderRadius:"8px",fontSize:"12px",fontFamily:"monospace",outline:"none",background:dm?'#0e0e1a':'#fff',color:dm?'#ddd':'#333'}}/>
+                  {falApiKey&&<p style={{fontSize:"10px",color:"#16a34a",marginTop:"4px",fontWeight:600}}>✓ Key saved</p>}
+                </div>
+                <p style={{fontSize:"11px",color:"#aaa",lineHeight:1.5}}>Paint over the object you want removed. LaMa fills it with context-aware inpainting.</p>
                 <div>
                   <div style={{display:"flex",justifyContent:"space-between",marginBottom:"5px"}}>
                     <span style={{fontSize:"12px",color:dm?'#ccc':'#555'}}>Brush size</span>
@@ -1165,7 +1389,6 @@ export default function App() {
                     style={{"--v":`${((aiRemoveBrush-10)/110)*100}%`}}
                     onChange={e=>setAiRemoveBrush(+e.target.value)}/>
                 </div>
-                {/* Mask canvas overlay */}
                 <div style={{position:"relative",borderRadius:"8px",overflow:"hidden",border:`1.5px solid ${aiMaskReady?'#f59e0b':cardBdr}`,cursor:"crosshair",lineHeight:0,userSelect:"none"}}
                   onMouseDown={e=>{maskDrawingRef.current=true; drawMask(e,e.currentTarget);}}
                   onMouseMove={e=>drawMask(e,e.currentTarget)}
@@ -1174,16 +1397,14 @@ export default function App() {
                   onTouchStart={e=>{e.preventDefault();maskDrawingRef.current=true;drawMask(e,e.currentTarget);}}
                   onTouchMove={e=>{e.preventDefault();drawMask(e,e.currentTarget);}}
                   onTouchEnd={()=>{maskDrawingRef.current=false;}}>
-                  <img src={image} alt="source"
-                    style={{width:"100%",display:"block",filter:toCSSFilter(filters)}}
-                    onLoad={initMaskCanvas}/>
-                  <canvas ref={maskCanvasRef}
-                    style={{position:"absolute",inset:0,width:"100%",height:"100%",opacity:0.5,mixBlendMode:"screen",pointerEvents:"none"}}/>
+                  <img src={image} alt="source" style={{width:"100%",display:"block",filter:toCSSFilter(filters)}} onLoad={initMaskCanvas}/>
+                  <canvas ref={maskCanvasRef} style={{position:"absolute",inset:0,width:"100%",height:"100%",opacity:0.5,mixBlendMode:"screen",pointerEvents:"none"}}/>
+                  {aiMaskReady&&<div style={{position:"absolute",top:"6px",left:"6px",padding:"3px 8px",background:"rgba(245,158,11,.9)",borderRadius:"12px",fontSize:"10px",fontWeight:700,color:"#fff"}}>✏ Mask painted</div>}
                 </div>
                 <div style={{display:"flex",gap:"7px"}}>
                   <button onClick={()=>{initMaskCanvas();setAiRemoveResult(null);setAiRemoveStatus('idle');}}
                     style={{flex:1,padding:"9px",border:`1px solid ${cardBdr}`,background:dm?'#252525':'#f2f2f8',borderRadius:"9px",fontSize:"12px",fontWeight:600,color:dm?'#ccc':'#666',cursor:"pointer",fontFamily:"inherit"}}>
-                    🗑 Clear Mask
+                    🗑 Clear
                   </button>
                   <AB onClick={handleAiRemove}
                     disabled={aiRemoveStatus==='loading'||!aiMaskReady||!falApiKey}
@@ -1192,6 +1413,7 @@ export default function App() {
                     style={{flex:2,padding:"9px",fontSize:"12px"}}>
                     {aiRemoveStatus==='loading'?<Row><Spin/>Removing…</Row>
                      :aiRemoveStatus==='done'?'✓ Done — Paint Again'
+                     :!falApiKey?'Enter API key above'
                      :'🧹 Remove Object'}
                   </AB>
                 </div>
