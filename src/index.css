@@ -1,1 +1,75 @@
 @import "tailwindcss";
+
+@layer base {
+  body {
+    font-family: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    /* Custom scrollbar setup */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(150, 150, 150, 0.3);
+      border-radius: 10px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(150, 150, 150, 0.5);
+    }
+  }
+
+  /* Smooth inputs */
+  input[type="range"] {
+    -webkit-appearance: none;
+    background: transparent;
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+  }
+}
+
+/* Glassmorphism utilities */
+.glass-panel {
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+[data-dark="false"] .glass-panel {
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.05);
+}
+
+/* Animations */
+@keyframes slideup {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 15px rgba(108, 99, 255, 0.2); }
+  50% { box-shadow: 0 0 25px rgba(108, 99, 255, 0.6); }
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 2s infinite ease-in-out;
+}
+
+/* Base Gradient Background */
+.app-bg-dark {
+  background: radial-gradient(circle at top left, #1a1a2e, #121212 40%),
+              radial-gradient(circle at bottom right, #2a1538, #121212 50%);
+  background-attachment: fixed;
+}
+.app-bg-light {
+  background: radial-gradient(circle at top left, #f3f0ff, #f7f8fa 40%),
+              radial-gradient(circle at bottom right, #fff0f5, #f7f8fa 50%);
+  background-attachment: fixed;
+}
