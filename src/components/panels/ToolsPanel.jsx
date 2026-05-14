@@ -1,7 +1,7 @@
 import { SL, Empty, Row, Spin, PBar, AB } from "../ui/common";
 import { BG_COLORS } from "../../constants";
 
-export function ToolsPanel({ image, handleRemoveBg, bgStatus, bgProgress, bgSubUrl, bgMode, setBgMode, cardBdr, cardBg, dm, bgColor, setBgColor, bgBlur, setBgBlur, bgResult, saveFile, falApiKey, saveFalKey, aiRemoveBrush, setAiRemoveBrush, toCSSFilter, filters, initMaskCanvas, maskCanvasRef, maskDrawingRef, drawMask, aiMaskReady, handleAiRemove, aiRemoveStatus, aiRemoveLog, aiRemoveResult, applyAiResult }) {
+export function ToolsPanel({ image, handleRemoveBg, bgStatus, bgProgress, bgSubUrl, bgMode, setBgMode, cardBdr, cardBg, dm, bgColor, setBgColor, bgBlur, setBgBlur, bgResult, saveFile, falApiKey, saveFalKey, claidApiKey, saveClaidKey, aiRemoveBrush, setAiRemoveBrush, toCSSFilter, filters, initMaskCanvas, maskCanvasRef, maskDrawingRef, drawMask, aiMaskReady, handleAiRemove, aiRemoveStatus, aiRemoveLog, aiRemoveResult, applyAiResult }) {
     return (
         <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
             <div>
@@ -64,13 +64,27 @@ export function ToolsPanel({ image, handleRemoveBg, bgStatus, bgProgress, bgSubU
                     <div style={{ padding: "10px 12px", background: dm ? '#1e2a10' : '#f0fdf4', border: "1px solid #86efac", borderRadius: "8px", fontSize: "11px", color: dm ? '#86efac' : '#166534', lineHeight: 1.6 }}>
                         🎁 Sign up free at <strong>claid.ai</strong> → you get <strong>50 free credits</strong> (50 removals). No credit card needed. Get your API key from Settings → API.
                     </div>
-                    {/* Claid API Key */}
-                    <div>
-                        <div style={{ fontSize: "11px", fontWeight: 600, color: "#aaa", textTransform: "uppercase", letterSpacing: ".05em", marginBottom: "5px" }}>Claid.ai API Key</div>
-                        <input type="password" value={falApiKey} onChange={e => saveFalKey(e.target.value)}
-                            placeholder="your-claid-api-key"
-                            style={{ width: "100%", padding: "8px 10px", border: `1px solid ${falApiKey ? '#6c63ff' : cardBdr}`, borderRadius: "8px", fontSize: "12px", fontFamily: "monospace", outline: "none", background: dm ? '#0e0e1a' : '#fff', color: dm ? '#ddd' : '#333' }} />
-                        {falApiKey && <p style={{ fontSize: "10px", color: "#16a34a", marginTop: "4px", fontWeight: 600 }}>✓ Key saved</p>}
+                    {/* API Keys Configuration */}
+                    <div style={{ padding: "12px", background: dm ? '#1a1a2e' : '#f0f4ff', border: `1px solid ${dm ? '#333' : '#d0d8ff'}`, borderRadius: "10px", display: "flex", flexDirection: "column", gap: "10px" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                            <span style={{ fontSize: "11px", fontWeight: 700, color: "#6c63ff" }}>⚙ API CONFIGURATION</span>
+                        </div>
+                        
+                        {/* fal.ai API Key */}
+                        <div>
+                            <div style={{ fontSize: "11px", fontWeight: 600, color: "#aaa", textTransform: "uppercase", letterSpacing: ".05em", marginBottom: "5px" }}>fal.ai API Key (Face Restore)</div>
+                            <input type="password" value={falApiKey} onChange={e => saveFalKey(e.target.value)}
+                                placeholder="your-fal-api-key"
+                                style={{ width: "100%", padding: "8px 10px", border: `1px solid ${falApiKey ? '#6c63ff' : cardBdr}`, borderRadius: "8px", fontSize: "12px", fontFamily: "monospace", outline: "none", background: dm ? '#0e0e1a' : '#fff', color: dm ? '#ddd' : '#333' }} />
+                        </div>
+
+                        {/* Claid API Key */}
+                        <div>
+                            <div style={{ fontSize: "11px", fontWeight: 600, color: "#aaa", textTransform: "uppercase", letterSpacing: ".05em", marginBottom: "5px" }}>Claid.ai API Key (Object Removal)</div>
+                            <input type="password" value={claidApiKey} onChange={e => saveClaidKey(e.target.value)}
+                                placeholder="your-claid-api-key"
+                                style={{ width: "100%", padding: "8px 10px", border: `1px solid ${claidApiKey ? '#6c63ff' : cardBdr}`, borderRadius: "8px", fontSize: "12px", fontFamily: "monospace", outline: "none", background: dm ? '#0e0e1a' : '#fff', color: dm ? '#ddd' : '#333' }} />
+                        </div>
                     </div>
                     <p style={{ fontSize: "11px", color: "#aaa", lineHeight: 1.5 }}>Paint over the object you want removed. LaMa fills it with context-aware inpainting.</p>
                     <div>

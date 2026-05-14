@@ -5,7 +5,8 @@ export function EditPanel({
     filters, setFilters, filterGroup, setFilterGroup, isEdited, resetAll, dm, cardBdr, cardBg,
     image, runBrowserUpscale, aiUpscaleStatus, aiUpscaleLog, aiUpscaleProgress, aiUpscaleResult, aiUpscaleResultSize, applyAiResult,
     runBrowserBeauty, aiBeautyStatus, aiBeautyLog, aiBeautyResult, saveFile,
-    aiScale, setAiScale, aiBeautySmooth, setAiBeautySmooth, aiBeautyClarity, setAiBeautyClarity, aiBeautyGlow, setAiBeautyGlow
+    aiScale, setAiScale, aiBeautySmooth, setAiBeautySmooth, aiBeautyClarity, setAiBeautyClarity, aiBeautyGlow, setAiBeautyGlow,
+    aiBeautyUseMask, setAiBeautyUseMask, runFalFaceRestore, aiFaceRestoreStatus, aiFaceRestoreLog, aiFaceRestoreResult
 }) {
     return (
         <>
@@ -103,6 +104,13 @@ export function EditPanel({
                                 <span style={{ fontSize: "10px", fontWeight: 700, padding: "2px 8px", background: "#f0fff4", color: "#16a34a", borderRadius: "20px", border: "1px solid #86efac", marginBottom: "8px" }}>FREE • In-Browser</span>
                             </div>
                             <p style={{ fontSize: "11px", color: "#aaa", lineHeight: 1.5 }}>Portrait retouching pipeline: adaptive skin smoothing, edge sharpening, auto white balance, subtle warmth + clarity boost. All runs locally.</p>
+                            
+                            <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", userSelect: "none" }}>
+                                <input type="checkbox" checked={aiBeautyUseMask} onChange={e => setAiBeautyUseMask(e.target.checked)} 
+                                    style={{ width: "16px", height: "16px", accentColor: "#6c63ff" }} />
+                                <span style={{ fontSize: "12px", color: dm ? '#ccc' : '#555', fontWeight: 600 }}>Apply to Face Skin Only (Beta)</span>
+                            </label>
+                            
                             <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
                                 <div>
                                     <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
@@ -147,6 +155,37 @@ export function EditPanel({
                                     <div style={{ display: "flex", gap: "7px" }}>
                                         <AB onClick={() => applyAiResult(aiBeautyResult)} color={dm ? '#252525' : '#f2f2f8'} textColor={dm ? '#ccc' : '#555'} style={{ flex: 1, padding: "9px", fontSize: "12px" }}>← Apply to Editor</AB>
                                         <AB onClick={async () => saveFile(await (await fetch(aiBeautyResult)).blob(), 'beauty.jpg')} color="purple" textColor="#fff" style={{ flex: 1, padding: "9px", fontSize: "12px" }}>↓ Download</AB>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* ── FACE RESTORE (Local, Free) ── */}
+                        <div style={{ padding: "14px", background: cardBg, border: `1.5px solid ${cardBdr}`, borderRadius: "12px", display: "flex", flexDirection: "column", gap: "10px" }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                                <SL>Face Restore</SL>
+                                <span style={{ fontSize: "10px", fontWeight: 700, padding: "2px 8px", background: "#f0fff4", color: "#16a34a", borderRadius: "20px", border: "1px solid #86efac", marginBottom: "8px" }}>FREE • In-Browser</span>
+                            </div>
+                            <p style={{ fontSize: "11px", color: "#aaa", lineHeight: 1.5 }}>AI-powered face detection + multi-pass enhancement: noise reduction, detail sharpening, contrast boost & color correction. Runs entirely on your device — no API key needed.</p>
+                            
+                            <AB onClick={runFalFaceRestore}
+                                disabled={aiFaceRestoreStatus === 'loading'}
+                                color={aiFaceRestoreStatus === 'done' ? '#f0fff4' : 'purple'}
+                                textColor={aiFaceRestoreStatus === 'done' ? '#16a34a' : '#fff'}
+                                style={{ width: "100%", padding: "11px" }}>
+                                {aiFaceRestoreStatus === 'loading' ? <Row><Spin />Restoring…</Row>
+                                    : aiFaceRestoreStatus === 'done' ? '✓ Restored — Run Again'
+                                        : '✨ Restore Face'}
+                            </AB>
+                            {aiFaceRestoreLog && <p style={{ fontSize: "11px", color: aiFaceRestoreStatus === 'error' ? '#ef4444' : '#a78bfa', lineHeight: 1.4 }}>{aiFaceRestoreLog}</p>}
+                            {aiFaceRestoreResult && (
+                                <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                                    <div style={{ borderRadius: "8px", overflow: "hidden", border: `1px solid ${cardBdr}` }}>
+                                        <img src={aiFaceRestoreResult} alt="restored" style={{ width: "100%", display: "block" }} />
+                                    </div>
+                                    <div style={{ display: "flex", gap: "7px" }}>
+                                        <AB onClick={() => applyAiResult(aiFaceRestoreResult)} color={dm ? '#252525' : '#f2f2f8'} textColor={dm ? '#ccc' : '#555'} style={{ flex: 1, padding: "9px", fontSize: "12px" }}>← Apply to Editor</AB>
+                                        <AB onClick={async () => saveFile(await (await fetch(aiFaceRestoreResult)).blob(), 'restored.jpg')} color="purple" textColor="#fff" style={{ flex: 1, padding: "9px", fontSize: "12px" }}>↓ Download</AB>
                                     </div>
                                 </div>
                             )}

@@ -12,6 +12,8 @@ import {
   toCSSFilter, toTransformCSS, saveFile, canvasToBlob, loadImageFromSrc,
   renderFinal, getExportDims, applyUnsharpMask, applyNoiseReduction, applyAutoLevels, calcBatchDims
 } from "./utils";
+import { createSkinMask } from "./faceMasking";
+import { restoreFaceLocal } from "./faceRestore";
 
 export default function App() {
   const [image, setImage] = useState(null);
@@ -88,15 +90,33 @@ export default function App() {
   const [batchAiBeautySmooth, setBatchAiBeautySmooth] = useState(5);
   const [batchAiBeautyClarity, setBatchAiBeautyClarity] = useState(5);
   const [batchAiBeautyGlow, setBatchAiBeautyGlow] = useState(4);
+  const [batchAiFaceRestore, setBatchAiFaceRestore] = useState(false);
+  const [batchAiBeautyUseMask, setBatchAiBeautyUseMask] = useState(true);
 
-  // AI Features state
-  const [falApiKey, setFalApiKey] = useState(() => localStorage.getItem('fal-api-key') || '');
+  // AI Features state — key migration: old code stored Claid key under 'fal-api-key'
+  const [falApiKey, setFalApiKey] = useState(() => localStorage.getItem('fal-ai-key') || '');
+  const [claidApiKey, setClaidApiKey] = useState(() => {
+    // Migrate: if claid-api-key is empty but fal-api-key has a value, it's the old Claid key
+    const claid = localStorage.getItem('claid-api-key');
+    if (claid) return claid;
+    const old = localStorage.getItem('fal-api-key');
+    if (old) { localStorage.setItem('claid-api-key', old); localStorage.removeItem('fal-api-key'); return old; }
+    return '';
+  });
+  const saveFalKey = (k) => { setFalApiKey(k); localStorage.setItem('fal-ai-key', k); };
+  const saveClaidKey = (k) => { setClaidApiKey(k); localStorage.setItem('claid-api-key', k); };
   const [aiUpscaleStatus, setAiUpscaleStatus] = useState('idle');
   const [aiUpscaleResult, setAiUpscaleResult] = useState(null);
   const [aiUpscaleLog, setAiUpscaleLog] = useState('');
   const [aiBeautyStatus, setAiBeautyStatus] = useState('idle');
   const [aiBeautyResult, setAiBeautyResult] = useState(null);
   const [aiBeautyLog, setAiBeautyLog] = useState('');
+  const [aiBeautyUseMask, setAiBeautyUseMask] = useState(true);
+
+  // AI Face Restore (fal.ai)
+  const [aiFaceRestoreStatus, setAiFaceRestoreStatus] = useState('idle');
+  const [aiFaceRestoreLog, setAiFaceRestoreLog] = useState('');
+  const [aiFaceRestoreResult, setAiFaceRestoreResult] = useState(null);
   const [aiRemoveStatus, setAiRemoveStatus] = useState('idle');
   const [aiRemoveResult, setAiRemoveResult] = useState(null);
   const [aiRemoveLog, setAiRemoveLog] = useState('');
@@ -386,7 +406,11 @@ export default function App() {
       if (batchSharpen) applyUnsharpMask(canvas, ctx, W, H, batchSharpenAmt, batchSharpenRad);
 
       if (batchAiBeauty) {
-        await applyBeautyPipeline(canvas, ctx, W, H, batchAiBeautySmooth, batchAiBeautyClarity, batchAiBeautyGlow);
+        let mask = null;
+        if (batchAiBeautyUseMask) {
+          mask = await createSkinMask(canvas);
+        }
+        await applyBeautyPipeline(canvas, ctx, W, H, batchAiBeautySmooth, batchAiBeautyClarity, batchAiBeautyGlow, mask);
       }
 
       if (batchAiUpscale) {
@@ -420,7 +444,7 @@ export default function App() {
     batchSharpen, batchSharpenAmt, batchSharpenRad, batchLogo, batchLogoScale,
     batchLogoOpacity, batchLogoPos, batchLogoMargin, batchResizeMode,
     batchAiBeauty, batchAiBeautySmooth, batchAiBeautyClarity, batchAiBeautyGlow,
-    batchAiUpscale, batchAiScale]);
+    batchAiUpscale, batchAiScale, batchAiFaceRestore, batchAiBeautyUseMask]);
 
   const handleBatchProcess = async () => {
     if (!sourceHandle || !outputHandle || batchImages.length === 0) {
@@ -498,8 +522,22 @@ export default function App() {
         if (batchDenoise) applyNoiseReduction(canvas, ctx, W, H, batchDenoiseAmt);
         if (batchSharpen) applyUnsharpMask(canvas, ctx, W, H, batchSharpenAmt, batchSharpenRad);
 
+        if (batchAiFaceRestore) {
+          try {
+            const restoredUrl = await restoreFaceLocal(canvas);
+            const restoredImg = await loadImageFromSrc(restoredUrl);
+            ctx.drawImage(restoredImg, 0, 0, W, H);
+          } catch (e) {
+            console.error("Batch Face Restore Error:", e);
+          }
+        }
+
         if (batchAiBeauty) {
-          await applyBeautyPipeline(canvas, ctx, W, H, batchAiBeautySmooth, batchAiBeautyClarity, batchAiBeautyGlow);
+          let mask = null;
+          if (batchAiBeautyUseMask) {
+            mask = await createSkinMask(canvas);
+          }
+          await applyBeautyPipeline(canvas, ctx, W, H, batchAiBeautySmooth, batchAiBeautyClarity, batchAiBeautyGlow, mask);
         }
 
         if (batchAiUpscale) {
@@ -568,7 +606,7 @@ export default function App() {
     generateBatchPreview,
   ]);
 
-  const saveFalKey = (k) => { setFalApiKey(k); localStorage.setItem('fal-api-key', k); };
+
 
   const canvasToDataUrl = useCallback((canvas, quality = 0.92) => {
     const MAX = 1600;
@@ -696,7 +734,7 @@ export default function App() {
     if (!aiMaskReady) { alert('Paint over the area to remove first.'); return; }
     const mc = maskCanvasRef.current;
     if (!mc) return;
-    if (!falApiKey.trim()) { alert('Enter your Claid.ai API key first.'); return; }
+    if (!claidApiKey.trim()) { alert('Enter your Claid.ai API key first.'); return; }
     if (!image) return;
     setAiRemoveStatus('loading'); setAiRemoveResult(null); setAiRemoveLog('Preparing image…');
     try {
@@ -721,7 +759,7 @@ export default function App() {
 
       const res = await fetch('https://api.claid.ai/v1-beta1/image/edit', {
         method: 'POST',
-        headers: { Authorization: `Bearer ${falApiKey.trim()}` },
+        headers: { Authorization: `Bearer ${claidApiKey.trim()}` },
         body: form,
       });
       const data = await res.json();
@@ -733,7 +771,7 @@ export default function App() {
       console.error(e); setAiRemoveStatus('error');
       setAiRemoveLog(e?.message || 'Failed. Check your Claid.ai API key.');
     }
-  }, [aiMaskReady, falApiKey, image, filters]);
+  }, [aiMaskReady, claidApiKey, image, filters]);
 
   const applyUpscalePipeline = async (sourceCanvas, scale, onProgress) => {
     const natW = sourceCanvas.width;
@@ -762,25 +800,49 @@ export default function App() {
     return currentCanvas;
   };
 
-  const applyBeautyPipeline = async (canvas, ctx, W, H, smooth, clarity, glow) => {
-    if (smooth > 0) applyNoiseReduction(canvas, ctx, W, H, smooth * 0.5);
-    applyAutoLevels(ctx, W, H);
-    ctx.globalCompositeOperation = 'overlay';
-    ctx.fillStyle = `rgba(255,200,150,${glow * 0.012})`;
-    ctx.fillRect(0, 0, W, H);
-    ctx.globalCompositeOperation = 'source-over';
-    if (clarity > 0) applyUnsharpMask(canvas, ctx, W, H, clarity * 0.15, 1.2);
+  const applyBeautyPipeline = async (canvas, ctx, W, H, smooth, clarity, glow, maskCanvas = null) => {
+    // If mask provided, we apply effects to a separate canvas and then composite
+    let targetCtx = ctx;
+    let targetCanvas = canvas;
+    
+    if (maskCanvas) {
+      targetCanvas = document.createElement('canvas');
+      targetCanvas.width = W;
+      targetCanvas.height = H;
+      targetCtx = targetCanvas.getContext('2d');
+      targetCtx.drawImage(canvas, 0, 0);
+    }
+
+    if (smooth > 0) applyNoiseReduction(targetCanvas, targetCtx, W, H, smooth * 0.5);
+    applyAutoLevels(targetCtx, W, H);
+    targetCtx.globalCompositeOperation = 'overlay';
+    targetCtx.fillStyle = `rgba(255,200,150,${glow * 0.012})`;
+    targetCtx.fillRect(0, 0, W, H);
+    targetCtx.globalCompositeOperation = 'source-over';
+    
+    if (clarity > 0) applyUnsharpMask(targetCanvas, targetCtx, W, H, clarity * 0.15, 1.2);
+    
     if (glow > 0) {
       const glowCanvas = document.createElement('canvas');
       glowCanvas.width = W; glowCanvas.height = H;
       const gCtx = glowCanvas.getContext('2d');
       gCtx.filter = `blur(${Math.round(glow * 3)}px) brightness(1.15)`;
-      gCtx.drawImage(canvas, 0, 0);
+      gCtx.drawImage(targetCanvas, 0, 0);
       gCtx.filter = 'none';
-      ctx.globalCompositeOperation = 'screen';
-      ctx.globalAlpha = glow * 0.025;
-      ctx.drawImage(glowCanvas, 0, 0);
-      ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
+      targetCtx.globalCompositeOperation = 'screen';
+      targetCtx.globalAlpha = glow * 0.025;
+      targetCtx.drawImage(glowCanvas, 0, 0);
+      targetCtx.globalAlpha = 1; targetCtx.globalCompositeOperation = 'source-over';
+    }
+
+    if (maskCanvas) {
+      // Mask the targetCanvas with the face mask
+      targetCtx.globalCompositeOperation = 'destination-in';
+      targetCtx.drawImage(maskCanvas, 0, 0);
+      targetCtx.globalCompositeOperation = 'source-over';
+      
+      // Draw the masked result back onto the original canvas
+      ctx.drawImage(targetCanvas, 0, 0);
     }
   };
 
@@ -834,7 +896,14 @@ export default function App() {
       ctx.drawImage(srcImg, 0, 0, W, H);
       ctx.filter = 'none';
 
-      await applyBeautyPipeline(canvas, ctx, W, H, aiBeautySmooth, aiBeautyClarity, aiBeautyGlow);
+      let mask = null;
+      if (aiBeautyUseMask) {
+        setAiBeautyLog('Detecting faces...');
+        mask = await createSkinMask(canvas);
+      }
+
+      setAiBeautyLog('Applying beauty filters...');
+      await applyBeautyPipeline(canvas, ctx, W, H, aiBeautySmooth, aiBeautyClarity, aiBeautyGlow, mask);
 
       setAiBeautyResult(canvas.toDataURL('image/jpeg', 0.95));
       setAiBeautyStatus('done'); setAiBeautyLog('');
@@ -842,7 +911,28 @@ export default function App() {
       console.error('Beauty error:', e);
       setAiBeautyStatus('error'); setAiBeautyLog(e.message || 'Beauty filter failed');
     }
-  }, [image, bgResult, filters, aiBeautySmooth, aiBeautyClarity, aiBeautyGlow]);
+  }, [image, bgResult, filters, aiBeautySmooth, aiBeautyClarity, aiBeautyGlow, aiBeautyUseMask]);
+
+  const runFalFaceRestore = useCallback(async () => {
+    if (!image) { alert('Upload a photo first.'); return; }
+    setAiFaceRestoreStatus('loading'); setAiFaceRestoreResult(null); setAiFaceRestoreLog('Starting face restore…');
+    try {
+      const srcImg = imgRef.current;
+      const W = srcImg.naturalWidth, H = srcImg.naturalHeight;
+      const tmp = document.createElement('canvas');
+      tmp.width = W; tmp.height = H;
+      const ctx = tmp.getContext('2d');
+      ctx.drawImage(srcImg, 0, 0, W, H);
+
+      const resultUrl = await restoreFaceLocal(tmp, msg => setAiFaceRestoreLog(msg));
+      setAiFaceRestoreResult(resultUrl);
+      setAiFaceRestoreStatus('done'); setAiFaceRestoreLog('');
+    } catch (e) {
+      console.error('Face Restore error:', e);
+      setAiFaceRestoreStatus('error'); 
+      setAiFaceRestoreLog(e.message || 'Face restoration failed');
+    }
+  }, [image]);
 
   const dm = darkMode;
   const cardBg = dm ? '#2a2a2a' : '#f8f8fd';
@@ -852,7 +942,7 @@ export default function App() {
   const renderPanel = (inline = false) => (
     <div style={{ display: "flex", flexDirection: "column", gap: "16px", padding: inline ? "10px 14px 40px" : "14px", background: dm ? '#1e1e1e' : '#fff', color: dm ? '#ddd' : '#1a1a1a', transition: 'background .3s,color .3s' }}>
       {activeTab === "tools" && (
-        <ToolsPanel {...{ image, handleRemoveBg, bgStatus, bgProgress, bgSubUrl, bgMode, setBgMode, cardBdr, cardBg, dm, bgColor, setBgColor, bgBlur, setBgBlur, bgResult, saveFile, falApiKey, saveFalKey, aiRemoveBrush, setAiRemoveBrush, toCSSFilter, filters, initMaskCanvas, maskCanvasRef, maskDrawingRef, drawMask, aiMaskReady, handleAiRemove, aiRemoveStatus, aiRemoveLog, aiRemoveResult, applyAiResult }} />
+        <ToolsPanel {...{ image, handleRemoveBg, bgStatus, bgProgress, bgSubUrl, bgMode, setBgMode, cardBdr, cardBg, dm, bgColor, setBgColor, bgBlur, setBgBlur, bgResult, saveFile, falApiKey, saveFalKey, claidApiKey, saveClaidKey, aiRemoveBrush, setAiRemoveBrush, toCSSFilter, filters, initMaskCanvas, maskCanvasRef, maskDrawingRef, drawMask, aiMaskReady, handleAiRemove, aiRemoveStatus, aiRemoveLog, aiRemoveResult, applyAiResult }} />
       )}
       {activeTab === "adjust" && (
         <AdjustPanel {...{ image, setRotation, setFlipH, setFlipV, rotation, flipH, flipV, cropMode, setCropMode, setCropBox, cropAspect, setCropAspect, applyCrop, dm, cardBg, cardBdr }} />
@@ -861,7 +951,7 @@ export default function App() {
         <OverlayPanel {...{ image, texts, selText, setSelText, addText, deleteText, updateText, dm, cardBg, cardBdr, inputSt }} />
       )}
       {activeTab === "edit" && (
-        <EditPanel {...{ filters, setFilters, filterGroup, setFilterGroup, isEdited, resetAll, dm, cardBdr, cardBg, image, runBrowserUpscale, aiUpscaleStatus, aiUpscaleLog, aiUpscaleProgress, aiUpscaleResult, aiUpscaleResultSize, applyAiResult, runBrowserBeauty, aiBeautyStatus, aiBeautyLog, aiBeautyResult, saveFile, aiScale, setAiScale, aiBeautySmooth, setAiBeautySmooth, aiBeautyClarity, setAiBeautyClarity, aiBeautyGlow, setAiBeautyGlow }} />
+        <EditPanel {...{ filters, setFilters, filterGroup, setFilterGroup, isEdited, resetAll, dm, cardBdr, cardBg, image, runBrowserUpscale, aiUpscaleStatus, aiUpscaleLog, aiUpscaleProgress, aiUpscaleResult, aiUpscaleResultSize, applyAiResult, runBrowserBeauty, aiBeautyStatus, aiBeautyLog, aiBeautyResult, saveFile, aiScale, setAiScale, aiBeautySmooth, setAiBeautySmooth, aiBeautyClarity, setAiBeautyClarity, aiBeautyGlow, setAiBeautyGlow, aiBeautyUseMask, setAiBeautyUseMask, runFalFaceRestore, aiFaceRestoreStatus, aiFaceRestoreLog, aiFaceRestoreResult }} />
       )}
       {activeTab === "batch" && (
         <div style={{ padding: "16px", color: dm ? '#aaa' : '#888', fontSize: "13px", textAlign: "center" }}>
@@ -923,7 +1013,7 @@ export default function App() {
 
       {!isMobile && (
         activeTab === "batch" ? (
-          <BatchPage {...{ dm, cardBg, cardBdr, inputSt, sourceHandle, outputHandle, batchImages, selectSourceFolder, selectOutputFolder, batchResizeMode, setBatchResizeMode, batchResizePreset, setBatchResizePreset, batchCustomW, setBatchCustomW, batchCustomH, setBatchCustomH, batchKeepAspect, setBatchKeepAspect, batchLongEdgePx, setBatchLongEdgePx, batchAutoLevels, setBatchAutoLevels, batchAutoContrast, setBatchAutoContrast, batchSharpen, setBatchSharpen, batchSharpenAmt, setBatchSharpenAmt, batchSharpenRad, setBatchSharpenRad, batchDenoise, setBatchDenoise, batchDenoiseAmt, setBatchDenoiseAmt, batchLogo, setBatchLogo, batchLogoFile, setBatchLogoFile, handleBatchLogoUpload, batchLogoScale, setBatchLogoScale, batchLogoOpacity, setBatchLogoOpacity, batchLogoPos, setBatchLogoPos, batchLogoMargin, setBatchLogoMargin, batchOutputFmt, setBatchOutputFmt, batchOutputQ, setBatchOutputQ, batchPrefix, setBatchPrefix, batchSuffix, setBatchSuffix, batchProcessing, batchProgress, batchDone, handleBatchProcess, batchPreviewIdx, batchPreviewOrigUrl, batchPreviewAfterUrl, batchPreviewLoading, batchPreviewSplit, setBatchPreviewSplit, batchPreviewDragging, setBatchPreviewDragging, batchPreviewOpen, setBatchPreviewOpen, generateBatchPreview, filters, setFilters, resetAll, batchFilterGroup, setBatchFilterGroup, calcBatchDims, batchAiUpscale, setBatchAiUpscale, batchAiBeauty, setBatchAiBeauty, batchAiScale, setBatchAiScale, batchAiBeautySmooth, setBatchAiBeautySmooth, batchAiBeautyClarity, setBatchAiBeautyClarity, batchAiBeautyGlow, setBatchAiBeautyGlow }} />
+          <BatchPage {...{ dm, cardBg, cardBdr, inputSt, sourceHandle, outputHandle, batchImages, selectSourceFolder, selectOutputFolder, batchResizeMode, setBatchResizeMode, batchResizePreset, setBatchResizePreset, batchCustomW, setBatchCustomW, batchCustomH, setBatchCustomH, batchKeepAspect, setBatchKeepAspect, batchLongEdgePx, setBatchLongEdgePx, batchAutoLevels, setBatchAutoLevels, batchAutoContrast, setBatchAutoContrast, batchSharpen, setBatchSharpen, batchSharpenAmt, setBatchSharpenAmt, batchSharpenRad, setBatchSharpenRad, batchDenoise, setBatchDenoise, batchDenoiseAmt, setBatchDenoiseAmt, batchLogo, setBatchLogo, batchLogoFile, setBatchLogoFile, handleBatchLogoUpload, batchLogoScale, setBatchLogoScale, batchLogoOpacity, setBatchLogoOpacity, batchLogoPos, setBatchLogoPos, batchLogoMargin, setBatchLogoMargin, batchOutputFmt, setBatchOutputFmt, batchOutputQ, setBatchOutputQ, batchPrefix, setBatchPrefix, batchSuffix, setBatchSuffix, batchProcessing, batchProgress, batchDone, handleBatchProcess, batchPreviewIdx, batchPreviewOrigUrl, batchPreviewAfterUrl, batchPreviewLoading, batchPreviewSplit, setBatchPreviewSplit, batchPreviewDragging, setBatchPreviewDragging, batchPreviewOpen, setBatchPreviewOpen, generateBatchPreview, filters, setFilters, resetAll, batchFilterGroup, setBatchFilterGroup, calcBatchDims, batchAiUpscale, setBatchAiUpscale, batchAiBeauty, setBatchAiBeauty, batchAiScale, setBatchAiScale, batchAiBeautySmooth, setBatchAiBeautySmooth, batchAiBeautyClarity, setBatchAiBeautyClarity, batchAiBeautyGlow, setBatchAiBeautyGlow, batchAiFaceRestore, setBatchAiFaceRestore, batchAiBeautyUseMask, setBatchAiBeautyUseMask }} />
         ) : (
           <div style={{ display: "flex", height: "calc(100vh - 52px)" }}>
             <div className="glass-panel" style={{ width: "310px", borderRight: `1px solid ${dm ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'}`, overflowY: "auto", flexShrink: 0 }}>
@@ -939,7 +1029,7 @@ export default function App() {
       {isMobile && (
         activeTab === "batch" ? (
           <div style={{ height: "calc(100vh - 52px)", overflowY: "auto" }}>
-            <BatchPage {...{ dm, cardBg, cardBdr, inputSt, isMobile: true, sourceHandle, outputHandle, batchImages, selectSourceFolder, selectOutputFolder, batchResizeMode, setBatchResizeMode, batchResizePreset, setBatchResizePreset, batchCustomW, setBatchCustomW, batchCustomH, setBatchCustomH, batchKeepAspect, setBatchKeepAspect, batchLongEdgePx, setBatchLongEdgePx, batchAutoLevels, setBatchAutoLevels, batchAutoContrast, setBatchAutoContrast, batchSharpen, setBatchSharpen, batchSharpenAmt, setBatchSharpenAmt, batchSharpenRad, setBatchSharpenRad, batchDenoise, setBatchDenoise, batchDenoiseAmt, setBatchDenoiseAmt, batchLogo, setBatchLogo, batchLogoFile, setBatchLogoFile, handleBatchLogoUpload, batchLogoScale, setBatchLogoScale, batchLogoOpacity, setBatchLogoOpacity, batchLogoPos, setBatchLogoPos, batchLogoMargin, setBatchLogoMargin, batchOutputFmt, setBatchOutputFmt, batchOutputQ, setBatchOutputQ, batchPrefix, setBatchPrefix, batchSuffix, setBatchSuffix, batchProcessing, batchProgress, batchDone, handleBatchProcess, batchPreviewIdx, batchPreviewOrigUrl, batchPreviewAfterUrl, batchPreviewLoading, batchPreviewSplit, setBatchPreviewSplit, batchPreviewDragging, setBatchPreviewDragging, batchPreviewOpen, setBatchPreviewOpen, generateBatchPreview, filters, setFilters, resetAll, batchFilterGroup, setBatchFilterGroup, calcBatchDims, batchAiUpscale, setBatchAiUpscale, batchAiBeauty, setBatchAiBeauty, batchAiScale, setBatchAiScale, batchAiBeautySmooth, setBatchAiBeautySmooth, batchAiBeautyClarity, setBatchAiBeautyClarity, batchAiBeautyGlow, setBatchAiBeautyGlow }} />
+            <BatchPage {...{ dm, cardBg, cardBdr, inputSt, isMobile: true, sourceHandle, outputHandle, batchImages, selectSourceFolder, selectOutputFolder, batchResizeMode, setBatchResizeMode, batchResizePreset, setBatchResizePreset, batchCustomW, setBatchCustomW, batchCustomH, setBatchCustomH, batchKeepAspect, setBatchKeepAspect, batchLongEdgePx, setBatchLongEdgePx, batchAutoLevels, setBatchAutoLevels, batchAutoContrast, setBatchAutoContrast, batchSharpen, setBatchSharpen, batchSharpenAmt, setBatchSharpenAmt, batchSharpenRad, setBatchSharpenRad, batchDenoise, setBatchDenoise, batchDenoiseAmt, setBatchDenoiseAmt, batchLogo, setBatchLogo, batchLogoFile, setBatchLogoFile, handleBatchLogoUpload, batchLogoScale, setBatchLogoScale, batchLogoOpacity, setBatchLogoOpacity, batchLogoPos, setBatchLogoPos, batchLogoMargin, setBatchLogoMargin, batchOutputFmt, setBatchOutputFmt, batchOutputQ, setBatchOutputQ, batchPrefix, setBatchPrefix, batchSuffix, setBatchSuffix, batchProcessing, batchProgress, batchDone, handleBatchProcess, batchPreviewIdx, batchPreviewOrigUrl, batchPreviewAfterUrl, batchPreviewLoading, batchPreviewSplit, setBatchPreviewSplit, batchPreviewDragging, setBatchPreviewDragging, batchPreviewOpen, setBatchPreviewOpen, generateBatchPreview, filters, setFilters, resetAll, batchFilterGroup, setBatchFilterGroup, calcBatchDims, batchAiUpscale, setBatchAiUpscale, batchAiBeauty, setBatchAiBeauty, batchAiScale, setBatchAiScale, batchAiBeautySmooth, setBatchAiBeautySmooth, batchAiBeautyClarity, setBatchAiBeautyClarity, batchAiBeautyGlow, setBatchAiBeautyGlow, batchAiFaceRestore, setBatchAiFaceRestore, batchAiBeautyUseMask, setBatchAiBeautyUseMask }} />
           </div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", height: "calc(100vh - 52px)", overflow: "hidden" }}>

@@ -23,7 +23,8 @@ export function BatchPage({ dm, cardBg, cardBdr, inputSt, isMobile = false,
   filters, setFilters, resetAll, calcBatchDims, batchFilterGroup, setBatchFilterGroup,
   batchAiUpscale, setBatchAiUpscale, batchAiBeauty, setBatchAiBeauty,
   batchAiScale, setBatchAiScale, batchAiBeautySmooth, setBatchAiBeautySmooth,
-  batchAiBeautyClarity, setBatchAiBeautyClarity, batchAiBeautyGlow, setBatchAiBeautyGlow
+  batchAiBeautyClarity, setBatchAiBeautyClarity, batchAiBeautyGlow, setBatchAiBeautyGlow,
+  batchAiFaceRestore, setBatchAiFaceRestore, batchAiBeautyUseMask, setBatchAiBeautyUseMask
 }) {
 
   const bg = dm ? '#121212' : '#f0f1f5';
@@ -660,6 +661,11 @@ export function BatchPage({ dm, cardBg, cardBdr, inputSt, isMobile = false,
               <Toggle checked={batchAiBeauty} onChange={e => setBatchAiBeauty(e.target.checked)} label="Beauty Filter" sub="Skin smoothing, clarity & glow" />
               {batchAiBeauty && (
                 <div style={{ padding: "10px", background: dm ? '#252525' : '#fff', border: `1px solid ${cardBdr}`, borderRadius: "9px", display: "flex", flexDirection: "column", gap: "8px" }}>
+                  <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", marginBottom: "4px" }}>
+                    <input type="checkbox" checked={batchAiBeautyUseMask} onChange={e => setBatchAiBeautyUseMask(e.target.checked)} 
+                      style={{ width: "16px", height: "16px", accentColor: "#6c63ff" }} />
+                    <span style={{ fontSize: "12px", color: dm ? '#ccc' : '#555', fontWeight: 600 }}>Target Face Skin Only</span>
+                  </label>
                   <div>
                     <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
                       <span style={{ fontSize: "11px", color: dm ? '#ccc' : '#555' }}>Smooth</span>
@@ -683,6 +689,8 @@ export function BatchPage({ dm, cardBg, cardBdr, inputSt, isMobile = false,
                   </div>
                 </div>
               )}
+
+              <Toggle checked={batchAiFaceRestore} onChange={e => setBatchAiFaceRestore(e.target.checked)} label="AI Face Restore" sub="GenAI face restoration (Cloud)" />
             </div>
           </Card>
         </div>
