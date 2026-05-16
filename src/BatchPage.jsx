@@ -1,7 +1,84 @@
-
+import { useMemo, useRef, useEffect, useCallback, memo } from "react";
 import { Spin } from "./components/ui/common";
 import { BATCH_RESIZE_PRESETS, DEFAULT_FILTERS, COLOR_FILTERS, FILTER_GROUPS, PRESETS } from "./constants";
+import { toCSSFilter } from "./utils";
 import { RawBatchPanel } from "./components/panels/RawBatchPanel";
+
+// Isolated slider — zero React re-renders during drag, commits on pointerUp
+const BatchFilterSlider = memo(function BatchFilterSlider({ f, value, setFilters, dm, accent }) {
+  const inputRef = useRef(null);
+  const labelRef = useRef(null);
+
+  // Keep input in sync when value changes from outside (e.g. preset apply, reset)
+  useEffect(() => {
+    if (inputRef.current) inputRef.current.value = value;
+    if (labelRef.current) {
+      const v = value;
+      labelRef.current.textContent =
+        (v > 0 && f.default === 0 ? '+' : '') +
+        (Number.isInteger(v) ? v : v.toFixed(1)) +
+        (f.unit || '');
+    }
+  }, [value, f]);
+
+  const changed = value !== f.default;
+  const pct = ((value - f.min) / (f.max - f.min)) * 100;
+
+  const onInput = useCallback(e => {
+    const v = parseFloat(e.target.value);
+    const p = ((v - f.min) / (f.max - f.min)) * 100;
+    // Update track fill imperatively (same as global onSliderInput handler)
+    e.target.style.setProperty('--v', `${p.toFixed(2)}%`);
+    // Update value label imperatively — no React re-render
+    if (labelRef.current) {
+      labelRef.current.textContent =
+        (v > 0 && f.default === 0 ? '+' : '') +
+        (Number.isInteger(v) ? v : v.toFixed(1)) +
+        (f.unit || '');
+    }
+  }, [f]);
+
+  const onPointerUp = useCallback(e => {
+    const v = parseFloat(e.target.value);
+    setFilters(p => ({ ...p, [f.key]: v }));
+  }, [f, setFilters]);
+
+  const onDoubleClick = useCallback(() => {
+    if (inputRef.current) inputRef.current.value = f.default;
+    const p = ((f.default - f.min) / (f.max - f.min)) * 100;
+    if (inputRef.current) inputRef.current.style.setProperty('--v', `${p.toFixed(2)}%`);
+    if (labelRef.current) {
+      const v = f.default;
+      labelRef.current.textContent =
+        (v > 0 && f.default === 0 ? '+' : '') +
+        (Number.isInteger(v) ? v : v.toFixed(1)) +
+        (f.unit || '');
+    }
+    setFilters(p => ({ ...p, [f.key]: f.default }));
+  }, [f, setFilters]);
+
+  return (
+    <div style={{ marginBottom: '16px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px' }}>
+        <span style={{ fontSize: '13px', fontWeight: 500, color: changed ? accent : dm ? '#ccc' : '#666' }}>{f.label}</span>
+        <span ref={labelRef} style={{ fontSize: '12px', color: '#bbb', fontVariantNumeric: 'tabular-nums' }}>
+          {(value > 0 && f.default === 0 ? '+' : '') + (Number.isInteger(value) ? value : value.toFixed(1)) + (f.unit || '')}
+        </span>
+      </div>
+      <input
+        ref={inputRef}
+        type="range" className="sl"
+        min={f.min} max={f.max} step={f.max <= 20 ? 0.5 : 1}
+        defaultValue={value}
+        style={{ '--v': `${pct}%` }}
+        onInput={onInput}
+        onPointerUp={onPointerUp}
+        onDoubleClick={onDoubleClick}
+      />
+    </div>
+  );
+});
+
 
 export function BatchPage({ dm, cardBg, cardBdr, inputSt, isMobile = false,
   sourceHandle, outputHandle, batchImages, selectSourceFolder, selectRawSourceFolder, selectOutputFolder,
@@ -58,6 +135,30 @@ export function BatchPage({ dm, cardBg, cardBdr, inputSt, isMobile = false,
 
   const isRaw = batchSection === "raw";
   const currentFiles = isRaw ? batchRawFiles : batchImages;
+
+  // Live CSS filter string — applied directly to the preview <img> at 60fps, no JPEG re-encode needed
+  const batchCssFilter = toCSSFilter(filters);
+  const batchTempAlpha = Math.abs(filters.temperature) / 300;
+  const batchTempColor = filters.temperature > 0 ? `rgba(255,140,0,${batchTempAlpha})` : `rgba(100,149,237,${batchTempAlpha})`;
+
+  const previewCallbackRef = useRef(generateBatchPreview);
+  useEffect(() => {
+    previewCallbackRef.current = generateBatchPreview;
+  }, [generateBatchPreview]);
+
+  const memoizedPreviewBar = useMemo(() => {
+    return currentFiles.slice(0, 200).map((img, i) => (
+      <button key={i} onClick={() => previewCallbackRef.current(i, isRaw)}
+        style={{ flexShrink: 0, padding: "5px 12px", border: `1.5px solid ${batchPreviewIdx === i ? '#6c63ff' : cardBdr}`,
+          background: batchPreviewIdx === i ? (dm ? '#1e1a3a' : '#faf9ff') : dm ? '#252525' : '#fff',
+          borderRadius: "8px", fontSize: "11px", fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
+          color: batchPreviewIdx === i ? '#6c63ff' : dm ? '#ccc' : '#555',
+          maxWidth: "160px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+          transition: "all .15s" }}>
+        {img.name}
+      </button>
+    ));
+  }, [isRaw, currentFiles, batchPreviewIdx, dm, cardBdr]);
   const canProcess = !batchProcessing && sourceHandle && outputHandle && currentFiles.length > 0;
 
   const activeEnhancements = [
@@ -166,17 +267,7 @@ export function BatchPage({ dm, cardBg, cardBdr, inputSt, isMobile = false,
               👁 Preview image:
             </span>
             <div style={{ display: "flex", gap: "6px", overflowX: "auto", paddingBottom: "4px", flex: 1 }}>
-              {(isRaw ? batchRawFiles : batchImages).map((img, i) => (
-                <button key={i} onClick={() => generateBatchPreview(i, isRaw)}
-                  style={{ flexShrink: 0, padding: "5px 12px", border: `1.5px solid ${batchPreviewIdx === i ? '#6c63ff' : cardBdr}`,
-                    background: batchPreviewIdx === i ? (dm ? '#1e1a3a' : '#faf9ff') : dm ? '#252525' : '#fff',
-                    borderRadius: "8px", fontSize: "11px", fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
-                    color: batchPreviewIdx === i ? '#6c63ff' : dm ? '#ccc' : '#555',
-                    maxWidth: "160px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                    transition: "all .15s" }}>
-                  {img.name}
-                </button>
-              ))}
+              {memoizedPreviewBar}
             </div>
             <button onClick={() => setBatchPreviewOpen(false)}
               style={{ background: dm ? '#333' : '#f2f2f8', border: "none", borderRadius: "8px", padding: "5px 10px", fontSize: "12px", color: dm ? '#aaa' : '#888', cursor: "pointer", fontWeight: 600, flexShrink: 0 }}>
@@ -211,8 +302,29 @@ export function BatchPage({ dm, cardBg, cardBdr, inputSt, isMobile = false,
                   setBatchPreviewSplit(Math.min(95, Math.max(5, ((e.touches[0].clientX - r.left) / r.width) * 100)));
                 }}>
 
-                <img src={batchPreviewAfterUrl} alt="after"
-                  style={{ width: "100%", maxHeight: "60vh", objectFit: "contain", display: "block" }} />
+                {/* After image — CSS filters applied live at 60fps, exactly like the Edit tab */}
+                <div style={{ position: "relative", lineHeight: 0 }}>
+                  <img src={batchPreviewAfterUrl} alt="after"
+                    style={{ width: "100%", maxHeight: "60vh", objectFit: "contain", display: "block",
+                      filter: batchCssFilter, transition: "filter .08s ease" }} />
+                  {filters.temperature !== 0 && (
+                    <div style={{ position: "absolute", inset: 0, background: batchTempColor,
+                      mixBlendMode: "overlay", pointerEvents: "none",
+                      clipPath: `inset(0 ${100 - batchPreviewSplit}% 0 0)` }} />
+                  )}
+                  {filters.fade > 0 && (
+                    <div style={{ position: "absolute", inset: 0,
+                      background: `rgba(255,255,255,${filters.fade / 180})`,
+                      mixBlendMode: "screen", pointerEvents: "none",
+                      clipPath: `inset(0 ${100 - batchPreviewSplit}% 0 0)` }} />
+                  )}
+                  {filters.vignette > 0 && (
+                    <div style={{ position: "absolute", inset: 0,
+                      background: `radial-gradient(ellipse at center,transparent 38%,rgba(0,0,0,${filters.vignette / 100}) 100%)`,
+                      pointerEvents: "none",
+                      clipPath: `inset(0 ${100 - batchPreviewSplit}% 0 0)` }} />
+                  )}
+                </div>
 
                 <div style={{ position: "absolute", inset: 0, clipPath: `inset(0 0 0 ${batchPreviewSplit}%)`, pointerEvents: "none" }}>
                   <img src={batchPreviewOrigUrl} alt="before"
@@ -474,32 +586,9 @@ export function BatchPage({ dm, cardBg, cardBdr, inputSt, isMobile = false,
                   </div>
                 </>
               ) : (
-                COLOR_FILTERS.filter(f => f.group === batchFilterGroup).map(f => {
-                  const val = filters[f.key];
-                  const pct = ((val - f.min) / (f.max - f.min)) * 100;
-                  const changed = val !== DEFAULT_FILTERS[f.key];
-                  return (
-                    <div key={f.key}>
-                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "5px" }}>
-                        <span style={{ fontSize: "12px", fontWeight: 500, color: changed ? accent : dm ? '#ccc' : '#666' }}>{f.label}</span>
-                        <span style={{ fontSize: "11px", color: "#bbb", fontVariantNumeric: "tabular-nums" }}>
-                          {val > 0 && f.default === 0 ? "+" : ""}{Number.isInteger(val) ? val : val.toFixed(1)}{f.unit}
-                        </span>
-                      </div>
-                      <input type="range" className="sl"
-                        min={f.min} max={f.max} step={f.max <= 20 ? .5 : 1}
-                        value={val}
-                        style={{ "--v": `${pct}%` }}
-                        onChange={e => setFilters(p => ({ ...p, [f.key]: parseFloat(e.target.value) }))} />
-                      {changed && (
-                        <button onClick={() => setFilters(p => ({ ...p, [f.key]: f.default }))}
-                          style={{ marginTop: "3px", fontSize: "10px", color: "#bbb", background: "none", border: "none", cursor: "pointer", padding: 0, fontFamily: "inherit" }}>
-                          reset
-                        </button>
-                      )}
-                    </div>
-                  );
-                })
+                COLOR_FILTERS.filter(f => f.group === batchFilterGroup).map(f => (
+                  <BatchFilterSlider key={f.key} f={f} value={filters[f.key]} setFilters={setFilters} dm={dm} accent={accent} />
+                ))
               )}
             </div>
             {Object.entries(filters).some(([k, v]) => v !== DEFAULT_FILTERS[k]) && (

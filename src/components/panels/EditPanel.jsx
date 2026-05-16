@@ -40,7 +40,8 @@ export function EditPanel({
                                 <span style={{ fontSize: "12px", color: "#bbb", fontVariantNumeric: "tabular-nums" }}>{val > 0 && f.default === 0 ? "+" : ""}{Number.isInteger(val) ? val : val.toFixed(1)}{f.unit}</span>
                             </div>
                             <input type="range" className="sl" min={f.min} max={f.max} step={f.max <= 20 ? .5 : 1} value={val}
-                                style={{ "--v": `${pct}%` }} onChange={e => setFilters(p => ({ ...p, [f.key]: parseFloat(e.target.value) }))} />
+                                style={{ "--v": `${pct}%` }} onChange={e => setFilters(p => ({ ...p, [f.key]: parseFloat(e.target.value) }))}
+                                onDoubleClick={() => setFilters(p => ({ ...p, [f.key]: f.default }))} />
                         </div>
                     );
                 })}

@@ -900,13 +900,9 @@ export default function App() {
     clearTimeout(batchPreviewTimerRef.current);
     batchPreviewTimerRef.current = setTimeout(() => {
       generateBatchPreview(batchPreviewIdx);
-    }, 350);
+    }, 300);
     return () => clearTimeout(batchPreviewTimerRef.current);
   }, [
-    filters.brightness, filters.contrast, filters.saturation, filters.exposure,
-    filters.temperature, filters.tint, filters.sharpness, filters.clarity,
-    filters.denoise, filters.highlights, filters.shadows, filters.hue,
-    filters.vibrance, filters.vignette, filters.fade, filters.grain,
     batchAutoContrast, batchAutoLevels,
     batchDenoise, batchDenoiseAmt,
     batchSharpen, batchSharpenAmt, batchSharpenRad,
