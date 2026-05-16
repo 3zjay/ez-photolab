@@ -136,8 +136,12 @@ export function canvasToBlob(c,mime,q){ return new Promise(r=>{ if(c.toBlob){c.t
 export function loadImageFromSrc(src) {
   return new Promise((resolve, reject) => {
     const img = new Image();
-    img.onload = () => resolve(img);
-    img.onerror = () => reject(new Error('Image failed to load for export'));
+    const timer = setTimeout(() => {
+      img.onload = null; img.onerror = null;
+      reject(new Error('Image load timeout (10s)'));
+    }, 10000);
+    img.onload = () => { clearTimeout(timer); resolve(img); };
+    img.onerror = () => { clearTimeout(timer); reject(new Error('Image failed to load')); };
     img.src = src;
   });
 }

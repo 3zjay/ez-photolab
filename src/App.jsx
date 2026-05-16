@@ -1,10 +1,10 @@
-
 import { useState, useRef, useEffect, useCallback } from "react";
 import { BatchPage } from "./BatchPage";
 import { ToolsPanel } from "./components/panels/ToolsPanel";
 import { AdjustPanel } from "./components/panels/AdjustPanel";
 import { OverlayPanel } from "./components/panels/OverlayPanel";
 import { EditPanel } from "./components/panels/EditPanel";
+import { RawBatchPanel } from "./components/panels/RawBatchPanel";
 import { Preview } from "./Preview";
 import { Empty, SL, AB, Row, Spin } from "./components/ui/common";
 import { DEFAULT_FILTERS, FB_MODES, PRESETS } from "./constants";
@@ -14,6 +14,7 @@ import {
 } from "./utils";
 import { createSkinMask } from "./faceMasking";
 import { restoreFaceLocal } from "./faceRestore";
+import { decodeRaw } from "./rawProcessor";
 
 export default function App() {
   const [image, setImage] = useState(null);
@@ -59,6 +60,7 @@ export default function App() {
   const [batchLogo, setBatchLogo] = useState(null);
   const [batchLogoFile, setBatchLogoFile] = useState(null);
   const [batchLogoScale, setBatchLogoScale] = useState(0.15);
+  const [batchLogoScalePortrait, setBatchLogoScalePortrait] = useState(0.30);
   const [batchLogoOpacity, setBatchLogoOpacity] = useState(0.7);
   const [batchLogoPos, setBatchLogoPos] = useState("bottom-right");
   const [batchLogoMargin, setBatchLogoMargin] = useState(20);
@@ -92,6 +94,13 @@ export default function App() {
   const [batchAiBeautyGlow, setBatchAiBeautyGlow] = useState(4);
   const [batchAiFaceRestore, setBatchAiFaceRestore] = useState(false);
   const [batchAiBeautyUseMask, setBatchAiBeautyUseMask] = useState(true);
+  const [batchRawFiles, setBatchRawFiles] = useState([]);
+  const [batchLogs, setBatchLogs] = useState([]);
+
+  const addBatchLog = useCallback((msg, type = 'info') => {
+    if (msg === "__CLEAR__") { setBatchLogs([]); return; }
+    setBatchLogs(prev => [{ msg, type, time: new Date().toLocaleTimeString() }, ...prev].slice(0, 100));
+  }, []);
 
   // AI Features state — key migration: old code stored Claid key under 'fal-api-key'
   const [falApiKey, setFalApiKey] = useState(() => localStorage.getItem('fal-ai-key') || '');
@@ -319,6 +328,45 @@ export default function App() {
     } catch (err) { if (err.name !== 'AbortError') console.error(err); }
   };
 
+  const selectRawSourceFolder = async () => {
+    addBatchLog("Opening folder picker for RAW files...", "info");
+    try {
+      const handle = await window.showDirectoryPicker();
+      setSourceHandle(handle);
+      const files = [];
+      const RAW_REGEX = /\.(nef|cr2|cr3|arw|dng|orf|raf|rw2|pef|x3f)$/i;
+      
+      addBatchLog("Scanning folder for RAW files...", "info");
+      for await (const entry of handle.values()) {
+        if (entry.kind === 'file' && entry.name.match(RAW_REGEX)) {
+          const file = await entry.getFile();
+          files.push({ name: entry.name, file });
+        }
+      }
+      
+      if (files.length === 0) {
+        addBatchLog("⚠️ No RAW files found in the selected folder.", "warning");
+      } else {
+        addBatchLog(`✅ Found ${files.length} RAW files. Ready for processing.`, "success");
+      }
+
+      const rawQueue = files.map(f => ({
+        name: f.name,
+        file: f.file,
+        previewUrl: null,
+        metadata: { model: 'RAW File', iso: '...', width: 0, height: 0 }
+      }));
+      
+      setBatchRawFiles(rawQueue);
+      setBatchDone(false);
+    } catch (err) { 
+      if (err.name !== 'AbortError') {
+        addBatchLog(`❌ Folder Error: ${err.message}`, "error");
+        console.error(err); 
+      }
+    }
+  };
+
   const selectOutputFolder = async () => {
     try {
       const handle = await window.showDirectoryPicker();
@@ -339,19 +387,39 @@ export default function App() {
     reader.readAsDataURL(file);
   };
 
-  const generateBatchPreview = useCallback(async (idx) => {
-    if (idx === null || !batchImages[idx]) return;
+  const generateBatchPreview = useCallback(async (idx, isRawOverride) => {
+    const isRaw = isRawOverride !== undefined ? isRawOverride : batchSection === 'raw';
+    const queue = isRaw ? batchRawFiles : batchImages;
+    if (idx === null || !queue[idx]) return;
+    
     setBatchPreviewLoading(true);
     setBatchPreviewIdx(idx);
     setBatchPreviewOpen(true);
-    const { file } = batchImages[idx];
+    
+    const targetFile = queue[idx];
     try {
-      const origUrl = await new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = e => resolve(e.target.result);
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-      });
+      let origUrl = null;
+      let orientation = 1;
+
+      if (isRaw) {
+        if (targetFile.previewUrl) {
+          origUrl = targetFile.previewUrl;
+          orientation = targetFile.metadata?.orientation || 1;
+        } else if (targetFile.file) {
+          const buffer = await targetFile.file.arrayBuffer();
+          const result = await decodeRaw(buffer, () => {});
+          origUrl = result.url;
+          orientation = result.orientation || 1;
+        }
+      } else {
+        origUrl = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = e => resolve(e.target.result);
+          reader.onerror = reject;
+          reader.readAsDataURL(targetFile.file);
+        });
+      }
+
       setBatchPreviewOrigUrl(origUrl);
 
       const img = await new Promise((resolve, reject) => {
@@ -362,20 +430,45 @@ export default function App() {
       });
 
       const PREVIEW_MAX = 1200;
-      const scale = Math.min(1, PREVIEW_MAX / Math.max(img.naturalWidth, img.naturalHeight));
-      let W = Math.round(img.naturalWidth * scale);
-      let H = Math.round(img.naturalHeight * scale);
+      let sW = img.naturalWidth || img.width;
+      let sH = img.naturalHeight || img.height;
+
+      if (isRaw && orientation >= 5 && orientation <= 8) {
+        const t = sW; sW = sH; sH = t;
+      }
+
+      const scale = Math.min(1, PREVIEW_MAX / Math.max(sW, sH));
+      let W = Math.round(sW * scale);
+      let H = Math.round(sH * scale);
 
       let canvas = document.createElement('canvas');
       canvas.width = W; canvas.height = H;
       let ctx = canvas.getContext('2d');
 
+      ctx.save();
       const cssFilterStr = toCSSFilter(filters);
       ctx.filter = cssFilterStr;
       ctx.imageSmoothingEnabled = true;
       ctx.imageSmoothingQuality = 'high';
-      ctx.drawImage(img, 0, 0, W, H);
-      ctx.filter = 'none';
+
+      if (isRaw && orientation !== 1) {
+        switch (orientation) {
+          case 2: ctx.transform(-1, 0, 0, 1, W, 0); break;
+          case 3: ctx.transform(-1, 0, 0, -1, W, H); break;
+          case 4: ctx.transform(1, 0, 0, -1, 0, H); break;
+          case 5: ctx.transform(0, 1, 1, 0, 0, 0); break;
+          case 6: ctx.transform(0, 1, -1, 0, W, 0); break;
+          case 7: ctx.transform(0, -1, -1, 0, W, H); break;
+          case 8: ctx.transform(0, -1, 1, 0, 0, H); break;
+        }
+      }
+
+      if (isRaw && orientation >= 5 && orientation <= 8) {
+        ctx.drawImage(img, 0, 0, H, W);
+      } else {
+        ctx.drawImage(img, 0, 0, W, H);
+      }
+      ctx.restore();
 
       if (filters.temperature !== 0) {
         const a = Math.abs(filters.temperature) / 300;
@@ -421,7 +514,8 @@ export default function App() {
       }
 
       if (batchLogo) {
-        const logoW = W * batchLogoScale;
+        const isPortrait = H > W;
+        const logoW = W * (isPortrait ? batchLogoScalePortrait : batchLogoScale);
         const logoH = (batchLogo.height / batchLogo.width) * logoW;
         const m = Math.round(batchLogoMargin * scale * (batchAiUpscale ? batchAiScale : 1));
         const positions = {
@@ -548,7 +642,8 @@ export default function App() {
         }
 
         if (batchLogo) {
-          const logoW = W * batchLogoScale;
+          const isPortrait = H > W;
+          const logoW = W * (isPortrait ? batchLogoScalePortrait : batchLogoScale);
           const logoH = (batchLogo.height / batchLogo.width) * logoW;
           const m = batchLogoMargin;
           const positions = {
@@ -577,10 +672,224 @@ export default function App() {
         await writable.close();
 
       } catch (err) {
+        addBatchLog(`❌ Error processing ${name}: ${err.message}`, "error");
         console.error(`Failed processing ${name}`, err);
       }
     }
 
+    addBatchLog("🏁 RAW Batch process complete.", "success");
+    setBatchProcessing(false);
+    setBatchDone(true);
+  };
+
+  const handleRawBatchProcess = async () => {
+    if (!outputHandle || batchRawFiles.length === 0) {
+      addBatchLog("⚠️ Processing aborted: Missing output folder or files.", "warning");
+      alert('Select output folder & add RAW files first.');
+      return;
+    }
+    
+    addBatchLog(`🚀 Starting RAW batch process for ${batchRawFiles.length} files...`, "info");
+    setBatchProcessing(true); setBatchDone(false);
+    setBatchProgress({ current: 0, total: batchRawFiles.length, currentFile: "" });
+
+    const cssFilterStr = toCSSFilter(filters);
+    const fmtMime = { jpeg: "image/jpeg", png: "image/png", webp: "image/webp" };
+    const fmtExt = { jpeg: "jpg", png: "png", webp: "webp" };
+    const mime = fmtMime[batchOutputFmt];
+    const ext = fmtExt[batchOutputFmt];
+    const quality = batchOutputFmt === "png" ? undefined : batchOutputQ / 100;
+
+    for (let i = 0; i < batchRawFiles.length; i++) {
+      const { name, previewUrl } = batchRawFiles[i];
+      setBatchProgress({ current: i + 1, total: batchRawFiles.length, currentFile: name });
+      
+      try {
+        addBatchLog(`[${i+1}/${batchRawFiles.length}] Processing ${name}...`, "info");
+        
+        let sourceImg = null;
+        let orientation = 1;
+        
+        if (batchRawFiles[i].canvas) {
+          addBatchLog(`  -> Using pre-rendered canvas for ${name}`, "info");
+          sourceImg = batchRawFiles[i].canvas;
+        } else if (previewUrl) {
+          addBatchLog(`  -> Loading preview image for ${name}...`, "info");
+          sourceImg = await loadImageFromSrc(previewUrl);
+          orientation = batchRawFiles[i].metadata?.orientation || 1;
+          addBatchLog(`  -> Preview loaded: ${sourceImg.naturalWidth}x${sourceImg.naturalHeight} (Orient: ${orientation})`, "info");
+        } else if (batchRawFiles[i].file) {
+          addBatchLog(`  -> JIT Decoding ${name}...`, "info");
+          const buffer = await batchRawFiles[i].file.arrayBuffer();
+          const result = await decodeRaw(buffer, (msg) => addBatchLog(`[${name}] ${msg}`, "info"));
+          orientation = result.orientation || 1;
+          addBatchLog(`  -> JIT Decode finished. Loading buffer image (Orient: ${orientation})...`, "info");
+          sourceImg = await loadImageFromSrc(result.url);
+        }
+
+        if (!sourceImg) {
+          throw new Error("Could not load source image");
+        }
+
+        let sW = sourceImg.naturalWidth || sourceImg.width;
+        let sH = sourceImg.naturalHeight || sourceImg.height;
+
+        if (orientation >= 5 && orientation <= 8) {
+          const t = sW; sW = sH; sH = t;
+        }
+
+        addBatchLog(`  -> Calculating output dimensions...`, "info");
+        let { W, H } = calcBatchDims(
+          sW, sH,
+          batchResizeMode, batchResizePreset,
+          batchCustomW, batchCustomH,
+          batchKeepAspect, batchLongEdgePx
+        );
+        addBatchLog(`  -> Output size: ${W}x${H}`, "info");
+
+        addBatchLog(`  -> Preparing canvas and context...`, "info");
+        let canvas = canvasRef.current;
+        if (!canvas) {
+          addBatchLog(`  ⚠️ Canvas ref is missing! Creating fallback...`, "warning");
+          canvas = document.createElement('canvas');
+        }
+        canvas.width = W; canvas.height = H;
+        let ctx = canvas.getContext('2d');
+        if (!ctx) throw new Error("Could not get 2D context");
+
+        addBatchLog(`  -> Drawing and applying adjustments...`, "info");
+        ctx.save();
+        ctx.filter = cssFilterStr;
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+
+        if (orientation !== 1) {
+          switch (orientation) {
+            case 2: ctx.transform(-1, 0, 0, 1, W, 0); break;
+            case 3: ctx.transform(-1, 0, 0, -1, W, H); break;
+            case 4: ctx.transform(1, 0, 0, -1, 0, H); break;
+            case 5: ctx.transform(0, 1, 1, 0, 0, 0); break;
+            case 6: ctx.transform(0, 1, -1, 0, W, 0); break;
+            case 7: ctx.transform(0, -1, -1, 0, W, H); break;
+            case 8: ctx.transform(0, -1, 1, 0, 0, H); break;
+          }
+        }
+
+        if (orientation >= 5 && orientation <= 8) {
+          ctx.drawImage(sourceImg, 0, 0, H, W);
+        } else {
+          ctx.drawImage(sourceImg, 0, 0, W, H);
+        }
+        
+        ctx.restore();
+
+        // Apply Temperature/Tint/Fade/Vignette/etc.
+        if (filters.temperature !== 0) {
+          const a = Math.abs(filters.temperature) / 300;
+          ctx.globalCompositeOperation = 'overlay';
+          ctx.fillStyle = filters.temperature > 0 ? `rgba(255,140,0,${a})` : `rgba(100,149,237,${a})`;
+          ctx.fillRect(0, 0, W, H);
+          ctx.globalCompositeOperation = 'source-over';
+        }
+        if (filters.fade > 0) {
+          ctx.globalCompositeOperation = 'screen';
+          ctx.fillStyle = `rgba(255,255,255,${filters.fade / 180})`;
+          ctx.fillRect(0, 0, W, H);
+          ctx.globalCompositeOperation = 'source-over';
+        }
+        if (filters.vignette > 0) {
+          const g = ctx.createRadialGradient(W / 2, H / 2, W * 0.3, W / 2, H / 2, W * 0.85);
+          g.addColorStop(0, 'rgba(0,0,0,0)');
+          g.addColorStop(1, `rgba(0,0,0,${filters.vignette / 100})`);
+          ctx.globalCompositeOperation = 'multiply';
+          ctx.fillStyle = g;
+          ctx.fillRect(0, 0, W, H);
+          ctx.globalCompositeOperation = 'source-over';
+        }
+
+        if (batchAutoContrast) {
+          addBatchLog(`  -> Applying Auto Contrast...`, "info");
+          applyAutoContrast(ctx, W, H);
+        }
+        if (batchAutoLevels) {
+          addBatchLog(`  -> Applying Auto Levels...`, "info");
+          applyAutoLevels(ctx, W, H);
+        }
+        if (batchDenoise) {
+          addBatchLog(`  -> Applying Noise Reduction (${batchDenoiseAmt})...`, "info");
+          applyNoiseReduction(canvas, ctx, W, H, batchDenoiseAmt);
+        }
+        if (batchSharpen) {
+          addBatchLog(`  -> Applying Sharpening (${batchSharpenAmt})...`, "info");
+          applyUnsharpMask(canvas, ctx, W, H, batchSharpenAmt, batchSharpenRad);
+        }
+
+        if (batchAiFaceRestore) {
+          addBatchLog(`  -> Running AI Face Restore...`, "info");
+          try {
+            const restoredUrl = await restoreFaceLocal(canvas);
+            const restoredImg = await loadImageFromSrc(restoredUrl);
+            ctx.drawImage(restoredImg, 0, 0, W, H);
+            addBatchLog(`  -> Face Restore finished.`, "success");
+          } catch (e) { 
+            addBatchLog(`  ⚠️ Face Restore failed: ${e.message}`, "warning");
+            console.error("Batch Face Restore Error:", e); 
+          }
+        }
+
+        if (batchAiBeauty) {
+          addBatchLog(`  -> Running AI Beauty (Smooth:${batchAiBeautySmooth})...`, "info");
+          let mask = null;
+          if (batchAiBeautyUseMask) mask = await createSkinMask(canvas);
+          await applyBeautyPipeline(canvas, ctx, W, H, batchAiBeautySmooth, batchAiBeautyClarity, batchAiBeautyGlow, mask);
+          addBatchLog(`  -> AI Beauty finished.`, "success");
+        }
+
+        if (batchAiUpscale) {
+          canvas = await applyUpscalePipeline(canvas, batchAiScale);
+          W = canvas.width; H = canvas.height;
+          ctx = canvas.getContext('2d');
+        }
+
+        if (batchLogo) {
+          const isPortrait = H > W;
+          const logoW = W * (isPortrait ? batchLogoScalePortrait : batchLogoScale);
+          const logoH = (batchLogo.height / batchLogo.width) * logoW;
+          const m = batchLogoMargin;
+          const positions = {
+            'top-left': { x: m, y: m },
+            'top-right': { x: W - logoW - m, y: m },
+            'top-center': { x: (W - logoW) / 2, y: m },
+            'bottom-left': { x: m, y: H - logoH - m },
+            'bottom-right': { x: W - logoW - m, y: H - logoH - m },
+            'bottom-center': { x: (W - logoW) / 2, y: H - logoH - m },
+            'center': { x: (W - logoW) / 2, y: (H - logoH) / 2 },
+          };
+          const { x, y } = positions[batchLogoPos] || positions['bottom-right'];
+          ctx.globalAlpha = batchLogoOpacity;
+          ctx.drawImage(batchLogo, x, y, logoW, logoH);
+          ctx.globalAlpha = 1.0;
+        }
+
+        const base = name.replace(/\.[^.]+$/, '');
+        const outName = `${batchPrefix}${base}${batchSuffix}.${ext}`;
+
+        addBatchLog(`  -> Converting canvas to ${ext.toUpperCase()} blob...`, "info");
+        const blob = await canvasToBlob(canvas, mime, quality);
+        if (blob) {
+          addBatchLog(`  -> Blob created (${Math.round(blob.size/1024)} KB). Writing to disk...`, "info");
+          const newFile = await outputHandle.getFileHandle(outName, { create: true });
+          const writable = await newFile.createWritable();
+          await writable.write(blob);
+          await writable.close();
+          addBatchLog(`✅ Successfully saved: ${outName}`, "success");
+        }
+      } catch (err) { 
+        addBatchLog(`❌ Error processing ${name}: ${err.message}`, "error");
+        console.error(`Failed processing ${name}`, err); 
+      }
+    }
+    addBatchLog("🏁 RAW Batch process complete.", "success");
     setBatchProcessing(false);
     setBatchDone(true);
   };
@@ -804,7 +1113,7 @@ export default function App() {
     // If mask provided, we apply effects to a separate canvas and then composite
     let targetCtx = ctx;
     let targetCanvas = canvas;
-    
+
     if (maskCanvas) {
       targetCanvas = document.createElement('canvas');
       targetCanvas.width = W;
@@ -819,9 +1128,9 @@ export default function App() {
     targetCtx.fillStyle = `rgba(255,200,150,${glow * 0.012})`;
     targetCtx.fillRect(0, 0, W, H);
     targetCtx.globalCompositeOperation = 'source-over';
-    
+
     if (clarity > 0) applyUnsharpMask(targetCanvas, targetCtx, W, H, clarity * 0.15, 1.2);
-    
+
     if (glow > 0) {
       const glowCanvas = document.createElement('canvas');
       glowCanvas.width = W; glowCanvas.height = H;
@@ -840,7 +1149,7 @@ export default function App() {
       targetCtx.globalCompositeOperation = 'destination-in';
       targetCtx.drawImage(maskCanvas, 0, 0);
       targetCtx.globalCompositeOperation = 'source-over';
-      
+
       // Draw the masked result back onto the original canvas
       ctx.drawImage(targetCanvas, 0, 0);
     }
@@ -929,7 +1238,7 @@ export default function App() {
       setAiFaceRestoreStatus('done'); setAiFaceRestoreLog('');
     } catch (e) {
       console.error('Face Restore error:', e);
-      setAiFaceRestoreStatus('error'); 
+      setAiFaceRestoreStatus('error');
       setAiFaceRestoreLog(e.message || 'Face restoration failed');
     }
   }, [image]);
@@ -1013,7 +1322,7 @@ export default function App() {
 
       {!isMobile && (
         activeTab === "batch" ? (
-          <BatchPage {...{ dm, cardBg, cardBdr, inputSt, sourceHandle, outputHandle, batchImages, selectSourceFolder, selectOutputFolder, batchResizeMode, setBatchResizeMode, batchResizePreset, setBatchResizePreset, batchCustomW, setBatchCustomW, batchCustomH, setBatchCustomH, batchKeepAspect, setBatchKeepAspect, batchLongEdgePx, setBatchLongEdgePx, batchAutoLevels, setBatchAutoLevels, batchAutoContrast, setBatchAutoContrast, batchSharpen, setBatchSharpen, batchSharpenAmt, setBatchSharpenAmt, batchSharpenRad, setBatchSharpenRad, batchDenoise, setBatchDenoise, batchDenoiseAmt, setBatchDenoiseAmt, batchLogo, setBatchLogo, batchLogoFile, setBatchLogoFile, handleBatchLogoUpload, batchLogoScale, setBatchLogoScale, batchLogoOpacity, setBatchLogoOpacity, batchLogoPos, setBatchLogoPos, batchLogoMargin, setBatchLogoMargin, batchOutputFmt, setBatchOutputFmt, batchOutputQ, setBatchOutputQ, batchPrefix, setBatchPrefix, batchSuffix, setBatchSuffix, batchProcessing, batchProgress, batchDone, handleBatchProcess, batchPreviewIdx, batchPreviewOrigUrl, batchPreviewAfterUrl, batchPreviewLoading, batchPreviewSplit, setBatchPreviewSplit, batchPreviewDragging, setBatchPreviewDragging, batchPreviewOpen, setBatchPreviewOpen, generateBatchPreview, filters, setFilters, resetAll, batchFilterGroup, setBatchFilterGroup, calcBatchDims, batchAiUpscale, setBatchAiUpscale, batchAiBeauty, setBatchAiBeauty, batchAiScale, setBatchAiScale, batchAiBeautySmooth, setBatchAiBeautySmooth, batchAiBeautyClarity, setBatchAiBeautyClarity, batchAiBeautyGlow, setBatchAiBeautyGlow, batchAiFaceRestore, setBatchAiFaceRestore, batchAiBeautyUseMask, setBatchAiBeautyUseMask }} />
+          <BatchPage {...{ dm, cardBg, cardBdr, inputSt, sourceHandle, outputHandle, batchImages, selectSourceFolder, selectRawSourceFolder, selectOutputFolder, batchResizeMode, setBatchResizeMode, batchResizePreset, setBatchResizePreset, batchCustomW, setBatchCustomW, batchCustomH, setBatchCustomH, batchKeepAspect, setBatchKeepAspect, batchLongEdgePx, setBatchLongEdgePx, batchAutoLevels, setBatchAutoLevels, batchAutoContrast, setBatchAutoContrast, batchSharpen, setBatchSharpen, batchSharpenAmt, setBatchSharpenAmt, batchSharpenRad, setBatchSharpenRad, batchDenoise, setBatchDenoise, batchDenoiseAmt, setBatchDenoiseAmt, batchLogo, setBatchLogo, batchLogoFile, setBatchLogoFile, handleBatchLogoUpload, batchLogoScale, setBatchLogoScale, batchLogoScalePortrait, setBatchLogoScalePortrait, batchLogoOpacity, setBatchLogoOpacity, batchLogoPos, setBatchLogoPos, batchLogoMargin, setBatchLogoMargin, batchOutputFmt, setBatchOutputFmt, batchOutputQ, setBatchOutputQ, batchPrefix, setBatchPrefix, batchSuffix, setBatchSuffix, batchProcessing, batchProgress, batchDone, handleBatchProcess, batchPreviewIdx, batchPreviewOrigUrl, batchPreviewAfterUrl, batchPreviewLoading, batchPreviewSplit, setBatchPreviewSplit, batchPreviewDragging, setBatchPreviewDragging, batchPreviewOpen, setBatchPreviewOpen, generateBatchPreview, filters, setFilters, resetAll, batchFilterGroup, setBatchFilterGroup, calcBatchDims, batchAiUpscale, setBatchAiUpscale, batchAiBeauty, setBatchAiBeauty, batchAiScale, setBatchAiScale, batchAiBeautySmooth, setBatchAiBeautySmooth, batchAiBeautyClarity, setBatchAiBeautyClarity, batchAiBeautyGlow, setBatchAiBeautyGlow, batchAiFaceRestore, setBatchAiFaceRestore, batchAiBeautyUseMask, setBatchAiBeautyUseMask, batchSection, setBatchSection, batchRawFiles, setBatchRawFiles, handleRawBatchProcess, batchLogs, addBatchLog }} />
         ) : (
           <div style={{ display: "flex", height: "calc(100vh - 52px)" }}>
             <div className="glass-panel" style={{ width: "310px", borderRight: `1px solid ${dm ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'}`, overflowY: "auto", flexShrink: 0 }}>
@@ -1029,7 +1338,7 @@ export default function App() {
       {isMobile && (
         activeTab === "batch" ? (
           <div style={{ height: "calc(100vh - 52px)", overflowY: "auto" }}>
-            <BatchPage {...{ dm, cardBg, cardBdr, inputSt, isMobile: true, sourceHandle, outputHandle, batchImages, selectSourceFolder, selectOutputFolder, batchResizeMode, setBatchResizeMode, batchResizePreset, setBatchResizePreset, batchCustomW, setBatchCustomW, batchCustomH, setBatchCustomH, batchKeepAspect, setBatchKeepAspect, batchLongEdgePx, setBatchLongEdgePx, batchAutoLevels, setBatchAutoLevels, batchAutoContrast, setBatchAutoContrast, batchSharpen, setBatchSharpen, batchSharpenAmt, setBatchSharpenAmt, batchSharpenRad, setBatchSharpenRad, batchDenoise, setBatchDenoise, batchDenoiseAmt, setBatchDenoiseAmt, batchLogo, setBatchLogo, batchLogoFile, setBatchLogoFile, handleBatchLogoUpload, batchLogoScale, setBatchLogoScale, batchLogoOpacity, setBatchLogoOpacity, batchLogoPos, setBatchLogoPos, batchLogoMargin, setBatchLogoMargin, batchOutputFmt, setBatchOutputFmt, batchOutputQ, setBatchOutputQ, batchPrefix, setBatchPrefix, batchSuffix, setBatchSuffix, batchProcessing, batchProgress, batchDone, handleBatchProcess, batchPreviewIdx, batchPreviewOrigUrl, batchPreviewAfterUrl, batchPreviewLoading, batchPreviewSplit, setBatchPreviewSplit, batchPreviewDragging, setBatchPreviewDragging, batchPreviewOpen, setBatchPreviewOpen, generateBatchPreview, filters, setFilters, resetAll, batchFilterGroup, setBatchFilterGroup, calcBatchDims, batchAiUpscale, setBatchAiUpscale, batchAiBeauty, setBatchAiBeauty, batchAiScale, setBatchAiScale, batchAiBeautySmooth, setBatchAiBeautySmooth, batchAiBeautyClarity, setBatchAiBeautyClarity, batchAiBeautyGlow, setBatchAiBeautyGlow, batchAiFaceRestore, setBatchAiFaceRestore, batchAiBeautyUseMask, setBatchAiBeautyUseMask }} />
+            <BatchPage {...{ dm, cardBg, cardBdr, inputSt, isMobile: true, sourceHandle, outputHandle, batchImages, selectSourceFolder, selectRawSourceFolder, selectOutputFolder, batchResizeMode, setBatchResizeMode, batchResizePreset, setBatchResizePreset, batchCustomW, setBatchCustomW, batchCustomH, setBatchCustomH, batchKeepAspect, setBatchKeepAspect, batchLongEdgePx, setBatchLongEdgePx, batchAutoLevels, setBatchAutoLevels, batchAutoContrast, setBatchAutoContrast, batchSharpen, setBatchSharpen, batchSharpenAmt, setBatchSharpenAmt, batchSharpenRad, setBatchSharpenRad, batchDenoise, setBatchDenoise, batchDenoiseAmt, setBatchDenoiseAmt, batchLogo, setBatchLogo, batchLogoFile, setBatchLogoFile, handleBatchLogoUpload, batchLogoScale, setBatchLogoScale, batchLogoScalePortrait, setBatchLogoScalePortrait, batchLogoOpacity, setBatchLogoOpacity, batchLogoPos, setBatchLogoPos, batchLogoMargin, setBatchLogoMargin, batchOutputFmt, setBatchOutputFmt, batchOutputQ, setBatchOutputQ, batchPrefix, setBatchPrefix, batchSuffix, setBatchSuffix, batchProcessing, batchProgress, batchDone, handleBatchProcess, batchPreviewIdx, batchPreviewOrigUrl, batchPreviewAfterUrl, batchPreviewLoading, batchPreviewSplit, setBatchPreviewSplit, batchPreviewDragging, setBatchPreviewDragging, batchPreviewOpen, setBatchPreviewOpen, generateBatchPreview, filters, setFilters, resetAll, batchFilterGroup, setBatchFilterGroup, calcBatchDims, batchAiUpscale, setBatchAiUpscale, batchAiBeauty, setBatchAiBeauty, batchAiScale, setBatchAiScale, batchAiBeautySmooth, setBatchAiBeautySmooth, batchAiBeautyClarity, setBatchAiBeautyClarity, batchAiBeautyGlow, setBatchAiBeautyGlow, batchAiFaceRestore, setBatchAiFaceRestore, batchAiBeautyUseMask, setBatchAiBeautyUseMask, batchSection, setBatchSection, batchRawFiles, setBatchRawFiles, handleRawBatchProcess, batchLogs, addBatchLog }} />
           </div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", height: "calc(100vh - 52px)", overflow: "hidden" }}>

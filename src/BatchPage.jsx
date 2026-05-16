@@ -1,9 +1,10 @@
 
 import { Spin } from "./components/ui/common";
 import { BATCH_RESIZE_PRESETS, DEFAULT_FILTERS, COLOR_FILTERS, FILTER_GROUPS, PRESETS } from "./constants";
+import { RawBatchPanel } from "./components/panels/RawBatchPanel";
 
 export function BatchPage({ dm, cardBg, cardBdr, inputSt, isMobile = false,
-  sourceHandle, outputHandle, batchImages, selectSourceFolder, selectOutputFolder,
+  sourceHandle, outputHandle, batchImages, selectSourceFolder, selectRawSourceFolder, selectOutputFolder,
   batchResizeMode, setBatchResizeMode, batchResizePreset, setBatchResizePreset,
   batchCustomW, setBatchCustomW, batchCustomH, setBatchCustomH,
   batchKeepAspect, setBatchKeepAspect, batchLongEdgePx, setBatchLongEdgePx,
@@ -11,7 +12,7 @@ export function BatchPage({ dm, cardBg, cardBdr, inputSt, isMobile = false,
   batchSharpen, setBatchSharpen, batchSharpenAmt, setBatchSharpenAmt, batchSharpenRad, setBatchSharpenRad,
   batchDenoise, setBatchDenoise, batchDenoiseAmt, setBatchDenoiseAmt,
   batchLogo, setBatchLogo, batchLogoFile, setBatchLogoFile, handleBatchLogoUpload,
-  batchLogoScale, setBatchLogoScale, batchLogoOpacity, setBatchLogoOpacity,
+  batchLogoScale, setBatchLogoScale, batchLogoScalePortrait, setBatchLogoScalePortrait, batchLogoOpacity, setBatchLogoOpacity,
   batchLogoPos, setBatchLogoPos, batchLogoMargin, setBatchLogoMargin,
   batchOutputFmt, setBatchOutputFmt, batchOutputQ, setBatchOutputQ,
   batchPrefix, setBatchPrefix, batchSuffix, setBatchSuffix,
@@ -24,7 +25,8 @@ export function BatchPage({ dm, cardBg, cardBdr, inputSt, isMobile = false,
   batchAiUpscale, setBatchAiUpscale, batchAiBeauty, setBatchAiBeauty,
   batchAiScale, setBatchAiScale, batchAiBeautySmooth, setBatchAiBeautySmooth,
   batchAiBeautyClarity, setBatchAiBeautyClarity, batchAiBeautyGlow, setBatchAiBeautyGlow,
-  batchAiFaceRestore, setBatchAiFaceRestore, batchAiBeautyUseMask, setBatchAiBeautyUseMask
+  batchAiFaceRestore, setBatchAiFaceRestore, batchAiBeautyUseMask, setBatchAiBeautyUseMask,
+  batchSection, setBatchSection, batchRawFiles, setBatchRawFiles, handleRawBatchProcess, batchLogs, addBatchLog
 }) {
 
   const bg = dm ? '#121212' : '#f0f1f5';
@@ -54,7 +56,10 @@ export function BatchPage({ dm, cardBg, cardBdr, inputSt, isMobile = false,
     </label>
   );
 
-  const canProcess = !batchProcessing && sourceHandle && outputHandle && batchImages.length > 0;
+  const isRaw = batchSection === "raw";
+  const currentFiles = isRaw ? batchRawFiles : batchImages;
+  const canProcess = !batchProcessing && sourceHandle && outputHandle && currentFiles.length > 0;
+
   const activeEnhancements = [
     batchResizeMode !== "none" && "📐 Resize",
     batchAutoContrast && "⚡ Auto Contrast",
@@ -70,20 +75,20 @@ export function BatchPage({ dm, cardBg, cardBdr, inputSt, isMobile = false,
     <div style={{ height: "calc(100vh - 52px)", overflowY: "auto", background: bg }}>
       <div style={{ background: panelBg, borderBottom: `1px solid ${cardBdr}`, padding: "14px 24px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "16px", flexWrap: "wrap", position: "sticky", top: 0, zIndex: 20 }}>
         <div>
-          <div style={{ fontSize: "16px", fontWeight: 700, color: dm ? '#f0f0f0' : '#1a1a2e', marginBottom: "2px" }}>📦 Batch Processor</div>
+          <div style={{ fontSize: "16px", fontWeight: 700, color: dm ? '#f0f0f0' : '#1a1a2e', marginBottom: "2px" }}>📦 {isRaw ? "RAW Batch Processor" : "Standard Batch Processor"}</div>
           <div style={{ fontSize: "12px", color: "#999" }}>
-            {batchImages.length > 0 ? `${batchImages.length} images queued` : "No source folder selected"}
+            {currentFiles.length > 0 ? `${currentFiles.length} images queued` : "No source folder selected"}
             {Object.entries(filters).filter(([k, v]) => v !== DEFAULT_FILTERS[k]).length > 0 && ` · ✏️ ${Object.entries(filters).filter(([k, v]) => v !== DEFAULT_FILTERS[k]).length} adjustments`}
             {activeEnhancements.length > 0 && " · " + activeEnhancements.join(" · ")}
           </div>
         </div>
         <div style={{ display: "flex", gap: "8px", alignItems: "center", flexShrink: 0 }}>
-          {batchImages.length > 0 && (
+          {((!isRaw && batchImages.length > 0) || (isRaw && batchRawFiles.length > 0)) && (
             <button
               onClick={() => {
                 if (!batchPreviewOpen) {
                   setBatchPreviewOpen(true);
-                  if (batchPreviewIdx === null) generateBatchPreview(0);
+                  if (batchPreviewIdx === null) generateBatchPreview(0, isRaw);
                 } else {
                   setBatchPreviewOpen(false);
                 }
@@ -97,7 +102,7 @@ export function BatchPage({ dm, cardBg, cardBdr, inputSt, isMobile = false,
             </button>
           )}
           <button
-            onClick={handleBatchProcess}
+            onClick={isRaw ? handleRawBatchProcess : handleBatchProcess}
             disabled={!canProcess}
             style={{ padding: "10px 24px", border: "none", borderRadius: "10px", fontFamily: "inherit", fontWeight: 700, fontSize: "14px", cursor: canProcess ? "pointer" : "not-allowed",
               background: canProcess ? "linear-gradient(135deg,#6c63ff,#a78bfa)" : (dm ? '#333' : '#ddd'),
@@ -107,12 +112,39 @@ export function BatchPage({ dm, cardBg, cardBdr, inputSt, isMobile = false,
             {batchProcessing
               ? <><Spin />Processing {batchProgress.current}/{batchProgress.total}…</>
               : batchDone ? "✅ Done — Run Again"
-                : canProcess ? `⚡ Process ${batchImages.length} Image${batchImages.length !== 1 ? "s" : ""}`
+                : canProcess ? `⚡ Process ${currentFiles.length} Image${currentFiles.length !== 1 ? "s" : ""}`
                   : !sourceHandle ? "Select source folder →"
                     : !outputHandle ? "Select output folder →"
                       : "Add images to source folder"}
           </button>
         </div>
+      </div>
+
+      <div style={{ background: panelBg, borderBottom: `1px solid ${cardBdr}`, padding: "0 24px", display: "flex", gap: "24px" }}>
+        {[
+          { id: "folders", label: "Standard Batch", icon: "📦" },
+          { id: "raw", label: "RAW Processor", icon: "📸" },
+        ].map(t => (
+          <button key={t.id} onClick={() => setBatchSection(t.id)}
+            style={{ 
+              padding: "14px 4px", 
+              fontSize: "13px", 
+              fontWeight: 700, 
+              color: batchSection === t.id ? accent : "#999", 
+              background: "none", 
+              border: "none", 
+              borderBottom: `3px solid ${batchSection === t.id ? accent : "transparent"}`,
+              cursor: "pointer", 
+              fontFamily: "inherit",
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+              transition: "all .2s"
+            }}>
+            <span>{t.icon}</span>
+            {t.label}
+          </button>
+        ))}
       </div>
 
       {batchProcessing && (
@@ -122,11 +154,11 @@ export function BatchPage({ dm, cardBg, cardBdr, inputSt, isMobile = false,
       )}
       {batchDone && !batchProcessing && (
         <div style={{ background: "#f0fff4", borderBottom: "1px solid #86efac", padding: "10px 24px", fontSize: "13px", fontWeight: 600, color: "#16a34a", textAlign: "center" }}>
-          ✅ Done! {batchImages.length} images saved to output folder.
+          ✅ Done! {batchSection === 'raw' ? batchRawFiles.length : batchImages.length} images saved to output folder.
         </div>
       )}
 
-      {batchPreviewOpen && batchImages.length > 0 && (
+      {batchPreviewOpen && ((!isRaw && batchImages.length > 0) || (isRaw && batchRawFiles.length > 0)) && (
         <div style={{ borderBottom: `1px solid ${cardBdr}`, background: dm ? '#161616' : '#f8f8fd' }}>
 
           <div style={{ padding: "10px 24px 0", display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
@@ -134,8 +166,8 @@ export function BatchPage({ dm, cardBg, cardBdr, inputSt, isMobile = false,
               👁 Preview image:
             </span>
             <div style={{ display: "flex", gap: "6px", overflowX: "auto", paddingBottom: "4px", flex: 1 }}>
-              {batchImages.map((img, i) => (
-                <button key={i} onClick={() => generateBatchPreview(i)}
+              {(isRaw ? batchRawFiles : batchImages).map((img, i) => (
+                <button key={i} onClick={() => generateBatchPreview(i, isRaw)}
                   style={{ flexShrink: 0, padding: "5px 12px", border: `1.5px solid ${batchPreviewIdx === i ? '#6c63ff' : cardBdr}`,
                     background: batchPreviewIdx === i ? (dm ? '#1e1a3a' : '#faf9ff') : dm ? '#252525' : '#fff',
                     borderRadius: "8px", fontSize: "11px", fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
@@ -303,25 +335,27 @@ export function BatchPage({ dm, cardBg, cardBdr, inputSt, isMobile = false,
         maxWidth: "1400px",
         margin: "0 auto"
       }}>
-
         <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-
           <Card>
             <SecLabel icon="📁">Source Folder</SecLabel>
-            <button onClick={selectSourceFolder}
+            <button onClick={isRaw ? selectRawSourceFolder : selectSourceFolder}
               style={{ width: "100%", padding: "11px", background: "linear-gradient(135deg,#6c63ff,#a78bfa)", color: "#fff", border: "none", borderRadius: "9px", fontSize: "13px", fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
-              {sourceHandle ? "📁 Change Folder" : "📁 Select Source Folder"}
+              {sourceHandle ? "📁 Change Folder" : `📁 Select ${isRaw ? "RAW" : "Source"} Folder`}
             </button>
-            {batchImages.length > 0
+            {currentFiles.length > 0
               ? <div style={{ display: "flex", alignItems: "center", gap: "8px", padding: "8px 12px", background: dm ? '#1a3a1a' : '#f0fff4', border: "1.5px solid #86efac", borderRadius: "8px" }}>
-                <span style={{ fontSize: "20px" }}>🖼</span>
+                <span style={{ fontSize: "20px" }}>{isRaw ? "📸" : "🖼"}</span>
                 <div>
-                  <div style={{ fontSize: "13px", fontWeight: 700, color: "#16a34a" }}>{batchImages.length} images found</div>
-                  <div style={{ fontSize: "11px", color: "#aaa" }}>JPG · PNG · WebP</div>
+                  <div style={{ fontSize: "13px", fontWeight: 700, color: "#16a34a" }}>{currentFiles.length} {isRaw ? "RAW files" : "images"} found</div>
+                  <div style={{ fontSize: "11px", color: "#aaa" }}>{isRaw ? "NEF · CR2 · ARW" : "JPG · PNG · WebP"}</div>
                 </div>
               </div>
-              : <div style={{ fontSize: "11px", color: "#bbb", textAlign: "center", padding: "6px 0" }}>JPG, PNG, WebP accepted</div>}
+              : <div style={{ fontSize: "11px", color: "#bbb", textAlign: "center", padding: "6px 0" }}>{isRaw ? "Professional RAW formats" : "JPG, PNG, WebP accepted"}</div>}
           </Card>
+
+          {isRaw && (
+            <RawBatchPanel {...{ dm, cardBg, cardBdr, inputSt, accent, batchRawFiles, setBatchRawFiles, batchProcessing, batchProgress, handleRawBatchProcess, batchDone, inline: true, batchLogs, addBatchLog }} />
+          )}
 
           <Card>
             <SecLabel icon="💾">Output Folder</SecLabel>
@@ -395,32 +429,78 @@ export function BatchPage({ dm, cardBg, cardBdr, inputSt, isMobile = false,
               ))}
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: "14px", marginTop: "4px" }}>
-              {COLOR_FILTERS.filter(f => f.group === batchFilterGroup).map(f => {
-                const val = filters[f.key];
-                const pct = ((val - f.min) / (f.max - f.min)) * 100;
-                const changed = val !== DEFAULT_FILTERS[f.key];
-                return (
-                  <div key={f.key}>
-                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "5px" }}>
-                      <span style={{ fontSize: "12px", fontWeight: 500, color: changed ? accent : dm ? '#ccc' : '#666' }}>{f.label}</span>
-                      <span style={{ fontSize: "11px", color: "#bbb", fontVariantNumeric: "tabular-nums" }}>
-                        {val > 0 && f.default === 0 ? "+" : ""}{Number.isInteger(val) ? val : val.toFixed(1)}{f.unit}
-                      </span>
-                    </div>
-                    <input type="range" className="sl"
-                      min={f.min} max={f.max} step={f.max <= 20 ? .5 : 1}
-                      value={val}
-                      style={{ "--v": `${pct}%` }}
-                      onChange={e => setFilters(p => ({ ...p, [f.key]: parseFloat(e.target.value) }))} />
-                    {changed && (
-                      <button onClick={() => setFilters(p => ({ ...p, [f.key]: f.default }))}
-                        style={{ marginTop: "3px", fontSize: "10px", color: "#bbb", background: "none", border: "none", cursor: "pointer", padding: 0, fontFamily: "inherit" }}>
-                        reset
-                      </button>
-                    )}
+              {batchFilterGroup === 'ai' ? (
+                <>
+                  <div style={{ display: "flex", alignItems: "center", gap: "10px", padding: "12px", background: dm ? '#222' : '#f8f8fd', borderRadius: "10px", border: `1px solid ${cardBdr}` }}>
+                    <input type="checkbox" id="baib" checked={batchAiBeauty} onChange={e => setBatchAiBeauty(e.target.checked)} style={{ accentColor: accent, width: "16px", height: "16px" }} />
+                    <label htmlFor="baib" style={{ fontSize: "13px", fontWeight: 700, cursor: "pointer", color: dm ? '#eee' : '#333' }}>AI Beauty (Skin Smoothing)</label>
                   </div>
-                );
-              })}
+                  {batchAiBeauty && (
+                    <div style={{ paddingLeft: "10px", borderLeft: `2px solid ${accent}`, display: "flex", flexDirection: "column", gap: "12px", marginLeft: "8px" }}>
+                      <div>
+                        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "5px" }}>
+                          <span style={{ fontSize: "12px", color: dm ? '#ccc' : '#555' }}>Smooth</span>
+                          <span style={{ fontSize: "11px", color: accent, fontWeight: 700 }}>{batchAiBeautySmooth}</span>
+                        </div>
+                        <input type="range" className="sl" min={1} max={10} step={1} value={batchAiBeautySmooth} style={{ "--v": `${((batchAiBeautySmooth - 1) / 9) * 100}%` }} onChange={e => setBatchAiBeautySmooth(+e.target.value)} />
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                         <input type="checkbox" id="baibm" checked={batchAiBeautyUseMask} onChange={e => setBatchAiBeautyUseMask(e.target.checked)} style={{ accentColor: accent }} />
+                         <label htmlFor="baibm" style={{ fontSize: "12px", color: dm ? '#ccc' : '#555' }}>Use Face Masking (Recommended)</label>
+                      </div>
+                    </div>
+                  )}
+
+                  <div style={{ display: "flex", alignItems: "center", gap: "10px", padding: "12px", background: dm ? '#222' : '#f8f8fd', borderRadius: "10px", border: `1px solid ${cardBdr}` }}>
+                    <input type="checkbox" id="baifr" checked={batchAiFaceRestore} onChange={e => setBatchAiFaceRestore(e.target.checked)} style={{ accentColor: accent, width: "16px", height: "16px" }} />
+                    <label htmlFor="baifr" style={{ fontSize: "13px", fontWeight: 700, cursor: "pointer", color: dm ? '#eee' : '#333' }}>AI Face Restore (fal.ai)</label>
+                  </div>
+
+                  <div style={{ display: "flex", alignItems: "center", gap: "10px", padding: "12px", background: dm ? '#222' : '#f8f8fd', borderRadius: "10px", border: `1px solid ${cardBdr}` }}>
+                    <input type="checkbox" id="baiu" checked={batchAiUpscale} onChange={e => setBatchAiUpscale(e.target.checked)} style={{ accentColor: accent, width: "16px", height: "16px" }} />
+                    <label htmlFor="baiu" style={{ fontSize: "13px", fontWeight: 700, cursor: "pointer", color: dm ? '#eee' : '#333' }}>AI Upscale (2x / 4x)</label>
+                  </div>
+                  {batchAiUpscale && (
+                    <div style={{ paddingLeft: "10px", borderLeft: `2px solid ${accent}`, display: "flex", flexDirection: "column", gap: "12px", marginLeft: "8px" }}>
+                       <div style={{ display: "flex", gap: "6px" }}>
+                         {[2, 4].map(s => (
+                           <button key={s} onClick={() => setBatchAiScale(s)} style={{ flex: 1, padding: "6px", background: batchAiScale === s ? accent : 'transparent', color: batchAiScale === s ? '#fff' : (dm ? '#ccc' : '#555'), border: `1px solid ${batchAiScale === s ? accent : cardBdr}`, borderRadius: "6px", fontSize: "12px", cursor: "pointer" }}>{s}x Scale</button>
+                         ))}
+                       </div>
+                    </div>
+                  )}
+                  <div style={{ padding: "10px", background: dm ? "rgba(255, 193, 7, 0.1)" : "#fff3cd", color: dm ? "#ffc107" : "#856404", borderRadius: "8px", fontSize: "11px", lineHeight: 1.4, marginTop: "8px" }}>
+                    <strong>Note:</strong> AI operations run locally or via cloud APIs and will significantly increase processing time per image.
+                  </div>
+                </>
+              ) : (
+                COLOR_FILTERS.filter(f => f.group === batchFilterGroup).map(f => {
+                  const val = filters[f.key];
+                  const pct = ((val - f.min) / (f.max - f.min)) * 100;
+                  const changed = val !== DEFAULT_FILTERS[f.key];
+                  return (
+                    <div key={f.key}>
+                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "5px" }}>
+                        <span style={{ fontSize: "12px", fontWeight: 500, color: changed ? accent : dm ? '#ccc' : '#666' }}>{f.label}</span>
+                        <span style={{ fontSize: "11px", color: "#bbb", fontVariantNumeric: "tabular-nums" }}>
+                          {val > 0 && f.default === 0 ? "+" : ""}{Number.isInteger(val) ? val : val.toFixed(1)}{f.unit}
+                        </span>
+                      </div>
+                      <input type="range" className="sl"
+                        min={f.min} max={f.max} step={f.max <= 20 ? .5 : 1}
+                        value={val}
+                        style={{ "--v": `${pct}%` }}
+                        onChange={e => setFilters(p => ({ ...p, [f.key]: parseFloat(e.target.value) }))} />
+                      {changed && (
+                        <button onClick={() => setFilters(p => ({ ...p, [f.key]: f.default }))}
+                          style={{ marginTop: "3px", fontSize: "10px", color: "#bbb", background: "none", border: "none", cursor: "pointer", padding: 0, fontFamily: "inherit" }}>
+                          reset
+                        </button>
+                      )}
+                    </div>
+                  );
+                })
+              )}
             </div>
             {Object.entries(filters).some(([k, v]) => v !== DEFAULT_FILTERS[k]) && (
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: "8px", borderTop: `1px solid ${cardBdr}`, marginTop: "4px" }}>
@@ -594,12 +674,21 @@ export function BatchPage({ dm, cardBg, cardBdr, inputSt, isMobile = false,
           {batchLogo && (<>
             <Card>
               <SecLabel icon="📐">Logo Size & Opacity</SecLabel>
-              <div>
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "5px" }}>
-                  <span style={{ fontSize: "12px", color: dm ? '#ccc' : '#555' }}>Size</span>
-                  <span style={{ fontSize: "12px", color: accent, fontWeight: 700 }}>{(batchLogoScale * 100).toFixed(0)}% of width</span>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px" }}>
+                <div>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "5px" }}>
+                    <span style={{ fontSize: "12px", color: dm ? '#ccc' : '#555' }}>Size (Landscape)</span>
+                    <span style={{ fontSize: "12px", color: accent, fontWeight: 700 }}>{(batchLogoScale * 100).toFixed(0)}%</span>
+                  </div>
+                  <input type="range" className="sl" min={0.03} max={1.0} step={0.01} value={batchLogoScale} style={{ "--v": `${((batchLogoScale - 0.03) / 0.97) * 100}%` }} onChange={e => setBatchLogoScale(+e.target.value)} />
                 </div>
-                <input type="range" className="sl" min={0.03} max={0.5} step={0.01} value={batchLogoScale} style={{ "--v": `${((batchLogoScale - 0.03) / 0.47) * 100}%` }} onChange={e => setBatchLogoScale(+e.target.value)} />
+                <div>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "5px" }}>
+                    <span style={{ fontSize: "12px", color: dm ? '#ccc' : '#555' }}>Size (Portrait)</span>
+                    <span style={{ fontSize: "12px", color: accent, fontWeight: 700 }}>{(batchLogoScalePortrait * 100).toFixed(0)}%</span>
+                  </div>
+                  <input type="range" className="sl" min={0.03} max={1.0} step={0.01} value={batchLogoScalePortrait} style={{ "--v": `${((batchLogoScalePortrait - 0.03) / 0.97) * 100}%` }} onChange={e => setBatchLogoScalePortrait(+e.target.value)} />
+                </div>
               </div>
               <div>
                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "5px" }}>
@@ -694,6 +783,62 @@ export function BatchPage({ dm, cardBg, cardBdr, inputSt, isMobile = false,
             </div>
           </Card>
         </div>
+
+        {/* PRODUCTION ACTIVITY LOG */}
+        {(batchLogs.length > 0 || batchProcessing) && (
+          <Card style={{ gridColumn: isMobile ? "auto" : "1 / -1", background: dm ? '#0f172a' : '#fafafa', border: `1px solid ${dm ? '#1e293b' : '#e2e8f0'}`, padding: "16px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <div style={{ width: "10px", height: "10px", borderRadius: "50%", background: batchProcessing ? "#10b981" : "#6c63ff", animation: batchProcessing ? "pulse 1.5s infinite" : "none" }} />
+                <SecLabel icon="📋" style={{ marginBottom: 0 }}>Production Activity Log</SecLabel>
+              </div>
+              <div style={{ display: "flex", gap: "10px" }}>
+                <button onClick={() => {
+                  const text = batchLogs.map(l => `[${l.time}] ${l.msg}`).join('\n');
+                  navigator.clipboard.writeText(text);
+                  addBatchLog("📋 Copied to clipboard!");
+                }} style={{ background: "none", border: "none", color: "#6c63ff", fontSize: "11px", fontWeight: 700, cursor: "pointer" }}>Copy Full Log</button>
+                <button onClick={() => addBatchLog("__CLEAR__")} style={{ background: "none", border: "none", color: "#94a3b8", fontSize: "11px", fontWeight: 700, cursor: "pointer" }}>Clear</button>
+              </div>
+            </div>
+
+            {batchProcessing && batchProgress.total > 0 && (
+              <div style={{ marginBottom: "16px", padding: "12px", background: dm ? "#1e293b" : "#fff", borderRadius: "10px", border: `1px solid ${dm ? "#334155" : "#e2e8f0"}` }}>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "12px", marginBottom: "6px", fontWeight: 700 }}>
+                  <span style={{ color: dm ? "#94a3b8" : "#64748b" }}>Batch Progress</span>
+                  <span style={{ color: accent }}>{Math.round((batchProgress.current / batchProgress.total) * 100)}%</span>
+                </div>
+                <div style={{ height: "6px", background: dm ? "#0f172a" : "#f1f5f9", borderRadius: "3px", overflow: "hidden" }}>
+                  <div style={{ height: "100%", width: `${(batchProgress.current / batchProgress.total) * 100}%`, background: "linear-gradient(90deg, #6c63ff, #a78bfa)", transition: "width 0.3s ease" }} />
+                </div>
+                <div style={{ marginTop: "6px", fontSize: "11px", color: "#94a3b8" }}>
+                  Currently processing: <span style={{ fontWeight: 600, color: dm ? "#cbd5e1" : "#334155" }}>{batchProgress.currentFile}</span>
+                </div>
+              </div>
+            )}
+
+            <div style={{ 
+              maxHeight: "250px", overflowY: "auto", background: dm ? '#020617' : '#fff', 
+              borderRadius: "8px", border: `1px solid ${dm ? '#1e293b' : '#e2e8f0'}`, padding: "10px",
+              display: "flex", flexDirection: "column", gap: "6px", fontFamily: "monospace"
+            }}>
+              {batchLogs.slice().reverse().map((log, i) => (
+                <div key={i} style={{ 
+                  fontSize: "11px", lineHeight: "1.5",
+                  color: log.type === 'error' ? '#ef4444' : log.type === 'success' ? '#10b981' : (dm ? '#94a3b8' : '#64748b'),
+                  borderLeft: `3px solid ${log.type === 'error' ? '#ef4444' : log.type === 'success' ? '#10b981' : 'transparent'}`,
+                  paddingLeft: "10px"
+                }}>
+                  <span style={{ opacity: 0.5, marginRight: "8px" }}>[{log.time}]</span>
+                  {log.msg}
+                </div>
+              ))}
+              {batchLogs.length === 0 && (
+                <div style={{ textAlign: "center", padding: "20px", color: "#64748b", fontStyle: "italic" }}>No production logs yet. Start processing to see activity.</div>
+              )}
+            </div>
+          </Card>
+        )}
       </div>
     </div>
   );
