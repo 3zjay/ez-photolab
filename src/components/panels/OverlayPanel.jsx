@@ -1,5 +1,5 @@
 
-import { SL, Empty } from "../ui/common";
+import { SL, Empty, SmoothSlider } from "../ui/common";
 import { FONTS, FONT_MAP } from "../../constants";
 
 export function OverlayPanel({ image, texts, selText, setSelText, addText, deleteText, updateText, dm, cardBg, cardBdr, inputSt }) {
@@ -48,14 +48,14 @@ export function OverlayPanel({ image, texts, selText, setSelText, addText, delet
                                         <span style={{ fontSize: "11px", fontWeight: 600, color: "#aaa", textTransform: "uppercase", letterSpacing: ".06em" }}>Size</span>
                                         <span style={{ fontSize: "12px", color: "#6c63ff", fontWeight: 600 }}>{selectedText.fontSize}px</span>
                                     </div>
-                                    <input type="range" className="sl" min={12} max={200} step={2} value={selectedText.fontSize} style={{ "--v": `${((selectedText.fontSize - 12) / 188) * 100}%` }} onChange={e => updateText(selText, "fontSize", +e.target.value)} />
+                                    <SmoothSlider min={12} max={200} step={2} value={selectedText.fontSize} defaultValue={48} onChange={v => updateText(selText, "fontSize", v)} />
                                 </div>
                                 <div style={{ marginBottom: "10px" }}>
                                     <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "5px" }}>
                                         <span style={{ fontSize: "11px", fontWeight: 600, color: "#aaa", textTransform: "uppercase", letterSpacing: ".06em" }}>Position Y</span>
                                         <span style={{ fontSize: "12px", color: "#6c63ff", fontWeight: 600 }}>{selectedText.y}%</span>
                                     </div>
-                                    <input type="range" className="sl" min={5} max={95} step={1} value={selectedText.y} style={{ "--v": `${((selectedText.y - 5) / 90) * 100}%` }} onChange={e => updateText(selText, "y", +e.target.value)} />
+                                    <SmoothSlider min={5} max={95} step={1} value={selectedText.y} defaultValue={50} onChange={v => updateText(selText, "y", v)} />
                                 </div>
                                 <div style={{ display: "flex", gap: "8px" }}>
                                     {[{ k: "bold", l: "Bold" }, { k: "italic", l: "Italic" }, { k: "stroke", l: "Outline" }].map(o => (

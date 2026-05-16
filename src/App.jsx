@@ -6,7 +6,7 @@ import { OverlayPanel } from "./components/panels/OverlayPanel";
 import { EditPanel } from "./components/panels/EditPanel";
 import { RawBatchPanel } from "./components/panels/RawBatchPanel";
 import { Preview } from "./Preview";
-import { Empty, SL, AB, Row, Spin } from "./components/ui/common";
+import { Empty, SL, AB, Row, Spin, SmoothSlider } from "./components/ui/common";
 import { DEFAULT_FILTERS, FB_MODES, PRESETS } from "./constants";
 import {
   toCSSFilter, toTransformCSS, saveFile, canvasToBlob, loadImageFromSrc,
@@ -1391,7 +1391,7 @@ export default function App() {
               </div>
               {exportFmt !== "png" && (<>
                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}><SL>Quality</SL><span style={{ fontSize: "13px", fontWeight: 700, color: "#6c63ff" }}>{exportQ}%</span></div>
-                <input type="range" className="sl" min={70} max={100} step={1} value={exportQ} style={{ "--v": `${((exportQ - 70) / 30) * 100}%`, marginBottom: "16px" }} onChange={e => setExportQ(+e.target.value)} />
+                <SmoothSlider min={70} max={100} step={1} value={exportQ} defaultValue={92} onChange={setExportQ} style={{ marginBottom: "16px" }} />
               </>)}
               <SL>Resolution</SL>
               <div style={{ display: "flex", gap: "6px", marginBottom: "10px", flexWrap: "wrap" }}>

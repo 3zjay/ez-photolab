@@ -1,4 +1,4 @@
-import { SL, Empty, Row, Spin, PBar, AB } from "../ui/common";
+import { SL, Empty, Row, Spin, PBar, AB, SmoothSlider } from "../ui/common";
 import { BG_COLORS } from "../../constants";
 
 export function ToolsPanel({ image, handleRemoveBg, bgStatus, bgProgress, bgSubUrl, bgMode, setBgMode, cardBdr, cardBg, dm, bgColor, setBgColor, bgBlur, setBgBlur, bgResult, saveFile, falApiKey, saveFalKey, claidApiKey, saveClaidKey, aiRemoveBrush, setAiRemoveBrush, toCSSFilter, filters, initMaskCanvas, maskCanvasRef, maskDrawingRef, drawMask, aiMaskReady, handleAiRemove, aiRemoveStatus, aiRemoveLog, aiRemoveResult, applyAiResult }) {
@@ -41,7 +41,7 @@ export function ToolsPanel({ image, handleRemoveBg, bgStatus, bgProgress, bgSubU
                                 <span style={{ fontSize: "11px", fontWeight: 600, color: "#aaa", textTransform: "uppercase", letterSpacing: ".06em" }}>Blur</span>
                                 <span style={{ fontSize: "12px", color: "#6c63ff", fontWeight: 600 }}>{bgBlur}px</span>
                             </div>
-                            <input type="range" className="sl" min={2} max={40} step={1} value={bgBlur} style={{ "--v": `${((bgBlur - 2) / 38) * 100}%` }} onChange={e => setBgBlur(+e.target.value)} />
+                            <SmoothSlider min={2} max={40} step={1} value={bgBlur} defaultValue={12} onChange={setBgBlur} />
                         </div>
                     )}
                     {bgResult && (<>
@@ -92,9 +92,7 @@ export function ToolsPanel({ image, handleRemoveBg, bgStatus, bgProgress, bgSubU
                             <span style={{ fontSize: "12px", color: dm ? '#ccc' : '#555' }}>Brush size</span>
                             <span style={{ fontSize: "12px", fontWeight: 700, color: "#6c63ff" }}>{aiRemoveBrush}px</span>
                         </div>
-                        <input type="range" className="sl" min={10} max={120} step={5} value={aiRemoveBrush}
-                            style={{ "--v": `${((aiRemoveBrush - 10) / 110) * 100}%` }}
-                            onChange={e => setAiRemoveBrush(+e.target.value)} />
+                        <SmoothSlider min={10} max={120} step={5} value={aiRemoveBrush} defaultValue={40} onChange={setAiRemoveBrush} />
                     </div>
                     <div style={{ position: "relative", borderRadius: "8px", overflow: "hidden", border: `1.5px solid ${aiMaskReady ? '#f59e0b' : cardBdr}`, cursor: "crosshair", lineHeight: 0, userSelect: "none", touchAction: "none" }}
                         onMouseDown={e => { maskDrawingRef.current = true; drawMask(e, e.currentTarget); }}

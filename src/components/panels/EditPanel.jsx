@@ -1,4 +1,4 @@
-import { SL, Row, Spin, PBar, AB } from "../ui/common";
+import { SL, Row, Spin, PBar, AB, SmoothSlider } from "../ui/common";
 import { PRESETS, FILTER_GROUPS, COLOR_FILTERS, DEFAULT_FILTERS } from "../../constants";
 
 export function EditPanel({
@@ -32,16 +32,15 @@ export function EditPanel({
                     ))}
                 </div>
                 {COLOR_FILTERS.filter(f => f.group === filterGroup).map(f => {
-                    const val = filters[f.key]; const pct = ((val - f.min) / (f.max - f.min)) * 100; const changed = val !== f.default;
+                    const val = filters[f.key]; const changed = val !== f.default;
                     return (
                         <div key={f.key} style={{ marginBottom: "16px" }}>
                             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "5px" }}>
                                 <span style={{ fontSize: "13px", fontWeight: 500, color: changed ? "#6c63ff" : dm ? '#ccc' : '#666' }}>{f.label}</span>
                                 <span style={{ fontSize: "12px", color: "#bbb", fontVariantNumeric: "tabular-nums" }}>{val > 0 && f.default === 0 ? "+" : ""}{Number.isInteger(val) ? val : val.toFixed(1)}{f.unit}</span>
                             </div>
-                            <input type="range" className="sl" min={f.min} max={f.max} step={f.max <= 20 ? .5 : 1} value={val}
-                                style={{ "--v": `${pct}%` }} onChange={e => setFilters(p => ({ ...p, [f.key]: parseFloat(e.target.value) }))}
-                                onDoubleClick={() => setFilters(p => ({ ...p, [f.key]: f.default }))} />
+                            <SmoothSlider min={f.min} max={f.max} step={f.max <= 20 ? 0.5 : 1} value={val} defaultValue={f.default}
+                                onChange={v => setFilters(p => ({ ...p, [f.key]: v }))} />
                         </div>
                     );
                 })}
@@ -118,24 +117,21 @@ export function EditPanel({
                                         <span style={{ fontSize: "12px", color: dm ? '#ccc' : '#555' }}>Smooth</span>
                                         <span style={{ fontSize: "12px", fontWeight: 700, color: "#6c63ff" }}>{aiBeautySmooth}</span>
                                     </div>
-                                    <input type="range" className="sl" min={0} max={10} step={1} value={aiBeautySmooth}
-                                        style={{ "--v": `${(aiBeautySmooth / 10) * 100}%` }} onChange={e => setAiBeautySmooth(+e.target.value)} />
+                                    <SmoothSlider min={0} max={10} step={1} value={aiBeautySmooth} defaultValue={5} onChange={setAiBeautySmooth} />
                                 </div>
                                 <div>
                                     <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
                                         <span style={{ fontSize: "12px", color: dm ? '#ccc' : '#555' }}>Clarity</span>
                                         <span style={{ fontSize: "12px", fontWeight: 700, color: "#6c63ff" }}>{aiBeautyClarity}</span>
                                     </div>
-                                    <input type="range" className="sl" min={0} max={10} step={1} value={aiBeautyClarity}
-                                        style={{ "--v": `${(aiBeautyClarity / 10) * 100}%` }} onChange={e => setAiBeautyClarity(+e.target.value)} />
+                                    <SmoothSlider min={0} max={10} step={1} value={aiBeautyClarity} defaultValue={5} onChange={setAiBeautyClarity} />
                                 </div>
                                 <div>
                                     <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
                                         <span style={{ fontSize: "12px", color: dm ? '#ccc' : '#555' }}>Glow</span>
                                         <span style={{ fontSize: "12px", fontWeight: 700, color: "#6c63ff" }}>{aiBeautyGlow}</span>
                                     </div>
-                                    <input type="range" className="sl" min={0} max={10} step={1} value={aiBeautyGlow}
-                                        style={{ "--v": `${(aiBeautyGlow / 10) * 100}%` }} onChange={e => setAiBeautyGlow(+e.target.value)} />
+                                    <SmoothSlider min={0} max={10} step={1} value={aiBeautyGlow} defaultValue={3} onChange={setAiBeautyGlow} />
                                 </div>
                             </div>
                             <AB onClick={runBrowserBeauty}

@@ -1,3 +1,5 @@
+import { useRef, useEffect, useCallback, memo } from "react";
+
 export const SL = ({ children }) => <div className="text-[11px] font-semibold text-gray-400 tracking-wider uppercase mb-2">{children}</div>;
 export const Empty = ({ children }) => (
   <div className="text-xs text-gray-400 text-center p-8 rounded-2xl glass-panel border border-dashed border-gray-500/30 flex flex-col items-center justify-center gap-3 transition-all hover:bg-white/5 cursor-pointer">
@@ -14,7 +16,7 @@ export const PBar = ({ value }) => (
     <div style={{ width: `${value}%` }} className="h-full bg-gradient-to-r from-indigo-500 to-purple-400 transition-all duration-300 rounded-full shadow-[0_0_10px_rgba(99,102,241,0.5)]" />
   </div>
 );
-export function AB({ children, onClick, disabled, color = "purple", textColor = "#fff", style = {}, className="" }) {
+export function AB({ children, onClick, disabled, color = "purple", textColor = "#fff", style = {}, className = "" }) {
   const isPurple = color === "purple";
   return (
     <button
@@ -33,3 +35,68 @@ export function AB({ children, onClick, disabled, color = "purple", textColor = 
     </button>
   );
 }
+
+/**
+ * SmoothSlider — universal 60fps slider used across the entire app.
+ * Zero React re-renders during drag. Track fill updates imperatively via DOM ref.
+ * Commits value to state only on pointerUp. Double-click resets to defaultValue.
+ *
+ * Props:
+ *   min, max, step        — range bounds
+ *   value                 — controlled value (synced via useEffect when changed externally)
+ *   defaultValue          — value to reset to on double-click
+ *   onChange(v: number)   — called on pointerUp with the final numeric value
+ *   style                 — extra styles on the <input>
+ */
+export const SmoothSlider = memo(function SmoothSlider({
+  min, max, step = 1, value, defaultValue, onChange, style = {}
+}) {
+  const inputRef = useRef(null);
+  const resetVal = defaultValue !== undefined ? defaultValue : value;
+
+  // Sync externally-controlled value → DOM (preset apply, reset all, etc.)
+  useEffect(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    el.value = value;
+    const pct = ((value - min) / (max - min)) * 100;
+    el.style.setProperty('--v', `${pct.toFixed(2)}%`);
+  }, [value, min, max]);
+
+  // During drag: only update the CSS track fill. Zero React re-renders.
+  const onInput = useCallback((e) => {
+    const pct = ((parseFloat(e.target.value) - min) / (max - min)) * 100;
+    e.target.style.setProperty('--v', `${pct.toFixed(2)}%`);
+  }, [min, max]);
+
+  // Commit to React state only when the user releases the mouse/touch
+  const onPointerUp = useCallback((e) => {
+    onChange(parseFloat(e.target.value));
+  }, [onChange]);
+
+  // Double-click resets to default
+  const onDoubleClick = useCallback(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    el.value = resetVal;
+    const pct = ((resetVal - min) / (max - min)) * 100;
+    el.style.setProperty('--v', `${pct.toFixed(2)}%`);
+    onChange(resetVal);
+  }, [resetVal, min, max, onChange]);
+
+  const pct = ((value - min) / (max - min)) * 100;
+
+  return (
+    <input
+      ref={inputRef}
+      type="range"
+      className="sl"
+      min={min} max={max} step={step}
+      defaultValue={value}
+      style={{ '--v': `${pct.toFixed(2)}%`, ...style }}
+      onInput={onInput}
+      onPointerUp={onPointerUp}
+      onDoubleClick={onDoubleClick}
+    />
+  );
+});

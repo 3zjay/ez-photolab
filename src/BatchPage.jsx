@@ -1,5 +1,5 @@
 import { useMemo, useRef, useEffect, useCallback, memo } from "react";
-import { Spin } from "./components/ui/common";
+import { Spin, SmoothSlider } from "./components/ui/common";
 import { BATCH_RESIZE_PRESETS, DEFAULT_FILTERS, COLOR_FILTERS, FILTER_GROUPS, PRESETS } from "./constants";
 import { toCSSFilter } from "./utils";
 import { RawBatchPanel } from "./components/panels/RawBatchPanel";
@@ -494,7 +494,7 @@ export function BatchPage({ dm, cardBg, cardBdr, inputSt, isMobile = false,
                   <span style={{ fontSize: "11px", color: "#aaa", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".05em" }}>Quality</span>
                   <span style={{ fontSize: "12px", color: accent, fontWeight: 700 }}>{batchOutputQ}%</span>
                 </div>
-                <input type="range" className="sl" min={60} max={100} step={1} value={batchOutputQ} style={{ "--v": `${((batchOutputQ - 60) / 40) * 100}%` }} onChange={e => setBatchOutputQ(+e.target.value)} />
+                <SmoothSlider min={60} max={100} step={1} value={batchOutputQ} defaultValue={90} onChange={setBatchOutputQ} />
                 <div style={{ display: "flex", gap: "5px", marginTop: "8px" }}>
                   {[75, 85, 90, 95].map(q => (
                     <button key={q} onClick={() => setBatchOutputQ(q)}
@@ -554,7 +554,7 @@ export function BatchPage({ dm, cardBg, cardBdr, inputSt, isMobile = false,
                           <span style={{ fontSize: "12px", color: dm ? '#ccc' : '#555' }}>Smooth</span>
                           <span style={{ fontSize: "11px", color: accent, fontWeight: 700 }}>{batchAiBeautySmooth}</span>
                         </div>
-                        <input type="range" className="sl" min={1} max={10} step={1} value={batchAiBeautySmooth} style={{ "--v": `${((batchAiBeautySmooth - 1) / 9) * 100}%` }} onChange={e => setBatchAiBeautySmooth(+e.target.value)} />
+                        <SmoothSlider min={1} max={10} step={1} value={batchAiBeautySmooth} defaultValue={5} onChange={setBatchAiBeautySmooth} />
                       </div>
                       <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                          <input type="checkbox" id="baibm" checked={batchAiBeautyUseMask} onChange={e => setBatchAiBeautyUseMask(e.target.checked)} style={{ accentColor: accent }} />
@@ -642,7 +642,7 @@ export function BatchPage({ dm, cardBg, cardBdr, inputSt, isMobile = false,
                   <span style={{ fontSize: "12px", color: dm ? '#ccc' : '#555' }}>Long edge target</span>
                   <span style={{ fontSize: "13px", fontWeight: 700, color: accent }}>{batchLongEdgePx.toLocaleString()}px</span>
                 </div>
-                <input type="range" className="sl" min={400} max={8000} step={100} value={batchLongEdgePx} style={{ "--v": `${((batchLongEdgePx - 400) / 7600) * 100}%` }} onChange={e => setBatchLongEdgePx(+e.target.value)} />
+                <SmoothSlider min={400} max={8000} step={100} value={batchLongEdgePx} defaultValue={2400} onChange={setBatchLongEdgePx} />
                 <div style={{ display: "flex", gap: "5px", flexWrap: "wrap" }}>
                   {[800, 1200, 1920, 2560, 3840].map(v => (
                     <button key={v} onClick={() => setBatchLongEdgePx(v)}
@@ -690,7 +690,7 @@ export function BatchPage({ dm, cardBg, cardBdr, inputSt, isMobile = false,
                   <span style={{ fontSize: "11px", color: "#aaa", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".05em" }}>Denoise Strength</span>
                   <span style={{ fontSize: "12px", color: accent, fontWeight: 700 }}>{batchDenoiseAmt.toFixed(1)}</span>
                 </div>
-                <input type="range" className="sl" min={0.5} max={5} step={0.5} value={batchDenoiseAmt} style={{ "--v": `${((batchDenoiseAmt - 0.5) / 4.5) * 100}%` }} onChange={e => setBatchDenoiseAmt(+e.target.value)} />
+                <SmoothSlider min={0.5} max={5} step={0.5} value={batchDenoiseAmt} defaultValue={2} onChange={setBatchDenoiseAmt} />
               </div>
             )}
 
@@ -701,14 +701,14 @@ export function BatchPage({ dm, cardBg, cardBdr, inputSt, isMobile = false,
                     <span style={{ fontSize: "11px", color: "#aaa", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".05em" }}>Amount</span>
                     <span style={{ fontSize: "12px", color: accent, fontWeight: 700 }}>{batchSharpenAmt.toFixed(1)}×</span>
                   </div>
-                  <input type="range" className="sl" min={0.2} max={3} step={0.1} value={batchSharpenAmt} style={{ "--v": `${((batchSharpenAmt - 0.2) / 2.8) * 100}%` }} onChange={e => setBatchSharpenAmt(+e.target.value)} />
+                  <SmoothSlider min={0.2} max={3} step={0.1} value={batchSharpenAmt} defaultValue={1} onChange={setBatchSharpenAmt} />
                 </div>
                 <div>
                   <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "5px" }}>
                     <span style={{ fontSize: "11px", color: "#aaa", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".05em" }}>Radius</span>
                     <span style={{ fontSize: "12px", color: accent, fontWeight: 700 }}>{batchSharpenRad.toFixed(1)}px</span>
                   </div>
-                  <input type="range" className="sl" min={0.5} max={4} step={0.5} value={batchSharpenRad} style={{ "--v": `${((batchSharpenRad - 0.5) / 3.5) * 100}%` }} onChange={e => setBatchSharpenRad(+e.target.value)} />
+                  <SmoothSlider min={0.5} max={4} step={0.5} value={batchSharpenRad} defaultValue={1.5} onChange={setBatchSharpenRad} />
                 </div>
               </div>
             )}
@@ -769,14 +769,14 @@ export function BatchPage({ dm, cardBg, cardBdr, inputSt, isMobile = false,
                     <span style={{ fontSize: "12px", color: dm ? '#ccc' : '#555' }}>Size (Landscape)</span>
                     <span style={{ fontSize: "12px", color: accent, fontWeight: 700 }}>{(batchLogoScale * 100).toFixed(0)}%</span>
                   </div>
-                  <input type="range" className="sl" min={0.03} max={1.0} step={0.01} value={batchLogoScale} style={{ "--v": `${((batchLogoScale - 0.03) / 0.97) * 100}%` }} onChange={e => setBatchLogoScale(+e.target.value)} />
+                  <SmoothSlider min={0.03} max={1.0} step={0.01} value={batchLogoScale} defaultValue={0.2} onChange={setBatchLogoScale} />
                 </div>
                 <div>
                   <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "5px" }}>
                     <span style={{ fontSize: "12px", color: dm ? '#ccc' : '#555' }}>Size (Portrait)</span>
                     <span style={{ fontSize: "12px", color: accent, fontWeight: 700 }}>{(batchLogoScalePortrait * 100).toFixed(0)}%</span>
                   </div>
-                  <input type="range" className="sl" min={0.03} max={1.0} step={0.01} value={batchLogoScalePortrait} style={{ "--v": `${((batchLogoScalePortrait - 0.03) / 0.97) * 100}%` }} onChange={e => setBatchLogoScalePortrait(+e.target.value)} />
+                  <SmoothSlider min={0.03} max={1.0} step={0.01} value={batchLogoScalePortrait} defaultValue={0.25} onChange={setBatchLogoScalePortrait} />
                 </div>
               </div>
               <div>
@@ -784,14 +784,14 @@ export function BatchPage({ dm, cardBg, cardBdr, inputSt, isMobile = false,
                   <span style={{ fontSize: "12px", color: dm ? '#ccc' : '#555' }}>Opacity</span>
                   <span style={{ fontSize: "12px", color: accent, fontWeight: 700 }}>{Math.round(batchLogoOpacity * 100)}%</span>
                 </div>
-                <input type="range" className="sl" min={0.1} max={1} step={0.05} value={batchLogoOpacity} style={{ "--v": `${((batchLogoOpacity - 0.1) / 0.9) * 100}%` }} onChange={e => setBatchLogoOpacity(+e.target.value)} />
+                <SmoothSlider min={0.1} max={1} step={0.05} value={batchLogoOpacity} defaultValue={1} onChange={setBatchLogoOpacity} />
               </div>
               <div>
                 <div style={{ fontSize: "12px", color: dm ? '#ccc' : '#555', marginBottom: "6px", fontWeight: 500 }}>Margin from edge</div>
                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "5px" }}>
                   <span style={{ fontSize: "11px", color: "#aaa" }}>{batchLogoMargin}px</span>
                 </div>
-                <input type="range" className="sl" min={0} max={100} step={5} value={batchLogoMargin} style={{ "--v": `${(batchLogoMargin / 100) * 100}%` }} onChange={e => setBatchLogoMargin(+e.target.value)} />
+                <SmoothSlider min={0} max={100} step={5} value={batchLogoMargin} defaultValue={20} onChange={setBatchLogoMargin} />
               </div>
             </Card>
 
@@ -849,21 +849,21 @@ export function BatchPage({ dm, cardBg, cardBdr, inputSt, isMobile = false,
                       <span style={{ fontSize: "11px", color: dm ? '#ccc' : '#555' }}>Smooth</span>
                       <span style={{ fontSize: "11px", fontWeight: 700, color: accent }}>{batchAiBeautySmooth}</span>
                     </div>
-                    <input type="range" className="sl" min={0} max={10} step={1} value={batchAiBeautySmooth} style={{ "--v": `${(batchAiBeautySmooth / 10) * 100}%` }} onChange={e => setBatchAiBeautySmooth(+e.target.value)} />
+                    <SmoothSlider min={0} max={10} step={1} value={batchAiBeautySmooth} defaultValue={5} onChange={setBatchAiBeautySmooth} />
                   </div>
                   <div>
                     <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
                       <span style={{ fontSize: "11px", color: dm ? '#ccc' : '#555' }}>Clarity</span>
                       <span style={{ fontSize: "11px", fontWeight: 700, color: accent }}>{batchAiBeautyClarity}</span>
                     </div>
-                    <input type="range" className="sl" min={0} max={10} step={1} value={batchAiBeautyClarity} style={{ "--v": `${(batchAiBeautyClarity / 10) * 100}%` }} onChange={e => setBatchAiBeautyClarity(+e.target.value)} />
+                    <SmoothSlider min={0} max={10} step={1} value={batchAiBeautyClarity} defaultValue={5} onChange={setBatchAiBeautyClarity} />
                   </div>
                   <div>
                     <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
                       <span style={{ fontSize: "11px", color: dm ? '#ccc' : '#555' }}>Glow</span>
                       <span style={{ fontSize: "11px", fontWeight: 700, color: accent }}>{batchAiBeautyGlow}</span>
                     </div>
-                    <input type="range" className="sl" min={0} max={10} step={1} value={batchAiBeautyGlow} style={{ "--v": `${(batchAiBeautyGlow / 10) * 100}%` }} onChange={e => setBatchAiBeautyGlow(+e.target.value)} />
+                    <SmoothSlider min={0} max={10} step={1} value={batchAiBeautyGlow} defaultValue={3} onChange={setBatchAiBeautyGlow} />
                   </div>
                 </div>
               )}

@@ -1,5 +1,5 @@
 
-import {SL, Empty, AB} from "../ui/common";
+import { SL, Empty, AB, SmoothSlider } from "../ui/common";
 
 export function AdjustPanel({ image, setRotation, setFlipH, setFlipV, rotation, flipH, flipV, cropMode, setCropMode, setCropBox, cropAspect, setCropAspect, applyCrop, dm, cardBg, cardBdr }) {
     const setCropAspectRatio = ratio => {
@@ -34,7 +34,7 @@ export function AdjustPanel({ image, setRotation, setFlipH, setFlipV, rotation, 
                             <span style={{ fontSize: "13px", fontWeight: 500, color: rotation !== 0 ? "#6c63ff" : dm ? '#ccc' : '#666' }}>Fine Rotate</span>
                             <span style={{ fontSize: "12px", color: "#bbb" }}>{rotation}°</span>
                         </div>
-                        <input type="range" className="sl" min={-180} max={180} step={1} value={rotation} style={{ "--v": `${((rotation + 180) / 360) * 100}%` }} onChange={e => setRotation(+e.target.value)} />
+                        <SmoothSlider min={-180} max={180} step={1} value={rotation} defaultValue={0} onChange={setRotation} />
                         {rotation !== 0 && <button onClick={() => setRotation(0)} style={{ marginTop: "6px", fontSize: "11px", color: "#6c63ff", background: "none", border: "none", cursor: "pointer", fontWeight: 600 }}>Reset rotation</button>}
                     </div>
                     <div>
