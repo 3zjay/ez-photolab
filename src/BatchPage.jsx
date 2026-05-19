@@ -43,6 +43,14 @@ const BatchFilterSlider = memo(function BatchFilterSlider({ f, value, setFilters
     setFilters(p => ({ ...p, [f.key]: v }));
   }, [f, setFilters]);
 
+  const onKeyUp = useCallback(e => {
+    const navKeys = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End'];
+    if (navKeys.includes(e.key)) {
+      const v = parseFloat(e.target.value);
+      setFilters(p => ({ ...p, [f.key]: v }));
+    }
+  }, [f, setFilters]);
+
   const onDoubleClick = useCallback(() => {
     if (inputRef.current) inputRef.current.value = f.default;
     const p = ((f.default - f.min) / (f.max - f.min)) * 100;
@@ -73,6 +81,7 @@ const BatchFilterSlider = memo(function BatchFilterSlider({ f, value, setFilters
         style={{ '--v': `${pct}%` }}
         onInput={onInput}
         onPointerUp={onPointerUp}
+        onKeyUp={onKeyUp}
         onDoubleClick={onDoubleClick}
       />
     </div>

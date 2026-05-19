@@ -74,6 +74,14 @@ export const SmoothSlider = memo(function SmoothSlider({
     onChange(parseFloat(e.target.value));
   }, [onChange]);
 
+  // Commit on keyboard adjust finalization (arrow keys, home, end, page keys)
+  const onKeyUp = useCallback((e) => {
+    const navKeys = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End'];
+    if (navKeys.includes(e.key)) {
+      onChange(parseFloat(e.target.value));
+    }
+  }, [onChange]);
+
   // Double-click resets to default
   const onDoubleClick = useCallback(() => {
     const el = inputRef.current;
@@ -96,6 +104,7 @@ export const SmoothSlider = memo(function SmoothSlider({
       style={{ '--v': `${pct.toFixed(2)}%`, ...style }}
       onInput={onInput}
       onPointerUp={onPointerUp}
+      onKeyUp={onKeyUp}
       onDoubleClick={onDoubleClick}
     />
   );

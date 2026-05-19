@@ -102,6 +102,37 @@ export default function App() {
     setBatchLogs(prev => [{ msg, type, time: new Date().toLocaleTimeString() }, ...prev].slice(0, 100));
   }, []);
 
+  // Deterministic memory revocation for single-image background removal
+  useEffect(() => {
+    return () => {
+      if (bgSubUrl) {
+        URL.revokeObjectURL(bgSubUrl);
+      }
+    };
+  }, [bgSubUrl]);
+
+  // Deterministic memory revocation for RAW Batch Queue file previews
+  const prevRawUrlsRef = useRef([]);
+  useEffect(() => {
+    const currentUrls = batchRawFiles.map(f => f.previewUrl).filter(Boolean);
+    // Revoke any preview URLs that were removed from the queue
+    prevRawUrlsRef.current.forEach(url => {
+      if (!currentUrls.includes(url)) {
+        URL.revokeObjectURL(url);
+      }
+    });
+    prevRawUrlsRef.current = currentUrls;
+  }, [batchRawFiles]);
+
+  // Clean up all RAW preview URLs on component unmount
+  useEffect(() => {
+    return () => {
+      prevRawUrlsRef.current.forEach(url => {
+        URL.revokeObjectURL(url);
+      });
+    };
+  }, []);
+
   // AI Features state — key migration: old code stored Claid key under 'fal-api-key'
   const [falApiKey, setFalApiKey] = useState(() => localStorage.getItem('fal-ai-key') || '');
   const [claidApiKey, setClaidApiKey] = useState(() => {
@@ -410,6 +441,7 @@ export default function App() {
           const result = await decodeRaw(buffer, () => {});
           origUrl = result.url;
           orientation = result.orientation || 1;
+          setBatchRawFiles(prev => prev.map((f, i) => i === idx ? { ...f, previewUrl: result.url, metadata: { ...f.metadata, orientation } } : f));
         }
       } else {
         origUrl = await new Promise((resolve, reject) => {
@@ -724,7 +756,13 @@ export default function App() {
           const result = await decodeRaw(buffer, (msg) => addBatchLog(`[${name}] ${msg}`, "info"));
           orientation = result.orientation || 1;
           addBatchLog(`  -> JIT Decode finished. Loading buffer image (Orient: ${orientation})...`, "info");
-          sourceImg = await loadImageFromSrc(result.url);
+          try {
+            sourceImg = await loadImageFromSrc(result.url);
+          } finally {
+            if (result.url && result.url.startsWith('blob:')) {
+              URL.revokeObjectURL(result.url);
+            }
+          }
         }
 
         if (!sourceImg) {
