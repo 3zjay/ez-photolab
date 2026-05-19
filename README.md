@@ -10,6 +10,15 @@ Built with React + Vite — runs entirely in your browser with zero server costs
 
 ---
 
+## 🚀 What's New in v2.1.0
+
+- **Universal RAW Processing**: Supports Canon (`.cr2`/`.cr3`), Sony (`.arw`), Nikon (`.nef`), Adobe (`.dng`), and 800+ other formats by combining super-fast embedded TIFF JPEG extraction with a powerful `libraw-wasm` WebAssembly fallback compiler thread.
+- **Keyboard Slider Accessibility**: Full arrow and navigation keys (`ArrowLeft`/`Right`, `ArrowDown`/`Up`, `PageUp`/`Down`, `Home`/`End`) are supported on all range sliders. Slider state is immediately and smoothly committed on `onKeyUp` while preserving 60fps uncontrolled drag rendering.
+- **Deterministic Memory Cleanup**: Zero native browser memory leaks. Built-in automatic `URL.revokeObjectURL` lifecycle management reactive to background removals, RAW batch queues (on file removal, queue clearing, and unmounting), and JIT-decoded RAW loops using try-finally protection blocks.
+
+---
+
+
 ## 🖼️ What It Does
 
 PHOTOlab V2 is a full-featured photo editing suite that runs 100% inside your web browser. No accounts, no uploads, no cloud — your photos stay on your device. From single-photo retouching to processing hundreds of Nikon RAW files in one click, PHOTOlab covers the entire photography workflow.
@@ -45,7 +54,7 @@ All AI tools run **locally on your device** using WebAssembly and the Canvas API
 
 ### 📦 Batch Processor
 
-Process an entire folder of standard photos **or Nikon RAW (.NEF/.sRAW) files** in one run.
+Process an entire folder of standard photos **or RAW (.CR2, .CR3, .NEF, .ARW, .DNG, etc.) files** in one run.
 
 #### Standard Batch (JPEG / PNG / WebP)
 - **Folder-based** — select an input folder and output folder via the File System Access API
@@ -58,8 +67,9 @@ Process an entire folder of standard photos **or Nikon RAW (.NEF/.sRAW) files** 
 - **Output** — JPEG/PNG/WebP with quality slider, custom filename prefix/suffix
 - **Quick Combos** — One-click "Product", "Portrait", "Landscape", "Low-Light" presets
 
-#### Nikon RAW Batch (.NEF / .sRAW)
-- **Embedded JPEG extraction** — pulls the full-resolution embedded preview from each NEF file, preserving Nikon's native colour science and high-ISO quality
+#### Universal RAW Batch (.NEF / .CR2 / .CR3 / .ARW / .DNG / etc.)
+- **Multi-Brand Embedded JPEG extraction** — pulls the full-resolution embedded preview from Canon, Nikon, Sony, and Adobe DNG files, preserving native camera color science and high-ISO sensor quality
+- **WASM-Powered Development Fallback** — decodes and develops raw sensor data for over 800+ legacy formats using the high-performance `libraw-wasm` WebAssembly engine in a background Web Worker
 - **EXIF orientation correction** — reads the master TIFF/EXIF header to auto-rotate portrait shots with no user intervention
 - **Dual-scale watermarking** — independent logo width % controls for Landscape vs. Portrait images, auto-detected at render time
 - **Full pipeline** — same resize, sharpen, denoise, watermark, and AI enhancement stack as standard batch
@@ -122,22 +132,25 @@ Output lands in `dist/` — drop it on Vercel, Netlify, GitHub Pages, or any sta
 | **AI / ML** | MediaPipe Tasks Vision (WASM / WebGPU) |
 | **Background Removal** | `@imgly/background-removal` |
 | **Image Processing** | Canvas API — pixel-level ImageData manipulation |
-| **RAW Decoding** | Embedded JPEG extraction from NEF TIFF structure |
+| **RAW Decoding** | `libraw-wasm` WebAssembly + TIFF Embedded JPEG Extraction |
 | **File System** | File System Access API (folder read/write, no uploads) |
 
 ### Key Design Decisions
 
-**60fps SmoothSlider**  
-Every slider in the app uses a shared `SmoothSlider` component that operates as an *uncontrolled* input during drag. The CSS track fill (`--v`) and value label are updated imperatively via DOM refs — zero React re-renders. State is committed on `pointerUp` only. Double-click resets to `defaultValue`.
+**60fps Accessible SmoothSlider**  
+Every slider in the app (`SmoothSlider` and `BatchFilterSlider`) operates as an *uncontrolled* input during drag. The CSS track fill (`--v`) and value label are updated imperatively via DOM refs — zero React re-renders. Full keyboard accessibility handles navigation (`ArrowLeft`/`Right`, `PageUp`/`Down`, `Home`/`End`) and commits changes immediately on `onKeyUp`. Drag pointer releases commit changes on `pointerUp`. Double-click resets to `defaultValue`.
 
 **Two-layer Batch Preview**  
 The batch live preview applies CSS filters (`brightness`, `contrast`, `saturation`, etc.) directly to the preview `<img>` tag at 60fps (GPU-accelerated, same as the Edit tab). Heavy operations — watermark compositing, AI effects — use a debounced (300ms) JPEG encoder that only fires when those settings change.
 
-**Embedded Preview RAW Pipeline**  
-Rather than decoding raw sensor data in the browser (slow, lossy), the RAW engine finds and extracts the full-resolution embedded JPEG from the NEF file's TIFF structure. This gives Nikon's native colour science at full speed.
+**Hybrid RAW Decoding Pipeline**  
+Rather than decoding raw sensor data in the browser (slow, lossy), the RAW engine first deep-scans the TIFF structure to extract the full-resolution embedded JPEG. If no large preview is found, it falls back to developing raw sensor data via a custom background worker proxy compiling the `libraw-wasm` WebAssembly module.
 
 **EXIF Orientation**  
 The RAW engine reads the orientation tag directly from the TIFF IFD, then applies the correct canvas transform matrix before compositing — so portrait shots always appear correctly rotated.
+
+**Deterministic Memory Revocation**  
+To prevent progressive browser memory leaks from high-resolution image editing, we implement reactive hooks that cleanly execute `URL.revokeObjectURL` for single-image background removals and batch-queued RAW items. In addition, the JIT-processing loop uses `try-finally` blocks to guarantee immediate URL release as soon as preview canvas elements are painted.
 
 ---
 
