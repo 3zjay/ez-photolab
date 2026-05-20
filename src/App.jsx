@@ -120,6 +120,58 @@ export function getTabIcon(id, isActive, dm) {
 export default function App() {
   const [image, setImage] = useState(null);
   const [filters, setFilters] = useState(DEFAULT_FILTERS);
+  
+  // PWA INSTALL STATE & LOGIC
+  const [deferredPrompt, setDeferredPrompt] = useState(null);
+  const [showPwaGuide, setShowPwaGuide] = useState(false);
+  const [isIOS, setIsIOS] = useState(false);
+  const [isInstalled, setIsInstalled] = useState(false);
+
+  useEffect(() => {
+    // Detect iOS devices
+    const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+    setIsIOS(ios);
+
+    const checkInstalled = () => {
+      const isStandalone = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone;
+      setIsInstalled(isStandalone);
+    };
+    checkInstalled();
+    
+    const mediaQuery = window.matchMedia('(display-mode: standalone)');
+    mediaQuery.addEventListener('change', checkInstalled);
+
+    const handleBeforeInstall = (e) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstall);
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstall);
+      mediaQuery.removeEventListener('change', checkInstalled);
+    };
+  }, []);
+
+  const handleInstallClick = async () => {
+    if (isInstalled) {
+      return;
+    }
+    if (isIOS) {
+      setShowPwaGuide(true);
+      return;
+    }
+    if (!deferredPrompt) {
+      // Fallback: show the guide overlay if native prompt is not active
+      setShowPwaGuide(true);
+      return;
+    }
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    console.log(`User installation choice outcome: ${outcome}`);
+    setDeferredPrompt(null);
+  };
+
   const [rotation, setRotation] = useState(0);
   const [flipH, setFlipH] = useState(false);
   const [flipV, setFlipV] = useState(false);
@@ -1447,6 +1499,45 @@ export default function App() {
           </div>
         </div>
         <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+          {!isInstalled && (
+            <button 
+              onClick={handleInstallClick}
+              style={{
+                background: 'linear-gradient(135deg, rgba(249, 115, 22, 0.12) 0%, rgba(250, 204, 21, 0.12) 100%)',
+                border: '1px solid rgba(249, 115, 22, 0.35)',
+                borderRadius: '8px',
+                padding: '6px 12px',
+                fontSize: '12px',
+                fontWeight: 700,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+                color: '#f97316',
+                transition: 'all 0.2s ease',
+                boxShadow: '0 2px 6px rgba(249, 115, 22, 0.08)',
+                fontFamily: "'Outfit', sans-serif"
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.transform = 'scale(1.03)';
+                e.currentTarget.style.border = '1px solid rgba(249, 115, 22, 0.5)';
+                e.currentTarget.style.boxShadow = '0 3px 10px rgba(249, 115, 22, 0.15)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = 'scale(1)';
+                e.currentTarget.style.border = '1px solid rgba(249, 115, 22, 0.35)';
+                e.currentTarget.style.boxShadow = '0 2px 6px rgba(249, 115, 22, 0.08)';
+              }}
+            >
+              <span style={{ fontSize: '14px' }}>📱</span>
+              <span style={{ 
+                background: 'linear-gradient(135deg, #f97316, #facc15)',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+                fontWeight: 800
+              }}>{isMobile ? 'Install' : 'Install App'}</span>
+            </button>
+          )}
           <button onClick={() => setDarkMode(!darkMode)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '6px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all .2s', color: dm ? '#ffd43b' : '#666' }} title={dm ? 'Light Mode' : 'Dark Mode'}>
             {dm ? (
               <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -1504,7 +1595,7 @@ export default function App() {
 
       {!isMobile && (
         activeTab === "home" ? (
-          <LandingPage {...{ dm, loadImage, setActiveTab }} />
+          <LandingPage {...{ dm, loadImage, setActiveTab, handleInstallClick, deferredPrompt, isIOS, isInstalled }} />
         ) : activeTab === "batch" ? (
           <BatchPage {...{ dm, cardBg, cardBdr, inputSt, sourceHandle, outputHandle, batchImages, selectSourceFolder, selectRawSourceFolder, selectOutputFolder, batchResizeMode, setBatchResizeMode, batchResizePreset, setBatchResizePreset, batchCustomW, setBatchCustomW, batchCustomH, setBatchCustomH, batchKeepAspect, setBatchKeepAspect, batchLongEdgePx, setBatchLongEdgePx, batchAutoLevels, setBatchAutoLevels, batchAutoContrast, setBatchAutoContrast, batchSharpen, setBatchSharpen, batchSharpenAmt, setBatchSharpenAmt, batchSharpenRad, setBatchSharpenRad, batchDenoise, setBatchDenoise, batchDenoiseAmt, setBatchDenoiseAmt, batchLogo, setBatchLogo, batchLogoFile, setBatchLogoFile, handleBatchLogoUpload, batchLogoScale, setBatchLogoScale, batchLogoScalePortrait, setBatchLogoScalePortrait, batchLogoOpacity, setBatchLogoOpacity, batchLogoPos, setBatchLogoPos, batchLogoMargin, setBatchLogoMargin, batchOutputFmt, setBatchOutputFmt, batchOutputQ, setBatchOutputQ, batchPrefix, setBatchPrefix, batchSuffix, setBatchSuffix, batchProcessing, batchProgress, batchDone, handleBatchProcess, batchPreviewIdx, batchPreviewOrigUrl, batchPreviewAfterUrl, batchPreviewLoading, batchPreviewSplit, setBatchPreviewSplit, batchPreviewDragging, setBatchPreviewDragging, batchPreviewOpen, setBatchPreviewOpen, generateBatchPreview, filters, setFilters, resetAll, batchFilterGroup, setBatchFilterGroup, calcBatchDims, batchAiUpscale, setBatchAiUpscale, batchAiBeauty, setBatchAiBeauty, batchAiScale, setBatchAiScale, batchAiBeautySmooth, setBatchAiBeautySmooth, batchAiBeautyClarity, setBatchAiBeautyClarity, batchAiBeautyGlow, setBatchAiBeautyGlow, batchAiFaceRestore, setBatchAiFaceRestore, batchAiBeautyUseMask, setBatchAiBeautyUseMask, batchSection, setBatchSection, batchRawFiles, setBatchRawFiles, handleRawBatchProcess, batchLogs, addBatchLog }} />
         ) : activeTab === "cull" ? (
@@ -1524,7 +1615,7 @@ export default function App() {
       {isMobile && (
         activeTab === "home" ? (
           <div style={{ height: "calc(100vh - 52px)", overflowY: "auto" }}>
-            <LandingPage {...{ dm, loadImage, setActiveTab }} />
+            <LandingPage {...{ dm, loadImage, setActiveTab, handleInstallClick, deferredPrompt, isIOS, isInstalled }} />
           </div>
         ) : activeTab === "batch" ? (
           <div style={{ height: "calc(100vh - 52px)", overflowY: "auto" }}>
@@ -1626,6 +1717,154 @@ export default function App() {
                 {fbExporting ? <Row><Spin color="rgba(255,255,255,.7)" />Exporting...</Row> : fbDone ? "✓ Saved!" : `↓ Export · ${FB_MODES.find(m => m.id === fbMode)?.desc}`}
               </AB>
             </>)}
+          </div>
+        </div>
+      )}
+      {showPwaGuide && (
+        <div 
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(5, 5, 10, 0.75)',
+            backdropFilter: 'blur(10px)',
+            zIndex: 1000,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '20px',
+            animation: 'fadein 0.25s ease'
+          }}
+          onClick={(e) => { if (e.target === e.currentTarget) setShowPwaGuide(false); }}
+        >
+          <div 
+            style={{
+              background: dm ? '#0f172a' : '#ffffff',
+              border: `1px solid ${dm ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)'}`,
+              borderRadius: '24px',
+              width: '100%',
+              maxWidth: '500px',
+              padding: '28px',
+              boxShadow: '0 20px 50px rgba(0,0,0,0.3)',
+              position: 'relative',
+              animation: 'slideup 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)',
+              fontFamily: "'Plus Jakarta Sans', sans-serif"
+            }}
+          >
+            {/* Close Button */}
+            <button 
+              onClick={() => setShowPwaGuide(false)}
+              style={{
+                position: 'absolute',
+                top: '20px',
+                right: '20px',
+                background: dm ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)',
+                border: 'none',
+                width: '32px',
+                height: '32px',
+                borderRadius: '50%',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: dm ? '#9ca3af' : '#4b5563',
+                fontSize: '14px',
+                transition: 'all 0.15s'
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.background = dm ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}
+              onMouseLeave={(e) => e.currentTarget.style.background = dm ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'}
+            >
+              ✕
+            </button>
+
+            {/* Header */}
+            <div style={{ textAlign: 'center', marginBottom: '24px' }}>
+              <div style={{ fontSize: '32px', marginBottom: '8px' }}>📱</div>
+              <h3 style={{ 
+                fontSize: '20px', 
+                fontWeight: 800, 
+                color: dm ? '#ffffff' : '#0f172a',
+                fontFamily: "'Outfit', sans-serif",
+                letterSpacing: '-0.5px'
+              }}>
+                Install PHOTOlab Professional
+              </h3>
+              <p style={{ fontSize: '13px', color: dm ? '#94a3b8' : '#64748b', marginTop: '4px' }}>
+                Run standalone fullscreen offline with high-performance storage decoders.
+              </p>
+            </div>
+
+            {/* Content split by platform */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              {/* Apple iOS/iPadOS Column */}
+              <div 
+                style={{
+                  background: dm ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.02)',
+                  border: `1px solid ${dm ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'}`,
+                  borderRadius: '16px',
+                  padding: '16px',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
+                  <span style={{ fontSize: '18px' }}>🍎</span>
+                  <span style={{ fontSize: '14px', fontWeight: 700, color: dm ? '#f8fafc' : '#0f172a' }}>Apple iPad / iPhone (Safari)</span>
+                </div>
+                <ol style={{ fontSize: '13px', color: dm ? '#cbd5e1' : '#334155', paddingLeft: '20px', lineHeight: 1.6 }}>
+                  <li style={{ marginBottom: '6px' }}>
+                    Tap the <strong>Share</strong> button <span style={{ fontSize: '14px', verticalAlign: 'middle' }}>📤</span> in Safari.
+                  </li>
+                  <li>
+                    Scroll down and select <strong style={{ color: dm ? '#f8fafc' : '#0f172a' }}>Add to Home Screen</strong> <span style={{ fontSize: '14px', verticalAlign: 'middle' }}>➕</span>.
+                  </li>
+                </ol>
+              </div>
+
+              {/* Android / Chrome Column */}
+              <div 
+                style={{
+                  background: dm ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.02)',
+                  border: `1px solid ${dm ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'}`,
+                  borderRadius: '16px',
+                  padding: '16px',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
+                  <span style={{ fontSize: '18px' }}>🤖</span>
+                  <span style={{ fontSize: '14px', fontWeight: 700, color: dm ? '#f8fafc' : '#0f172a' }}>Android / Chrome / Desktop</span>
+                </div>
+                <ol style={{ fontSize: '13px', color: dm ? '#cbd5e1' : '#334155', paddingLeft: '20px', lineHeight: 1.6 }}>
+                  <li style={{ marginBottom: '6px' }}>
+                    Tap <strong style={{ 
+                      background: 'linear-gradient(135deg, #f97316, #facc15)',
+                      WebkitBackgroundClip: 'text',
+                      WebkitTextFillColor: 'transparent',
+                      fontWeight: 800
+                    }}>📱 Install App</strong> in the header bar.
+                  </li>
+                  <li>
+                    Confirm the installation prompt when prompted by your browser.
+                  </li>
+                </ol>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'center', marginTop: '24px' }}>
+              <button 
+                onClick={() => setShowPwaGuide(false)}
+                style={{
+                  padding: '10px 24px',
+                  background: 'linear-gradient(135deg,#6c63ff,#8b5cf6)',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '10px',
+                  fontSize: '13px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  boxShadow: '0 2px 8px rgba(108,99,255,.3)'
+                }}
+              >
+                Got it
+              </button>
+            </div>
           </div>
         </div>
       )}

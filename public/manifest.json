@@ -1,0 +1,23 @@
+{
+  "short_name": "PHOTOlab",
+  "name": "PHOTOlab Professional AI Photo Editor",
+  "description": "Professional offline RAW developer, automated focus culler, AI facial retoucher, and WebGL image processor.",
+  "icons": [
+    {
+      "src": "/logo.svg",
+      "type": "image/svg+xml",
+      "sizes": "any"
+    },
+    {
+      "src": "/logo.svg",
+      "type": "image/svg+xml",
+      "sizes": "512x512",
+      "purpose": "maskable"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#0b0f19",
+  "theme_color": "#6c63ff",
+  "display": "standalone",
+  "orientation": "any"
+}

@@ -219,7 +219,7 @@ export function CameraIcon({ size = 16, className = "" }) {
   );
 }
 
-export function LandingPage({ dm, loadImage, setActiveTab }) {
+export function LandingPage({ dm, loadImage, setActiveTab, handleInstallClick, deferredPrompt, isIOS, isInstalled }) {
   const [sliderPos, setSliderPos] = useState(50);
   const [isDraggingSlider, setIsDraggingSlider] = useState(false);
   const [activeNode, setActiveNode] = useState(null);
@@ -1018,6 +1018,206 @@ export function LandingPage({ dm, loadImage, setActiveTab }) {
             <p style={{ fontSize: "12.5px", color: dm ? "#9ca3af" : "#4b5563", lineHeight: 1.55 }}>
               Fine-tune exposure, apply studio LUT presets, restore faces, overlay watermark graphics, and download lossless JPEGs with non-destructive XMP.
             </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Premium PWA Installation Card (Section 7) */}
+      <div 
+        className="glass-panel"
+        style={{ 
+          maxWidth: "900px", 
+          width: "100%", 
+          marginTop: "60px", 
+          padding: "36px", 
+          borderRadius: "24px",
+          border: `1.5px solid ${dm ? "rgba(249, 115, 22, 0.25)" : "rgba(249, 115, 22, 0.2)"}`,
+          background: dm 
+            ? "radial-gradient(circle at top right, rgba(249, 115, 22, 0.05), rgba(11, 15, 25, 0.8))" 
+            : "radial-gradient(circle at top right, rgba(249, 115, 22, 0.03), rgba(255, 255, 255, 0.95))",
+          boxShadow: dm ? "0 10px 40px rgba(0, 0, 0, 0.3)" : "0 10px 40px rgba(108, 99, 255, 0.05)",
+          position: "relative",
+          overflow: "hidden",
+          animation: "slideup 1.0s ease"
+        }}
+      >
+        {/* Glow Effect */}
+        <div style={{
+          position: "absolute",
+          top: "-50px",
+          right: "-50px",
+          width: "150px",
+          height: "150px",
+          background: "radial-gradient(circle, rgba(249, 115, 22, 0.2) 0%, transparent 70%)",
+          filter: "blur(20px)",
+          pointerEvents: "none"
+        }} />
+
+        <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
+          
+          {/* Header */}
+          <div style={{ borderBottom: `1px solid ${dm ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.06)"}`, paddingBottom: "16px" }}>
+            <h2 style={{
+              fontSize: "clamp(20px, 4vw, 24px)",
+              fontWeight: 900,
+              color: dm ? "#ffffff" : "#111827",
+              fontFamily: "'Outfit', sans-serif",
+              letterSpacing: "-0.5px",
+              display: "flex",
+              alignItems: "center",
+              gap: "10px"
+            }}>
+              <span>📱 7. Install the App on Your Tablet</span>
+            </h2>
+            <p style={{ fontSize: "14px", color: dm ? "#9ca3af" : "#4b5563", marginTop: "6px", lineHeight: 1.5 }}>
+              Install PHOTOlab to access a standalone, fullscreen workspace with complete offline functionality. Decodes raw data and runs AI models with zero network usage.
+            </p>
+          </div>
+
+          {/* Platforms Grid */}
+          <div style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+            gap: "24px"
+          }}>
+            {/* Android / Chrome */}
+            <div style={{
+              background: dm ? "rgba(255, 255, 255, 0.02)" : "rgba(0, 0, 0, 0.01)",
+              border: `1px solid ${dm ? "rgba(255, 255, 255, 0.05)" : "rgba(0, 0, 0, 0.04)"}`,
+              borderRadius: "16px",
+              padding: "20px",
+              display: "flex",
+              flexDirection: "column",
+              gap: "12px"
+            }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <span style={{ fontSize: "20px" }}>🤖</span>
+                <h3 style={{ fontSize: "16px", fontWeight: 800, color: dm ? "#ffffff" : "#111827", fontFamily: "'Outfit', sans-serif" }}>
+                  Android / Chrome OS
+                </h3>
+              </div>
+              <ul style={{ 
+                fontSize: "13px", 
+                color: dm ? "#cbd5e1" : "#374151", 
+                paddingLeft: "18px", 
+                lineHeight: "1.7",
+                display: "flex",
+                flexDirection: "column",
+                gap: "8px"
+              }}>
+                <li>
+                  Tap <strong style={{ 
+                    background: "linear-gradient(135deg, #f97316, #facc15)",
+                    WebkitBackgroundClip: "text",
+                    WebkitTextFillColor: "transparent",
+                    fontWeight: 900
+                  }}>📱 Install App</strong> in the top header.
+                </li>
+                <li>
+                  Confirm the installation prompt in the browser pop-up.
+                </li>
+                <li>
+                  Launch PHOTOlab directly from your tablet app drawer or desktop.
+                </li>
+              </ul>
+            </div>
+
+            {/* iOS / Safari */}
+            <div style={{
+              background: dm ? "rgba(255, 255, 255, 0.02)" : "rgba(0, 0, 0, 0.01)",
+              border: `1px solid ${dm ? "rgba(255, 255, 255, 0.05)" : "rgba(0, 0, 0, 0.04)"}`,
+              borderRadius: "16px",
+              padding: "20px",
+              display: "flex",
+              flexDirection: "column",
+              gap: "12px"
+            }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <span style={{ fontSize: "20px" }}>🍎</span>
+                <h3 style={{ fontSize: "16px", fontWeight: 800, color: dm ? "#ffffff" : "#111827", fontFamily: "'Outfit', sans-serif" }}>
+                  Apple iPad / iPhone (Safari)
+                </h3>
+              </div>
+              <ul style={{ 
+                fontSize: "13px", 
+                color: dm ? "#cbd5e1" : "#374151", 
+                paddingLeft: "18px", 
+                lineHeight: "1.7",
+                display: "flex",
+                flexDirection: "column",
+                gap: "8px"
+              }}>
+                <li>
+                  Tap <strong style={{ 
+                    background: "linear-gradient(135deg, #f97316, #facc15)",
+                    WebkitBackgroundClip: "text",
+                    WebkitTextFillColor: "transparent",
+                    fontWeight: 900
+                  }}>📱 Install App</strong> or the Safari Share button <strong style={{ color: dm ? "#ffffff" : "#111827" }}>📤</strong>.
+                </li>
+                <li>
+                  Scroll down the share sheet and select <strong style={{ color: dm ? "#ffffff" : "#111827" }}>Add to Home Screen ➕</strong>.
+                </li>
+                <li>
+                  Access PHOTOlab directly from your home screen in stunning standalone mode.
+                </li>
+              </ul>
+            </div>
+          </div>
+
+          {/* Action Call-to-Action Bar */}
+          <div style={{ 
+            display: "flex", 
+            justifyContent: "center", 
+            alignItems: "center", 
+            paddingTop: "8px"
+          }}>
+            {isInstalled ? (
+              <div style={{
+                background: "rgba(22, 163, 74, 0.1)",
+                border: "1.5px solid rgba(22, 163, 74, 0.3)",
+                color: "#16a34a",
+                padding: "10px 24px",
+                borderRadius: "12px",
+                fontSize: "14px",
+                fontWeight: 700,
+                display: "flex",
+                alignItems: "center",
+                gap: "8px"
+              }}>
+                <span>✓</span> App Installed &amp; 100% Offline Ready
+              </div>
+            ) : (
+              <button 
+                onClick={handleInstallClick}
+                style={{
+                  background: 'linear-gradient(135deg, #f97316 0%, #facc15 100%)',
+                  color: '#ffffff',
+                  border: 'none',
+                  borderRadius: '12px',
+                  padding: '12px 32px',
+                  fontSize: '14px',
+                  fontWeight: 800,
+                  cursor: 'pointer',
+                  boxShadow: '0 4px 18px rgba(249, 115, 22, 0.35)',
+                  transition: 'all 0.2s ease',
+                  fontFamily: "'Outfit', sans-serif",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px"
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.transform = 'translateY(-2px)';
+                  e.currentTarget.style.boxShadow = '0 6px 22px rgba(249, 115, 22, 0.45)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = 'none';
+                  e.currentTarget.style.boxShadow = '0 4px 18px rgba(249, 115, 22, 0.35)';
+                }}
+              >
+                <span>📱</span> Install PHOTOlab on Tablet
+              </button>
+            )}
           </div>
         </div>
       </div>
