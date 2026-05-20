@@ -20,7 +20,15 @@ import { LandingPage } from "./LandingPage";
 
 export function ApertureLogo({ size = 26, className = "" }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" className={`aperture-logo ${className}`} style={{ display: 'inline-block', verticalAlign: 'middle' }}>
+    <svg 
+      width={size} 
+      height={size} 
+      viewBox="0 0 24 24" 
+      fill="none" 
+      xmlns="http://www.w3.org/2000/svg" 
+      className={`aperture-logo ${className}`} 
+      style={{ display: 'inline-block', verticalAlign: 'middle' }}
+    >
       <defs>
         <linearGradient id="logoGlow" x1="0%" y1="0%" x2="100%" y2="100%">
           <stop offset="0%" stopColor="#06b6d4" />
@@ -28,14 +36,15 @@ export function ApertureLogo({ size = 26, className = "" }) {
           <stop offset="100%" stopColor="#ec4899" />
         </linearGradient>
       </defs>
-      <circle cx="50" cy="50" r="46" stroke="url(#logoGlow)" strokeWidth="6" strokeLinecap="round" style={{ opacity: 0.9 }} />
-      <g stroke="url(#logoGlow)" strokeWidth="4" strokeLinecap="round" opacity="0.9">
-        <path d="M50 10 L68 40 L45 35 Z" fill="url(#logoGlow)" fillOpacity="0.15" />
-        <path d="M90 50 L60 68 L65 45 Z" fill="url(#logoGlow)" fillOpacity="0.15" />
-        <path d="M50 90 L32 60 L55 65 Z" fill="url(#logoGlow)" fillOpacity="0.15" />
-        <path d="M10 50 L40 32 L35 55 Z" fill="url(#logoGlow)" fillOpacity="0.15" />
+      <circle cx="12" cy="12" r="10" stroke="url(#logoGlow)" strokeWidth="2.2" strokeLinecap="round" style={{ opacity: 0.95 }} />
+      <g stroke="url(#logoGlow)" strokeWidth="1.6" strokeLinecap="round" opacity="0.95">
+        <path d="m14.31 8 5.74 9.94" />
+        <path d="M9.69 8h11.48" />
+        <path d="m7.38 12 5.74-9.94" />
+        <path d="M9.69 16 3.95 6.06" />
+        <path d="M14.31 16H2.83" />
+        <path d="m16.62 12-5.74 9.94" />
       </g>
-      <circle cx="50" cy="50" r="14" stroke="url(#logoGlow)" strokeWidth="3" fill="none" />
     </svg>
   );
 }
@@ -1403,6 +1412,12 @@ export default function App() {
       <style>{`
         *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
         ::-webkit-scrollbar{width:4px;height:4px}::-webkit-scrollbar-thumb{background:#ddd;border-radius:2px}
+        .aperture-logo {
+          transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .aperture-logo:hover {
+          transform: rotate(60deg) scale(1.08);
+        }
         .sl{-webkit-appearance:none;appearance:none;width:100%;height:4px;border-radius:2px;outline:none;background:linear-gradient(to right,#6c63ff var(--v,50%),#e0e0e8 var(--v,50%));cursor:pointer;touch-action:none;}
         .sl:active{cursor:grabbing}
         .sl::-webkit-slider-thumb{-webkit-appearance:none;width:22px;height:22px;border-radius:50%;background:#6c63ff;border:3px solid #fff;box-shadow:0 1px 6px rgba(108,99,255,.4);cursor:grab;will-change:transform;transition:transform .1s,box-shadow .1s}
@@ -1424,9 +1439,9 @@ export default function App() {
       <header className="glass-panel" style={{ height: "52px", padding: "0 14px", display: "flex", alignItems: "center", justifyContent: "space-between", position: "sticky", top: 0, zIndex: 50, borderBottom: `1px solid ${dm ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'}` }}>
         <div style={{ display: "flex", alignItems: "center", gap: "9px", cursor: "pointer" }} onClick={() => setActiveTab("home")}>
           <ApertureLogo size={30} />
-          <div style={{ fontSize: "16px", fontWeight: 800, color: dm ? '#f0f0f0' : '#1a1a2e', letterSpacing: "-.3px", display: "flex", alignItems: "center", gap: "4px" }}>
+          <div style={{ fontSize: "17px", fontWeight: 900, color: dm ? '#ffffff' : '#0f172a', letterSpacing: "-0.5px", display: "flex", alignItems: "center", gap: "2px", fontFamily: "'Outfit', sans-serif" }}>
             <span>PHOTO</span>
-            <span style={{ fontStyle: "italic", background: "linear-gradient(135deg, #06b6d4, #6c63ff)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>LAB</span>
+            <span style={{ fontStyle: "italic", background: "linear-gradient(135deg, #06b6d4, #6c63ff, #ec4899)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", fontWeight: 900 }}>LAB</span>
           </div>
         </div>
         <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
@@ -1491,7 +1506,7 @@ export default function App() {
         ) : activeTab === "batch" ? (
           <BatchPage {...{ dm, cardBg, cardBdr, inputSt, sourceHandle, outputHandle, batchImages, selectSourceFolder, selectRawSourceFolder, selectOutputFolder, batchResizeMode, setBatchResizeMode, batchResizePreset, setBatchResizePreset, batchCustomW, setBatchCustomW, batchCustomH, setBatchCustomH, batchKeepAspect, setBatchKeepAspect, batchLongEdgePx, setBatchLongEdgePx, batchAutoLevels, setBatchAutoLevels, batchAutoContrast, setBatchAutoContrast, batchSharpen, setBatchSharpen, batchSharpenAmt, setBatchSharpenAmt, batchSharpenRad, setBatchSharpenRad, batchDenoise, setBatchDenoise, batchDenoiseAmt, setBatchDenoiseAmt, batchLogo, setBatchLogo, batchLogoFile, setBatchLogoFile, handleBatchLogoUpload, batchLogoScale, setBatchLogoScale, batchLogoScalePortrait, setBatchLogoScalePortrait, batchLogoOpacity, setBatchLogoOpacity, batchLogoPos, setBatchLogoPos, batchLogoMargin, setBatchLogoMargin, batchOutputFmt, setBatchOutputFmt, batchOutputQ, setBatchOutputQ, batchPrefix, setBatchPrefix, batchSuffix, setBatchSuffix, batchProcessing, batchProgress, batchDone, handleBatchProcess, batchPreviewIdx, batchPreviewOrigUrl, batchPreviewAfterUrl, batchPreviewLoading, batchPreviewSplit, setBatchPreviewSplit, batchPreviewDragging, setBatchPreviewDragging, batchPreviewOpen, setBatchPreviewOpen, generateBatchPreview, filters, setFilters, resetAll, batchFilterGroup, setBatchFilterGroup, calcBatchDims, batchAiUpscale, setBatchAiUpscale, batchAiBeauty, setBatchAiBeauty, batchAiScale, setBatchAiScale, batchAiBeautySmooth, setBatchAiBeautySmooth, batchAiBeautyClarity, setBatchAiBeautyClarity, batchAiBeautyGlow, setBatchAiBeautyGlow, batchAiFaceRestore, setBatchAiFaceRestore, batchAiBeautyUseMask, setBatchAiBeautyUseMask, batchSection, setBatchSection, batchRawFiles, setBatchRawFiles, handleRawBatchProcess, batchLogs, addBatchLog }} />
         ) : activeTab === "cull" ? (
-          <CullPage {...{ dm, cardBg, cardBdr, inputSt, sourceHandle, outputHandle, batchImages, selectSourceFolder, selectRawSourceFolder, selectOutputFolder, batchLogs, addBatchLog, batchSection, setBatchSection }} />
+          <CullPage {...{ dm, cardBg, cardBdr, inputSt, sourceHandle, outputHandle, batchImages, selectSourceFolder, selectRawSourceFolder, selectOutputFolder, batchLogs, addBatchLog, batchSection, setBatchSection, isMobile }} />
         ) : (
           <div style={{ display: "flex", height: "calc(100vh - 52px)" }}>
             <div className="glass-panel" style={{ width: "310px", borderRight: `1px solid ${dm ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'}`, overflowY: "auto", flexShrink: 0 }}>
@@ -1515,7 +1530,7 @@ export default function App() {
           </div>
         ) : activeTab === "cull" ? (
           <div style={{ height: "calc(100vh - 52px)", overflowY: "auto", padding: "16px" }}>
-            <CullPage {...{ dm, cardBg, cardBdr, inputSt, sourceHandle, outputHandle, batchImages, selectSourceFolder, selectRawSourceFolder, selectOutputFolder, batchLogs, addBatchLog, batchSection, setBatchSection }} />
+            <CullPage {...{ dm, cardBg, cardBdr, inputSt, sourceHandle, outputHandle, batchImages, selectSourceFolder, selectRawSourceFolder, selectOutputFolder, batchLogs, addBatchLog, batchSection, setBatchSection, isMobile: true }} />
           </div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", height: "calc(100vh - 52px)", overflow: "hidden" }}>

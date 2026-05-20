@@ -40,7 +40,8 @@ export default function CullPage({
   batchLogs,
   addBatchLog,
   batchSection,
-  setBatchSection
+  setBatchSection,
+  isMobile = false
 }) {
   // Option Parameters
   const [sensitivity, setSensitivity] = useState(12);
@@ -402,11 +403,13 @@ export default function CullPage({
         outline: "none",
         fontFamily: "'Outfit', 'Inter', sans-serif",
         color: dm ? "#f3f4f6" : "#1f2937",
-        minHeight: "85vh",
+        height: isMobile ? "auto" : "calc(100vh - 52px)",
+        overflowY: isMobile ? "visible" : "auto",
         display: "flex",
         flexDirection: "column",
         gap: "24px",
-        padding: "0 10px"
+        padding: isMobile ? "0px" : "24px 32px 40px",
+        boxSizing: "border-box"
       }}
     >
       {/* Dynamic Toast Alert */}
