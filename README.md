@@ -10,10 +10,12 @@ Built with React + Vite — runs entirely in your browser with zero server costs
 
 ---
 
-## 🚀 What's New in v2.1.0
+## 🚀 What's New in v2.2.0
 
-- **Universal RAW Processing**: Supports Canon (`.cr2`/`.cr3`), Sony (`.arw`), Nikon (`.nef`), Adobe (`.dng`), and 800+ other formats by combining super-fast embedded TIFF JPEG extraction with a powerful `libraw-wasm` WebAssembly fallback compiler thread.
-- **Keyboard Slider Accessibility**: Full arrow and navigation keys (`ArrowLeft`/`Right`, `ArrowDown`/`Up`, `PageUp`/`Down`, `Home`/`End`) are supported on all range sliders. Slider state is immediately and smoothly committed on `onKeyUp` while preserving 60fps uncontrolled drag rendering.
+- **Robust RAW Previews & Full-Range Scanning**: Enlarged the embedded RAW JPEG preview scanner to scan full files, successfully extracting high-fidelity previews instantly (under 20ms) from large RAW formats (e.g., Nikon `.NEF` or Sony `.ARW` of 25MB+) without booted WASM engine overhead.
+- **Cross-Origin Isolated Dev Environment**: Pre-configured COOP (`Cross-Origin-Opener-Policy`) and COEP (`Cross-Origin-Embedder-Policy`) headers in the Vite dev server, securely unlocking browser `SharedArrayBuffer` memory space for the multithreaded WASM fallback engine.
+- **Queue Metadata Integrity**: Corrected real-time queue name reference displays in the batch comparison slider footer to dynamically reference active RAW files.
+- **Universal Keyboard Slider Accessibility**: Full arrow and navigation keys (`ArrowLeft`/`Right`, `ArrowDown`/`Up`, `PageUp`/`Down`, `Home`/`End`) are supported on all range sliders. Slider state is immediately and smoothly committed on `onKeyUp` while preserving 60fps uncontrolled drag rendering.
 - **Deterministic Memory Cleanup**: Zero native browser memory leaks. Built-in automatic `URL.revokeObjectURL` lifecycle management reactive to background removals, RAW batch queues (on file removal, queue clearing, and unmounting), and JIT-decoded RAW loops using try-finally protection blocks.
 
 ---

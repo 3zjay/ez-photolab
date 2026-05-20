@@ -83,7 +83,7 @@ export async function decodeRaw(fileBuffer, onLog) {
     const candidates = [];
     
     // 1. Deep Scan for embedded JPEG previews (Nikon/Canon/Sony standard)
-    for (let i = 0; i < Math.min(bytes.length, 10000000); i++) {
+    for (let i = 0; i < bytes.length - 2; i++) {
       if (bytes[i] === 0xFF && bytes[i+1] === 0xD8 && bytes[i+2] === 0xFF) {
         let start = i;
         let end = -1;

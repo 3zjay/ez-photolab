@@ -105,7 +105,7 @@ export default function App() {
   // Deterministic memory revocation for single-image background removal
   useEffect(() => {
     return () => {
-      if (bgSubUrl) {
+      if (bgSubUrl && bgSubUrl.startsWith('blob:')) {
         URL.revokeObjectURL(bgSubUrl);
       }
     };
@@ -118,20 +118,13 @@ export default function App() {
     // Revoke any preview URLs that were removed from the queue
     prevRawUrlsRef.current.forEach(url => {
       if (!currentUrls.includes(url)) {
-        URL.revokeObjectURL(url);
+        if (url && url.startsWith('blob:')) {
+          URL.revokeObjectURL(url);
+        }
       }
     });
     prevRawUrlsRef.current = currentUrls;
   }, [batchRawFiles]);
-
-  // Clean up all RAW preview URLs on component unmount
-  useEffect(() => {
-    return () => {
-      prevRawUrlsRef.current.forEach(url => {
-        URL.revokeObjectURL(url);
-      });
-    };
-  }, []);
 
   // AI Features state — key migration: old code stored Claid key under 'fal-api-key'
   const [falApiKey, setFalApiKey] = useState(() => localStorage.getItem('fal-ai-key') || '');
@@ -564,6 +557,10 @@ export default function App() {
       setBatchPreviewAfterUrl(canvas.toDataURL('image/jpeg', 0.92));
     } catch (e) {
       console.error('Preview failed', e);
+      addBatchLog(`❌ Preview failed: ${e.message || e}`, 'error');
+      if (e.stack) {
+        addBatchLog(`Stack: ${e.stack.split('\n').slice(0, 2).join(' ')}`, 'error');
+      }
     }
     setBatchPreviewLoading(false);
   }, [batchImages, filters, batchAutoContrast, batchAutoLevels, batchDenoise, batchDenoiseAmt,

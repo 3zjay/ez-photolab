@@ -363,7 +363,7 @@ export function BatchPage({ dm, cardBg, cardBdr, inputSt, isMobile = false,
 
               <div style={{ display: "flex", gap: "16px", marginTop: "10px", flexWrap: "wrap", alignItems: "center" }}>
                 <span style={{ fontSize: "11px", color: "#bbb" }}>
-                  ← Drag to compare · {batchImages[batchPreviewIdx]?.name}
+                  ← Drag to compare · {batchSection === 'raw' ? batchRawFiles[batchPreviewIdx]?.name : batchImages[batchPreviewIdx]?.name}
                 </span>
                 <div style={{ display: "flex", gap: "6px", marginLeft: "auto", flexWrap: "wrap" }}>
                   {[
