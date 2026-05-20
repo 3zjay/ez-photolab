@@ -59,6 +59,12 @@ export default function CullPage({
   // Grouped references
   const [groups, setGroups] = useState([]);
 
+  // Physical Export & Layout Configuration States
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportProgress, setExportProgress] = useState({ current: 0, total: 0, currentFile: "" });
+  const [exportMethod, setExportMethod] = useState("folders"); // "folders" or "xmp"
+  const [layoutMode, setLayoutMode] = useState("keepers_rejects"); // "keepers_rejects", "keepers_only", "clusters"
+
   // Toast / Status state
   const [toastMessage, setToastMessage] = useState(null);
 
@@ -181,17 +187,110 @@ export default function CullPage({
   // 5. Exporter to write XMP Sidecar files
   const handleExportXmp = async () => {
     if (!outputHandle) {
-      alert("Please select an Output Folder first to store ratings sidecars!");
+      alert("Please select a Destination Output Folder first!");
       return;
     }
 
+    setIsExporting(true);
+    setExportProgress({ current: 0, total: 1, currentFile: "Writing sidecars..." });
+    addBatchLog?.("📝 Exporting Adobe-compliant XMP sidecars...", "info");
+
     try {
-      // Flatten all images from groups
       const allImages = groups.flat();
       const count = await exportXmpSidecars(outputHandle, allImages, addBatchLog);
       showToast(`Exported ${count} rating sidecars successfully!`);
     } catch (e) {
+      addBatchLog?.(`❌ XMP Sidecars Export Failed: ${e.message}`, "error");
       alert(`Export failed: ${e.message}`);
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  // 5b. Exporter to physically copy and group files into subfolders
+  const handlePhysicalExport = async (mode = layoutMode) => {
+    if (!outputHandle) {
+      alert("Please select a Destination Output Folder first!");
+      return;
+    }
+
+    setIsExporting(true);
+    setExportProgress({ current: 0, total: 0, currentFile: "Initializing folders..." });
+    addBatchLog?.(`📁 Starting physical file sort using mode: "${mode}"`, "info");
+
+    try {
+      const allImages = groups.flat();
+      
+      // Determine what files will actually be copied
+      const filesToCopy = mode === "keepers_only" 
+        ? allImages.filter(item => item.isKeyPhoto) 
+        : allImages;
+
+      if (filesToCopy.length === 0) {
+        throw new Error("No files matched the current export criteria (e.g. no Keepers marked).");
+      }
+
+      // Initialize directories
+      let keepersDir = null;
+      let alternatesDir = null;
+
+      if (mode === "keepers_rejects") {
+        keepersDir = await outputHandle.getDirectoryHandle("Keepers", { create: true });
+        alternatesDir = await outputHandle.getDirectoryHandle("Rejected & Alternates", { create: true });
+      } else if (mode === "keepers_only") {
+        keepersDir = await outputHandle.getDirectoryHandle("Keepers", { create: true });
+      }
+
+      let copiedCount = 0;
+      const total = filesToCopy.length;
+
+      for (let i = 0; i < total; i++) {
+        const item = filesToCopy[i];
+
+        setExportProgress({
+          current: i + 1,
+          total,
+          currentFile: item.name
+        });
+
+        if (item.file) {
+          // Determine target directory
+          let targetDir = outputHandle;
+          let destName = item.name;
+
+          if (mode === "keepers_rejects") {
+            targetDir = item.isKeyPhoto ? keepersDir : alternatesDir;
+          } else if (mode === "keepers_only") {
+            targetDir = keepersDir;
+          } else if (mode === "clusters") {
+            const clusterFolder = `Group_${item.cullGroup + 1}`;
+            targetDir = await outputHandle.getDirectoryHandle(clusterFolder, { create: true });
+            
+            // Mark the Key Photo visually inside the cluster folder
+            if (item.isKeyPhoto) {
+              destName = `KEEPER_${item.name}`;
+            }
+          }
+
+          // Write file content directly
+          const arrayBuffer = await item.file.arrayBuffer();
+          const fileRef = await targetDir.getFileHandle(destName, { create: true });
+          const writable = await fileRef.createWritable();
+          await writable.write(new Uint8Array(arrayBuffer));
+          await writable.close();
+
+          copiedCount++;
+        }
+      }
+
+      addBatchLog?.(`✅ Successfully organized and saved ${copiedCount} files into subdirectories.`, "success");
+      showToast(`Saved ${copiedCount} files to folders successfully!`);
+    } catch (e) {
+      addBatchLog?.(`❌ Folder Export Failed: ${e.message}`, "error");
+      console.error(e);
+      alert(`Sort export failed: ${e.message}`);
+    } finally {
+      setIsExporting(false);
     }
   };
 
@@ -1136,35 +1235,182 @@ export default function CullPage({
               </div>
             </div>
 
-            {/* Direct XMP Sync Ratings Trigger */}
-            <button
-              onClick={handleExportXmp}
-              disabled={!outputHandle}
+            {/* Smart Save & Organize Panel */}
+            <div
+              className="glass-panel"
               style={{
-                padding: "16px",
-                background: outputHandle ? `linear-gradient(135deg, ${accent}, #5b54d6)` : (dm ? "#222" : "#eee"),
-                color: outputHandle ? "#fff" : (dm ? "#555" : "#aaa"),
-                border: "none",
-                borderRadius: "14px",
-                cursor: outputHandle ? "pointer" : "not-allowed",
-                fontSize: "14px",
-                fontWeight: 700,
-                boxShadow: outputHandle ? "0 4px 14px rgba(108, 99, 255, 0.25)" : "none",
-                transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)"
-              }}
-              onMouseEnter={(e) => {
-                if (outputHandle) {
-                  e.currentTarget.style.transform = "translateY(-1px)";
-                }
-              }}
-              onMouseLeave={(e) => {
-                if (outputHandle) {
-                  e.currentTarget.style.transform = "none";
-                }
+                borderRadius: "20px",
+                padding: "20px",
+                display: "flex",
+                flexDirection: "column",
+                gap: "16px",
+                boxShadow: dm ? "0 10px 40px rgba(0,0,0,0.3)" : "0 10px 30px rgba(0,0,0,0.03)"
               }}
             >
-              💾 Save XMP Sidecars to Output Folder
-            </button>
+              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                <span style={{ fontSize: "16px" }}>💾</span>
+                <h3 style={{ margin: 0, fontSize: "14px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.5px", color: dm ? "#a1a1aa" : "#4b5563" }}>
+                  Save & Organize Results
+                </h3>
+              </div>
+
+              {/* Export Mode Tabs */}
+              <div style={{ display: "flex", gap: "4px", background: dm ? "rgba(0,0,0,0.2)" : "rgba(0,0,0,0.05)", padding: "4px", borderRadius: "10px" }}>
+                <button
+                  onClick={() => setExportMethod("folders")}
+                  style={{
+                    flex: 1,
+                    padding: "8px",
+                    background: exportMethod === "folders" ? (dm ? "#1e1b4b" : "#fff") : "transparent",
+                    color: exportMethod === "folders" ? accent : (dm ? "#9ca3af" : "#4b5563"),
+                    border: "none",
+                    borderRadius: "8px",
+                    fontSize: "12px",
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    boxShadow: exportMethod === "folders" && !dm ? "0 2px 6px rgba(0,0,0,0.05)" : "none",
+                    transition: "all 0.15s ease"
+                  }}
+                >
+                  📁 Smart Folders
+                </button>
+                <button
+                  onClick={() => setExportMethod("xmp")}
+                  style={{
+                    flex: 1,
+                    padding: "8px",
+                    background: exportMethod === "xmp" ? (dm ? "#1e1b4b" : "#fff") : "transparent",
+                    color: exportMethod === "xmp" ? accent : (dm ? "#9ca3af" : "#4b5563"),
+                    border: "none",
+                    borderRadius: "8px",
+                    fontSize: "12px",
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    boxShadow: exportMethod === "xmp" && !dm ? "0 2px 6px rgba(0,0,0,0.05)" : "none",
+                    transition: "all 0.15s ease"
+                  }}
+                >
+                  📝 XMP Sidecars
+                </button>
+              </div>
+
+              {/* Dynamic Tab Contents */}
+              {exportMethod === "folders" ? (
+                <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                  <span style={{ fontSize: "11px", color: dm ? "#a1a1aa" : "#71717a", lineHeight: "1.4" }}>
+                    Physically sort photos by copying them into organized subdirectories inside your output destination.
+                  </span>
+
+                  {/* Folder Layout Options */}
+                  <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                    {[
+                      { id: "keepers_rejects", title: "Keepers vs Rejected", desc: "Creates /Keepers and /Rejected & Alternates folders." },
+                      { id: "keepers_only", title: "Keepers Only", desc: "Only saves the best designated photos to a /Keepers folder." },
+                      { id: "clusters", title: "AI Duplicate Groups", desc: "Puts duplicates into /Group_1, /Group_2, etc. folders." }
+                    ].map((opt) => (
+                      <label
+                        key={opt.id}
+                        style={{
+                          display: "flex",
+                          alignItems: "flex-start",
+                          gap: "10px",
+                          padding: "10px",
+                          borderRadius: "10px",
+                          background: layoutMode === opt.id ? (dm ? "rgba(108, 99, 255, 0.05)" : "rgba(108, 99, 255, 0.02)") : "transparent",
+                          border: `1px solid ${layoutMode === opt.id ? accent : (dm ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.05)")}`,
+                          cursor: "pointer",
+                          transition: "all 0.15s ease"
+                        }}
+                      >
+                        <input
+                          type="radio"
+                          name="layout_mode"
+                          checked={layoutMode === opt.id}
+                          onChange={() => setLayoutMode(opt.id)}
+                          style={{ accentColor: accent, marginTop: "2px" }}
+                        />
+                        <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+                          <span style={{ fontSize: "12px", fontWeight: 700 }}>{opt.title}</span>
+                          <span style={{ fontSize: "10px", color: dm ? "#888" : "#666" }}>{opt.desc}</span>
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+
+                  {/* Execute Button */}
+                  {isExporting ? (
+                    <div style={{ display: "flex", flexDirection: "column", gap: "6px", padding: "10px 0" }}>
+                      <div style={{ width: "100%", height: "6px", background: dm ? "#222" : "#e5e7eb", borderRadius: "10px", overflow: "hidden" }}>
+                        <div
+                          style={{
+                            height: "100%",
+                            width: `${(exportProgress.current / exportProgress.total) * 100}%`,
+                            background: `linear-gradient(90deg, ${accent}, #06b6d4)`,
+                            transition: "width 0.1s ease"
+                          }}
+                        />
+                      </div>
+                      <span style={{ fontSize: "11px", fontWeight: 700, textAlign: "center" }}>
+                        Saving: {exportProgress.current} / {exportProgress.total} ({exportProgress.currentFile})
+                      </span>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => handlePhysicalExport()}
+                      disabled={!outputHandle}
+                      style={{
+                        padding: "14px",
+                        background: outputHandle ? `linear-gradient(135deg, ${accent}, #5b54d6)` : (dm ? "#222" : "#eee"),
+                        color: outputHandle ? "#fff" : (dm ? "#555" : "#aaa"),
+                        border: "none",
+                        borderRadius: "12px",
+                        cursor: outputHandle ? "pointer" : "not-allowed",
+                        fontSize: "13px",
+                        fontWeight: 700,
+                        boxShadow: outputHandle ? "0 4px 14px rgba(108, 99, 255, 0.25)" : "none",
+                        transition: "all 0.2s ease"
+                      }}
+                    >
+                      📁 Execute Smart Folder Export
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+                  <span style={{ fontSize: "11px", color: dm ? "#a1a1aa" : "#71717a", lineHeight: "1.4" }}>
+                    Export non-destructive star ratings and color labels directly into standard Adobe XMP sidecar metadata files. Ideal for Lightroom or Bridge workflows.
+                  </span>
+
+                  {isExporting ? (
+                    <div style={{ display: "flex", flexDirection: "column", gap: "6px", padding: "10px 0" }}>
+                      <span style={{ fontSize: "11px", fontWeight: 700, textAlign: "center", color: accent }}>
+                        Generating XMP metadata...
+                      </span>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={handleExportXmp}
+                      disabled={!outputHandle}
+                      style={{
+                        padding: "14px",
+                        background: outputHandle ? `linear-gradient(135deg, ${accent}, #5b54d6)` : (dm ? "#222" : "#eee"),
+                        color: outputHandle ? "#fff" : (dm ? "#555" : "#aaa"),
+                        border: "none",
+                        borderRadius: "12px",
+                        cursor: outputHandle ? "pointer" : "not-allowed",
+                        fontSize: "13px",
+                        fontWeight: 700,
+                        boxShadow: outputHandle ? "0 4px 14px rgba(108, 99, 255, 0.25)" : "none",
+                        transition: "all 0.2s ease"
+                      }}
+                    >
+                      📝 Save XMP Sidecars to Output Folder
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+
           </div>
         </div>
       )}
