@@ -2,6 +2,30 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import { cullBatch } from "./cullEngine";
 import { exportXmpSidecars } from "./xmpExporter";
 
+function StarRating({ rating, onChange, size = 18 }) {
+  return (
+    <div style={{ display: "flex", gap: "4px" }}>
+      {[1, 2, 3, 4, 5].map((s) => (
+        <svg
+          key={s}
+          onClick={() => onChange && onChange(s)}
+          width={size}
+          height={size}
+          viewBox="0 0 24 24"
+          fill={s <= rating ? "#fbbf24" : "none"}
+          stroke={s <= rating ? "#d97706" : "#9ca3af"}
+          strokeWidth="2"
+          style={{ cursor: "pointer", transition: "transform 0.15s ease" }}
+          onMouseEnter={(e) => (e.currentTarget.style.transform = "scale(1.25)")}
+          onMouseLeave={(e) => (e.currentTarget.style.transform = "scale(1)")}
+        >
+          <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+        </svg>
+      ))}
+    </div>
+  );
+}
+
 export default function CullPage({
   dm,
   cardBg,
@@ -29,6 +53,8 @@ export default function CullPage({
   const [cullResults, setCullResults] = useState([]);
   const [activeGroupIndex, setActiveGroupIndex] = useState(0);
   const [activeAlternateIndex, setActiveAlternateIndex] = useState(0);
+  const [showFaceBoxes, setShowFaceBoxes] = useState(true);
+  const [showShortcutsHelp, setShowShortcutsHelp] = useState(true);
 
   // Grouped references
   const [groups, setGroups] = useState([]);
@@ -275,12 +301,13 @@ export default function CullPage({
       tabIndex={0}
       style={{
         outline: "none",
-        fontFamily: "'Inter', sans-serif",
+        fontFamily: "'Outfit', 'Inter', sans-serif",
         color: dm ? "#f3f4f6" : "#1f2937",
-        minHeight: "82vh",
+        minHeight: "85vh",
         display: "flex",
         flexDirection: "column",
-        gap: "20px"
+        gap: "24px",
+        padding: "0 10px"
       }}
     >
       {/* Dynamic Toast Alert */}
@@ -290,22 +317,22 @@ export default function CullPage({
             position: "fixed",
             bottom: "24px",
             right: "24px",
-            background: "rgba(18, 18, 24, 0.9)",
-            border: `1px solid ${accent}`,
+            background: dm ? "rgba(18, 18, 24, 0.9)" : "rgba(255, 255, 255, 0.95)",
+            border: `1px solid ${dm ? "rgba(255, 255, 255, 0.1)" : "rgba(0, 0, 0, 0.1)"}`,
+            boxShadow: "0 10px 40px rgba(0, 0, 0, 0.2)",
             padding: "12px 24px",
-            borderRadius: "12px",
-            boxShadow: "0 8px 32px rgba(0, 0, 0, 0.4)",
-            color: "#fff",
+            borderRadius: "14px",
+            color: dm ? "#fff" : "#1f2937",
             zIndex: 9999,
             display: "flex",
             alignItems: "center",
             gap: "10px",
-            fontSize: "14px",
-            animation: "slideIn 0.25s ease-out",
-            backdropFilter: "blur(8px)"
+            fontSize: "13px",
+            fontWeight: 600,
+            backdropFilter: "blur(12px)"
           }}
         >
-          <span style={{ color: labelColors[toastMessage.type] || accent }}>●</span>
+          <span style={{ color: labelColors[toastMessage.type] || accent, fontSize: "16px" }}>●</span>
           {toastMessage.msg}
         </div>
       )}
@@ -313,11 +340,14 @@ export default function CullPage({
       {/* Top Header Section */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div>
-          <h1 style={{ margin: 0, fontSize: "24px", fontWeight: 800, background: `linear-gradient(135deg, ${accent}, #a78bfa)`, WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
-            EZ-Cull AI Lab
-          </h1>
-          <p style={{ margin: "4px 0 0 0", fontSize: "13px", color: dm ? "#9ca3af" : "#4b5563" }}>
-            Identify duplicate series, remove blur & blinks, and export non-destructive Lightroom ratings in-browser.
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <span style={{ fontSize: "20px" }}>🔍</span>
+            <h1 style={{ margin: 0, fontSize: "24px", fontWeight: 800, background: "linear-gradient(135deg, #06b6d4, #6c63ff)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
+              Cull AI Lab
+            </h1>
+          </div>
+          <p style={{ margin: "4px 0 0 0", fontSize: "13px", color: dm ? "#a1a1aa" : "#71717a" }}>
+            Group duplicate clusters, detect blinks, check focus points, and synchronize Adobe ratings natively.
           </p>
         </div>
 
@@ -330,16 +360,24 @@ export default function CullPage({
             style={{
               padding: "8px 16px",
               background: "transparent",
-              border: `1px solid ${dm ? "#374151" : "#e5e7eb"}`,
-              color: dm ? "#9ca3af" : "#4b5563",
+              border: `1px solid ${dm ? "rgba(255, 255, 255, 0.15)" : "rgba(0, 0, 0, 0.1)"}`,
+              color: dm ? "#d1d5db" : "#4b5563",
               borderRadius: "8px",
               cursor: "pointer",
               fontSize: "13px",
               fontWeight: 600,
               transition: "all 0.2s"
             }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.borderColor = accent;
+              e.currentTarget.style.color = accent;
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.borderColor = dm ? "rgba(255, 255, 255, 0.15)" : "rgba(0, 0, 0, 0.1)";
+              e.currentTarget.style.color = dm ? "#d1d5db" : "#4b5563";
+            }}
           >
-            ← Reset Setup
+            ← Ingest New Folder
           </button>
         )}
       </div>
@@ -347,79 +385,150 @@ export default function CullPage({
       {/* CONFIG / INGESTION INTERFACE */}
       {groups.length === 0 && (
         <div
+          className="glass-panel"
           style={{
-            background: cardBg,
-            border: `1px solid ${cardBdr}`,
-            borderRadius: "16px",
-            padding: "30px",
+            borderRadius: "20px",
+            padding: "36px",
             display: "flex",
             flexDirection: "column",
-            gap: "24px",
-            boxShadow: "0 4px 20px rgba(0,0,0,0.05)"
+            gap: "28px",
+            boxShadow: dm ? "0 10px 40px rgba(0,0,0,0.3)" : "0 10px 30px rgba(0,0,0,0.03)"
           }}
         >
           {/* Files Selector Row */}
-          <div style={{ display: "flex", gap: "16px", flexWrap: "wrap" }}>
-            <div style={{ flex: 1, minWidth: "250px", display: "flex", flexDirection: "column", gap: "8px" }}>
-              <label style={{ fontSize: "13px", fontWeight: 700 }}>1. Choose Target Source</label>
-              <div style={{ display: "flex", gap: "8px" }}>
-                <button
-                  onClick={selectSourceFolder}
-                  style={{
-                    flex: 1,
-                    padding: "12px",
-                    background: sourceHandle ? "rgba(34, 197, 94, 0.1)" : (dm ? "#1f2937" : "#f9fafb"),
-                    border: `1px dashed ${sourceHandle ? "#22c55e" : (dm ? "#374151" : "#d1d5db")}`,
-                    borderRadius: "10px",
-                    cursor: "pointer",
-                    fontSize: "13px",
-                    fontWeight: 600,
-                    color: sourceHandle ? "#22c55e" : (dm ? "#d1d5db" : "#4b5563")
-                  }}
-                >
-                  {sourceHandle ? `✓ Folder Selected` : `📂 Pick Folder`}
-                </button>
-              </div>
-              <span style={{ fontSize: "11px", color: "#9ca3af" }}>
-                {activeInputFiles.length > 0 ? `Detected ${activeInputFiles.length} photos ready for culling.` : "Select directory containing JPG/PNG camera files."}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "24px" }}>
+            
+            {/* Step 1: Input directory */}
+            <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+              <label style={{ fontSize: "14px", fontWeight: 700, display: "flex", alignItems: "center", gap: "6px" }}>
+                <span style={{ display: "flex", alignItems: "center", justifyContent: "center", width: "20px", height: "20px", background: accent, color: "#fff", borderRadius: "50%", fontSize: "11px" }}>1</span>
+                Choose Target Source Folder
+              </label>
+              
+              <button
+                onClick={selectSourceFolder}
+                style={{
+                  padding: "16px",
+                  background: sourceHandle ? "rgba(34, 197, 94, 0.05)" : (dm ? "rgba(255, 255, 255, 0.01)" : "#f9fafb"),
+                  border: `2px dashed ${sourceHandle ? "#22c55e" : (dm ? "rgba(255, 255, 255, 0.1)" : "#d1d5db")}`,
+                  borderRadius: "12px",
+                  cursor: "pointer",
+                  fontSize: "14px",
+                  fontWeight: 600,
+                  color: sourceHandle ? "#22c55e" : (dm ? "#d1d5db" : "#4b5563"),
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "10px",
+                  transition: "all 0.25s"
+                }}
+                onMouseEnter={(e) => {
+                  if (!sourceHandle) {
+                    e.currentTarget.style.borderColor = accent;
+                    e.currentTarget.style.background = dm ? "rgba(108, 99, 255, 0.03)" : "rgba(108, 99, 255, 0.02)";
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!sourceHandle) {
+                    e.currentTarget.style.borderColor = dm ? "rgba(255, 255, 255, 0.1)" : "#d1d5db";
+                    e.currentTarget.style.background = dm ? "rgba(255, 255, 255, 0.01)" : "#f9fafb";
+                  }
+                }}
+              >
+                <span style={{ fontSize: "18px" }}>📂</span>
+                {sourceHandle ? `Folder: ${sourceHandle.name}` : `Select Directory with Images`}
+              </button>
+              
+              <span style={{ fontSize: "12px", color: dm ? "#a1a1aa" : "#71717a" }}>
+                {activeInputFiles.length > 0 ? (
+                  <strong style={{ color: "#22c55e" }}>✓ Loaded {activeInputFiles.length} photos ready for scan.</strong>
+                ) : (
+                  "Select the directory containing JPEG/PNG raw outputs."
+                )}
               </span>
             </div>
 
-            <div style={{ flex: 1, minWidth: "250px", display: "flex", flexDirection: "column", gap: "8px" }}>
-              <label style={{ fontSize: "13px", fontWeight: 700 }}>2. Pick Output Destination (Ratings)</label>
+            {/* Step 2: Output directory */}
+            <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+              <label style={{ fontSize: "14px", fontWeight: 700, display: "flex", alignItems: "center", gap: "6px" }}>
+                <span style={{ display: "flex", alignItems: "center", justifyContent: "center", width: "20px", height: "20px", background: accent, color: "#fff", borderRadius: "50%", fontSize: "11px" }}>2</span>
+                Set Sidecar Export Destination
+              </label>
+              
               <button
                 onClick={selectOutputFolder}
                 style={{
-                  padding: "12px",
-                  background: outputHandle ? "rgba(34, 197, 94, 0.1)" : (dm ? "#1f2937" : "#f9fafb"),
-                  border: `1px dashed ${outputHandle ? "#22c55e" : (dm ? "#374151" : "#d1d5db")}`,
-                  borderRadius: "10px",
+                  padding: "16px",
+                  background: outputHandle ? "rgba(34, 197, 94, 0.05)" : (dm ? "rgba(255, 255, 255, 0.01)" : "#f9fafb"),
+                  border: `2px dashed ${outputHandle ? "#22c55e" : (dm ? "rgba(255, 255, 255, 0.1)" : "#d1d5db")}`,
+                  borderRadius: "12px",
                   cursor: "pointer",
-                  fontSize: "13px",
+                  fontSize: "14px",
                   fontWeight: 600,
-                  color: outputHandle ? "#22c55e" : (dm ? "#d1d5db" : "#4b5563")
+                  color: outputHandle ? "#22c55e" : (dm ? "#d1d5db" : "#4b5563"),
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "10px",
+                  transition: "all 0.25s"
+                }}
+                onMouseEnter={(e) => {
+                  if (!outputHandle) {
+                    e.currentTarget.style.borderColor = accent;
+                    e.currentTarget.style.background = dm ? "rgba(108, 99, 255, 0.03)" : "rgba(108, 99, 255, 0.02)";
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!outputHandle) {
+                    e.currentTarget.style.borderColor = dm ? "rgba(255, 255, 255, 0.1)" : "#d1d5db";
+                    e.currentTarget.style.background = dm ? "rgba(255, 255, 255, 0.01)" : "#f9fafb";
+                  }
                 }}
               >
-                {outputHandle ? `✓ Destination Set` : `💾 Pick Output Folder`}
+                <span style={{ fontSize: "18px" }}>💾</span>
+                {outputHandle ? `Folder: ${outputHandle.name}` : `Select Rating Output Folder`}
               </button>
-              <span style={{ fontSize: "11px", color: "#9ca3af" }}>
-                Used to write XMP sidecars containing star ratings & colors.
+              
+              <span style={{ fontSize: "12px", color: dm ? "#a1a1aa" : "#71717a" }}>
+                {outputHandle ? (
+                  <strong style={{ color: "#22c55e" }}>✓ Outputs synced directly. Ready to save ratings.</strong>
+                ) : (
+                  "Used to write non-destructive XMP metadata for Adobe Lightroom/Bridge."
+                )}
               </span>
             </div>
           </div>
 
-          <hr style={{ border: "none", height: "1px", background: dm ? "#374151" : "#e5e7eb" }} />
+          {activeInputFiles.length > 0 && (
+            <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+              <span style={{ fontSize: "12px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px", color: dm ? "#888" : "#999" }}>Ingestion Files Preview</span>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(80px, 1fr))", gap: "10px", maxHeight: "150px", overflowY: "auto", padding: "8px", background: dm ? "rgba(0,0,0,0.2)" : "rgba(0,0,0,0.02)", borderRadius: "10px", border: `1px solid ${dm ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.05)"}` }}>
+                {activeInputFiles.map((fileObj, idx) => (
+                  <div key={idx} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "4px", padding: "6px", background: dm ? "#222" : "#f3f4f6", borderRadius: "8px", border: `1px solid ${dm ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.05)"}` }}>
+                    <div style={{ fontSize: "20px" }}>🖼️</div>
+                    <span style={{ fontSize: "10px", fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", width: "65px", textAlign: "center" }}>{fileObj.name}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <hr style={{ border: "none", height: "1px", background: dm ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.08)" }} />
 
           {/* Parameters Controls */}
-          <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-            <h3 style={{ margin: 0, fontSize: "15px", fontWeight: 700 }}>AI Parameters & Sensitivity Settings</h3>
+          <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <span style={{ fontSize: "16px" }}>⚙️</span>
+              <h3 style={{ margin: 0, fontSize: "15px", fontWeight: 700 }}>AI Parameters & Sensitivity Settings</h3>
+            </div>
             
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "24px" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "28px" }}>
+              
               {/* Grouping Sensitivity */}
               <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
                 <div style={{ display: "flex", justifyContent: "space-between" }}>
-                  <label style={{ fontSize: "13px", fontWeight: 600 }}>Duplicate Grouping Sensitivity</label>
-                  <span style={{ fontSize: "13px", color: accent, fontWeight: 700 }}>Hamming: {sensitivity} (Alternate Range)</span>
+                  <label style={{ fontSize: "13px", fontWeight: 700 }}>Duplicate Grouping Sensitivity</label>
+                  <span style={{ fontSize: "13px", color: accent, fontWeight: 800 }}>Hamming: {sensitivity}</span>
                 </div>
                 <input
                   type="range"
@@ -427,18 +536,18 @@ export default function CullPage({
                   max="24"
                   value={sensitivity}
                   onChange={(e) => setSensitivity(parseInt(e.target.value))}
-                  style={{ accentColor: accent, cursor: "pointer" }}
+                  style={{ accentColor: accent, cursor: "pointer", width: "100%" }}
                 />
-                <span style={{ fontSize: "11px", color: "#9ca3af" }}>
-                  Smaller value = tighter groupings (requires near identity). Higher value = matches broader motion bursts.
+                <span style={{ fontSize: "11px", color: dm ? "#a1a1aa" : "#71717a", lineHeight: "1.4" }}>
+                  Smaller values group tighter (only exact matches). Larger values group broader clusters (catches continuous bursts).
                 </span>
               </div>
 
               {/* Sharpness Cutoff */}
               <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
                 <div style={{ display: "flex", justifyContent: "space-between" }}>
-                  <label style={{ fontSize: "13px", fontWeight: 600 }}>Focus Sharpness Strictness</label>
-                  <span style={{ fontSize: "13px", color: accent, fontWeight: 700 }}>Score Limit: {blurCutoff}%</span>
+                  <label style={{ fontSize: "13px", fontWeight: 700 }}>Focus Sharpness Strictness</label>
+                  <span style={{ fontSize: "13px", color: accent, fontWeight: 800 }}>Min Score: {blurCutoff}%</span>
                 </div>
                 <input
                   type="range"
@@ -446,49 +555,52 @@ export default function CullPage({
                   max="80"
                   value={blurCutoff}
                   onChange={(e) => setBlurCutoff(parseInt(e.target.value))}
-                  style={{ accentColor: accent, cursor: "pointer" }}
+                  style={{ accentColor: accent, cursor: "pointer", width: "100%" }}
                 />
-                <span style={{ fontSize: "11px", color: "#9ca3af" }}>
-                  Cutoff threshold for out-of-focus warning flags.
+                <span style={{ fontSize: "11px", color: dm ? "#a1a1aa" : "#71717a", lineHeight: "1.4" }}>
+                  Threshold for out-of-focus warning flags. Alternates below this setting get flagged as blurry candidates.
                 </span>
               </div>
             </div>
 
             {/* MediaPipe blink selection */}
-            <div style={{ display: "flex", alignItems: "center", gap: "10px", marginTop: "8px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "10px", marginTop: "10px" }}>
               <input
                 type="checkbox"
                 id="cull_landmarks"
                 checked={useFaceLandmarks}
                 onChange={(e) => setUseFaceLandmarks(e.target.checked)}
-                style={{ accentColor: accent, width: "16px", height: "16px", cursor: "pointer" }}
+                style={{ accentColor: accent, width: "17px", height: "17px", cursor: "pointer" }}
               />
-              <label htmlFor="cull_landmarks" style={{ fontSize: "13px", fontWeight: 600, cursor: "pointer" }}>
-                Run MediaPipe Vision landmarker (detects closed-eye blinks and smile parameters)
+              <label htmlFor="cull_landmarks" style={{ fontSize: "13px", fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: "6px" }}>
+                Enable MediaPipe Face Landmarker (Auto-detects closed eyes, blinks, and smiles)
               </label>
             </div>
           </div>
 
           {/* Trigger Button / Progress */}
-          <div style={{ display: "flex", flexDirection: "column", gap: "12px", alignItems: "center", marginTop: "12px" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: "16px", alignItems: "center", marginTop: "8px" }}>
             {isProcessing ? (
-              <div style={{ width: "100%", display: "flex", flexDirection: "column", alignItems: "center", gap: "10px" }}>
-                <div style={{ width: "100%", height: "6px", background: dm ? "#374151" : "#e5e7eb", borderRadius: "10px", overflow: "hidden" }}>
+              <div style={{ width: "100%", display: "flex", flexDirection: "column", alignItems: "center", gap: "12px", padding: "10px 0" }}>
+                <div style={{ width: "100%", height: "8px", background: dm ? "#222" : "#e5e7eb", borderRadius: "10px", overflow: "hidden", border: `1px solid ${dm ? "rgba(255,255,255,0.05)" : "transparent"}` }}>
                   <div
                     style={{
                       height: "100%",
                       width: `${(progress.current / progress.total) * 100}%`,
-                      background: `linear-gradient(90deg, ${accent}, #a78bfa)`,
-                      transition: "width 0.15s ease-out"
+                      background: "linear-gradient(90deg, #06b6d4, #6c63ff, #ec4899)",
+                      transition: "width 0.2s cubic-bezier(0.4, 0, 0.2, 1)"
                     }}
                   />
                 </div>
-                <span style={{ fontSize: "13px", fontWeight: 700 }}>
-                  Analyzing images with EZ-Cull local AI... {progress.current} / {progress.total}
-                </span>
-                <span style={{ fontSize: "11px", color: "#9ca3af" }}>
-                  Current processing target: {progress.currentFile}
-                </span>
+                
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "4px" }}>
+                  <span style={{ fontSize: "14px", fontWeight: 800, letterSpacing: "-0.2px" }}>
+                    Analyzing photo clusters... {progress.current} / {progress.total} ({Math.round((progress.current / progress.total) * 100)}%)
+                  </span>
+                  <span style={{ fontSize: "12px", color: accent, fontWeight: 600 }}>
+                    Scanning: {progress.currentFile}
+                  </span>
+                </div>
               </div>
             ) : (
               <button
@@ -497,19 +609,43 @@ export default function CullPage({
                 style={{
                   width: "100%",
                   padding: "16px",
-                  background: `linear-gradient(135deg, ${accent}, #5b54d6)`,
-                  color: "#fff",
+                  background: activeInputFiles.length === 0 ? (dm ? "#222" : "#eee") : "linear-gradient(135deg, #06b6d4, #6c63ff)",
+                  color: activeInputFiles.length === 0 ? (dm ? "#555" : "#aaa") : "#fff",
                   border: "none",
-                  borderRadius: "12px",
+                  borderRadius: "14px",
                   cursor: activeInputFiles.length === 0 ? "not-allowed" : "pointer",
                   fontSize: "15px",
                   fontWeight: 700,
-                  boxShadow: "0 4px 14px rgba(108, 99, 255, 0.4)",
-                  transition: "all 0.2s"
+                  boxShadow: activeInputFiles.length === 0 ? "none" : "0 8px 30px rgba(108, 99, 255, 0.25)",
+                  transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)"
+                }}
+                onMouseEnter={(e) => {
+                  if (activeInputFiles.length > 0) {
+                    e.currentTarget.style.transform = "translateY(-1px)";
+                    e.currentTarget.style.boxShadow = "0 12px 35px rgba(108, 99, 255, 0.35)";
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (activeInputFiles.length > 0) {
+                    e.currentTarget.style.transform = "none";
+                    e.currentTarget.style.boxShadow = "0 8px 30px rgba(108, 99, 255, 0.25)";
+                  }
                 }}
               >
-                🚀 Run AI-Assisted Cull ({activeInputFiles.length} Photos)
+                ⚡ Start AI Culling Sequence ({activeInputFiles.length} Photos)
               </button>
+            )}
+
+            {/* Micro logs view inside ingestion card */}
+            {batchLogs && batchLogs.length > 0 && (
+              <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: "6px" }}>
+                <span style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", color: dm ? "#777" : "#aaa" }}>Console logs</span>
+                <div style={{ width: "100%", maxHeight: "100px", overflowY: "auto", background: dm ? "#000" : "#222", color: "#22c55e", padding: "10px", borderRadius: "10px", fontFamily: "monospace", fontSize: "11px", display: "flex", flexDirection: "column", gap: "4px" }}>
+                  {batchLogs.slice(-4).map((log, lidx) => (
+                    <div key={lidx}>{log.text}</div>
+                  ))}
+                </div>
+              </div>
             )}
           </div>
         </div>
@@ -517,122 +653,160 @@ export default function CullPage({
 
       {/* ACTIVE CULLING REVIEW WORKSPACE */}
       {groups.length > 0 && activePhoto && (
-        <div style={{ display: "flex", gap: "20px", flexWrap: "wrap", height: "calc(100vh - 280px)" }}>
-          {/* Left Panel: Primary Review & Comparison Viewer */}
+        <div style={{ display: "grid", gridTemplateColumns: "2.2fr 1fr", gap: "24px", minHeight: "65vh" }}>
+          
+          {/* Left Column: Darkroom Viewport & Group Details */}
           <div
+            className="glass-panel"
             style={{
-              flex: 2,
-              minWidth: "400px",
-              background: cardBg,
-              border: `1px solid ${cardBdr}`,
-              borderRadius: "16px",
-              padding: "16px",
+              borderRadius: "20px",
+              padding: "20px",
               display: "flex",
               flexDirection: "column",
-              position: "relative",
-              overflow: "hidden"
+              boxShadow: dm ? "0 10px 40px rgba(0,0,0,0.3)" : "0 10px 30px rgba(0,0,0,0.03)",
+              position: "relative"
             }}
           >
-            {/* Group Status Header */}
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                paddingBottom: "12px",
-                borderBottom: `1px solid ${dm ? "#374151" : "#e5e7eb"}`,
-                marginBottom: "12px"
-              }}
-            >
+            {/* Header info */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: `1px solid ${dm ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)"}`, paddingBottom: "12px", marginBottom: "16px" }}>
               <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                <span
-                  style={{
-                    background: "rgba(108, 99, 255, 0.1)",
-                    color: accent,
-                    padding: "4px 8px",
-                    borderRadius: "6px",
-                    fontSize: "12px",
-                    fontWeight: 700
-                  }}
-                >
-                  Group {activeGroupIndex + 1} of {groups.length}
+                <span style={{ background: "linear-gradient(135deg, #06b6d4, #6c63ff)", color: "#fff", padding: "4px 10px", borderRadius: "8px", fontSize: "11px", fontWeight: 800 }}>
+                  CLUSTER {activeGroupIndex + 1} / {groups.length}
                 </span>
-                <span style={{ fontSize: "12px", color: "#9ca3af" }}>
-                  Contains {activeGroup.length} duplicate alternates
+                <span style={{ fontSize: "13px", fontWeight: 600, color: dm ? "#9ca3af" : "#4b5563" }}>
+                  {activeGroup.length} duplicate alternates
                 </span>
               </div>
+              
+              <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                <button
+                  onClick={() => setShowFaceBoxes(!showFaceBoxes)}
+                  style={{
+                    background: showFaceBoxes ? "rgba(108, 99, 255, 0.1)" : "transparent",
+                    color: showFaceBoxes ? accent : (dm ? "#a1a1aa" : "#666"),
+                    border: `1px solid ${showFaceBoxes ? accent : (dm ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)")}`,
+                    padding: "5px 10px",
+                    borderRadius: "8px",
+                    fontSize: "11px",
+                    fontWeight: 700,
+                    cursor: "pointer"
+                  }}
+                >
+                  {showFaceBoxes ? "Hide Face Bounding Boxes" : "Show Face Boxes"}
+                </button>
 
-              {/* Status Flag */}
-              <div style={{ display: "flex", gap: "8px" }}>
                 {activePhoto.isKeyPhoto ? (
-                  <span style={{ background: "rgba(34, 197, 94, 0.15)", color: "#22c55e", padding: "4px 8px", borderRadius: "6px", fontSize: "11px", fontWeight: 700 }}>
-                    ★ AI Keeper (Key Photo)
+                  <span style={{ background: "rgba(34, 197, 94, 0.15)", color: "#22c55e", padding: "5px 12px", borderRadius: "8px", fontSize: "11px", fontWeight: 800, border: "1px solid rgba(34, 197, 94, 0.3)" }}>
+                    ★ Auto-Selected Key Photo
                   </span>
                 ) : (
                   <button
                     onClick={() => handlePromoteToKeyPhoto(activePhoto)}
                     style={{
-                      background: "rgba(108, 99, 255, 0.1)",
-                      color: accent,
-                      border: `1px solid ${accent}`,
-                      padding: "4px 10px",
-                      borderRadius: "6px",
+                      background: "linear-gradient(135deg, #6c63ff, #a78bfa)",
+                      color: "#fff",
+                      border: "none",
+                      padding: "6px 14px",
+                      borderRadius: "8px",
                       fontSize: "11px",
                       fontWeight: 700,
-                      cursor: "pointer"
+                      cursor: "pointer",
+                      boxShadow: "0 4px 10px rgba(108, 99, 255, 0.25)"
                     }}
                   >
-                    Promote to Key Photo (S)
+                    Set as Key Photo (S)
                   </button>
                 )}
               </div>
             </div>
 
-            {/* Main Picture Frame */}
+            {/* Darkroom Viewport Panel */}
             <div
               style={{
                 flex: 1,
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                background: dm ? "#111827" : "#f3f4f6",
-                borderRadius: "12px",
+                background: dm ? "#0a0a0f" : "#f1f2f6",
+                borderRadius: "14px",
                 position: "relative",
                 overflow: "hidden",
-                maxHeight: "60vh"
+                border: `1px solid ${dm ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.05)"}`,
+                minHeight: "55vh",
+                maxHeight: "55vh"
               }}
             >
-              <img
-                src={activePhoto.previewUrl}
-                alt={activePhoto.name}
-                style={{
-                  maxWidth: "100%",
-                  maxHeight: "100%",
-                  objectFit: "contain",
-                  borderRadius: "8px"
-                }}
-              />
+              <div style={{ position: "relative", display: "inline-block", maxWidth: "100%", maxHeight: "100%" }}>
+                <img
+                  src={activePhoto.previewUrl}
+                  alt={activePhoto.name}
+                  style={{
+                    maxWidth: "100%",
+                    maxHeight: "53vh",
+                    objectFit: "contain",
+                    borderRadius: "8px",
+                    display: "block"
+                  }}
+                />
 
-              {/* Quality overlay badge HUD */}
+                {/* SVG/Div Bounding Boxes for Faces */}
+                {showFaceBoxes && activePhoto.faces?.map((face, index) => (
+                  <div
+                    key={index}
+                    style={{
+                      position: "absolute",
+                      left: `${face.rect.x * 100}%`,
+                      top: `${face.rect.y * 100}%`,
+                      width: `${face.rect.w * 100}%`,
+                      height: `${face.rect.h * 100}%`,
+                      border: `2px solid ${face.metrics?.blinkDetected ? "#ef4444" : "#22c55e"}`,
+                      boxShadow: `0 0 8px ${face.metrics?.blinkDetected ? "rgba(239, 68, 68, 0.5)" : "rgba(34, 197, 94, 0.5)"}`,
+                      borderRadius: "6px",
+                      pointerEvents: "auto",
+                      cursor: "help",
+                      transition: "all 0.15s"
+                    }}
+                    title={`Face #${index + 1} | Eyes: ${face.metrics?.blinkDetected ? "Blinking / Closed" : "Open"} | Smile: ${face.metrics?.smileScore}%`}
+                  >
+                    {/* Tiny Face HUD Label */}
+                    <div style={{
+                      position: "absolute",
+                      top: "-22px",
+                      left: "-1px",
+                      background: face.metrics?.blinkDetected ? "#ef4444" : "#22c55e",
+                      color: "#fff",
+                      fontSize: "9px",
+                      fontWeight: 800,
+                      padding: "2px 6px",
+                      borderRadius: "4px",
+                      whiteSpace: "nowrap"
+                    }}>
+                      👤 Face {index + 1} ({face.metrics?.blinkDetected ? "Blink" : "OK"})
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Viewport Floating Information HUD */}
               <div
                 style={{
                   position: "absolute",
                   bottom: "16px",
                   left: "16px",
-                  background: "rgba(18, 18, 24, 0.8)",
-                  backdropFilter: "blur(6px)",
+                  background: "rgba(10, 10, 15, 0.85)",
+                  backdropFilter: "blur(12px)",
                   padding: "8px 16px",
                   borderRadius: "10px",
-                  border: "1px solid rgba(255,255,255,0.15)",
+                  border: "1px solid rgba(255, 255, 255, 0.08)",
                   display: "flex",
-                  gap: "14px",
+                  gap: "16px",
                   fontSize: "12px",
                   color: "#fff",
-                  boxShadow: "0 4px 20px rgba(0,0,0,0.3)"
+                  boxShadow: "0 8px 32px rgba(0, 0, 0, 0.3)"
                 }}
               >
                 <div>
-                  <span style={{ color: "#aaa" }}>Sharpness:</span>{" "}
+                  <span style={{ color: "#aaa" }}>Sharpness Value:</span>{" "}
                   <strong style={{ color: activePhoto.sharpness >= blurCutoff ? "#22c55e" : "#ef4444" }}>
                     {activePhoto.sharpness}%
                   </strong>
@@ -640,22 +814,24 @@ export default function CullPage({
 
                 {activePhoto.faces?.length > 0 && (
                   <>
-                    <div style={{ width: "1px", background: "rgba(255,255,255,0.2)" }} />
+                    <div style={{ width: "1px", background: "rgba(255, 255, 255, 0.15)" }} />
                     <div>
-                      <span style={{ color: "#aaa" }}>Faces:</span> <strong>{activePhoto.faces.length}</strong>
+                      <span style={{ color: "#aaa" }}>Detected Faces:</span> <strong>{activePhoto.faces.length}</strong>
                     </div>
                   </>
                 )}
 
-                {activePhoto.faces?.some(f => f.metrics?.blinkDetected) && (
+                {activePhoto.warnings?.length > 0 && (
                   <>
-                    <div style={{ width: "1px", background: "rgba(255,255,255,0.2)" }} />
-                    <div style={{ color: "#ef4444", fontWeight: 700 }}>⚠️ Blink Flagged</div>
+                    <div style={{ width: "1px", background: "rgba(255, 255, 255, 0.15)" }} />
+                    <div style={{ color: "#ef4444", fontWeight: 700, display: "flex", alignItems: "center", gap: "4px" }}>
+                      <span>⚠️</span> Quality Flags
+                    </div>
                   </>
                 )}
               </div>
 
-              {/* Active Ratings Overlay Tag */}
+              {/* Floating Star/Label Badges inside Viewer */}
               <div
                 style={{
                   position: "absolute",
@@ -668,15 +844,19 @@ export default function CullPage({
                 {activePhoto.rating > 0 && (
                   <div
                     style={{
-                      background: "rgba(234, 179, 8, 0.9)",
-                      color: "#000",
+                      background: "rgba(251, 191, 36, 0.95)",
+                      color: "#1e1b4b",
                       fontWeight: 800,
                       padding: "4px 10px",
                       borderRadius: "6px",
-                      fontSize: "12px"
+                      fontSize: "11px",
+                      boxShadow: "0 4px 12px rgba(251, 191, 36, 0.2)",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "2px"
                     }}
                   >
-                    {"★".repeat(activePhoto.rating)}
+                    <span>★</span> {activePhoto.rating}
                   </div>
                 )}
                 {activePhoto.label && (
@@ -684,11 +864,13 @@ export default function CullPage({
                     style={{
                       background: labelColors[activePhoto.label],
                       color: "#fff",
-                      fontWeight: 700,
+                      fontWeight: 800,
                       padding: "4px 10px",
                       borderRadius: "6px",
-                      fontSize: "11px",
-                      textTransform: "uppercase"
+                      fontSize: "10px",
+                      textTransform: "uppercase",
+                      boxShadow: `0 4px 12px ${labelColors[activePhoto.label]}40`,
+                      letterSpacing: "0.5px"
                     }}
                   >
                     {activePhoto.label}
@@ -697,142 +879,202 @@ export default function CullPage({
               </div>
             </div>
 
-            {/* Active Filename bottom row */}
-            <div style={{ display: "flex", justifyContent: "space-between", marginTop: "12px", fontSize: "12px", color: "#9ca3af" }}>
-              <span>File: {activePhoto.name}</span>
-              <span>Quality Score: {activePhoto.cullScore}%</span>
+            {/* Bottom details metadata line */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "14px" }}>
+              <span style={{ fontSize: "13px", fontWeight: 600, color: dm ? "#aaa" : "#555" }}>
+                📄 {activePhoto.name}
+              </span>
+              <span style={{ fontSize: "12px", color: dm ? "#888" : "#999" }}>
+                Quality Metric Score: <strong style={{ color: activePhoto.cullScore >= 70 ? "#22c55e" : "#eab308" }}>{activePhoto.cullScore} pts</strong>
+              </span>
             </div>
           </div>
 
-          {/* Right Panel: Alternates Grid & Rating Dashboard */}
-          <div style={{ flex: 1, minWidth: "300px", display: "flex", flexDirection: "column", gap: "20px" }}>
-            {/* Quick Ratings Dashboard Card */}
+          {/* Right Column: AI Insights, Star Ratings, Alternate Items */}
+          <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+            
+            {/* 1. Ratings Dashboard Panel */}
             <div
+              className="glass-panel"
               style={{
-                background: cardBg,
-                border: `1px solid ${cardBdr}`,
-                borderRadius: "16px",
+                borderRadius: "20px",
                 padding: "20px",
                 display: "flex",
                 flexDirection: "column",
-                gap: "16px"
+                gap: "18px",
+                boxShadow: dm ? "0 10px 40px rgba(0,0,0,0.3)" : "0 10px 30px rgba(0,0,0,0.03)"
               }}
             >
-              <h3 style={{ margin: 0, fontSize: "14px", fontWeight: 700 }}>Ratings & Labels Dashboard</h3>
-              
-              {/* Star Rating Row */}
+              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                <span style={{ fontSize: "16px" }}>🏷️</span>
+                <h3 style={{ margin: 0, fontSize: "14px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.5px", color: dm ? "#a1a1aa" : "#4b5563" }}>
+                  Rating Controls
+                </h3>
+              </div>
+
+              {/* Stars */}
               <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-                <span style={{ fontSize: "12px", color: "#9ca3af" }}>Set Rating (Keys 1-5):</span>
-                <div style={{ display: "flex", gap: "8px" }}>
-                  {[1, 2, 3, 4, 5].map((star) => (
-                    <button
-                      key={star}
-                      onClick={() => updateActivePhotoRating(star)}
-                      style={{
-                        flex: 1,
-                        padding: "8px",
-                        background: activePhoto.rating >= star ? "rgba(234, 179, 8, 0.15)" : "transparent",
-                        border: `1px solid ${activePhoto.rating >= star ? "#eab308" : (dm ? "#374151" : "#e5e7eb")}`,
-                        color: activePhoto.rating >= star ? "#eab308" : (dm ? "#9ca3af" : "#4b5563"),
-                        borderRadius: "8px",
-                        fontSize: "14px",
-                        cursor: "pointer",
-                        transition: "all 0.15s"
-                      }}
-                    >
-                      ★
-                    </button>
-                  ))}
+                <span style={{ fontSize: "12px", color: dm ? "#a1a1aa" : "#71717a", fontWeight: 600 }}>Star Rating (Keys 1-5):</span>
+                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                  <StarRating rating={activePhoto.rating} onChange={updateActivePhotoRating} size={22} />
+                  <span style={{ fontSize: "12px", fontWeight: 700, color: "#fbbf24" }}>
+                    {activePhoto.rating ? `${activePhoto.rating} Stars` : "Unrated"}
+                  </span>
                 </div>
               </div>
 
-              {/* Color Label Row */}
+              {/* Color Labels */}
               <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-                <span style={{ fontSize: "12px", color: "#9ca3af" }}>Color Tags (Keys 6-9):</span>
-                <div style={{ display: "flex", gap: "8px" }}>
-                  {["green", "blue", "yellow", "red"].map((c) => (
+                <span style={{ fontSize: "12px", color: dm ? "#a1a1aa" : "#71717a", fontWeight: 600 }}>Color Label tags (Keys 6-9):</span>
+                <div style={{ display: "flex", gap: "6px" }}>
+                  {["green", "blue", "yellow", "red"].map((colorName) => (
                     <button
-                      key={c}
-                      onClick={() => updateActivePhotoRating(undefined, c)}
+                      key={colorName}
+                      onClick={() => updateActivePhotoRating(undefined, colorName)}
                       style={{
                         flex: 1,
-                        height: "28px",
-                        background: labelColors[c],
-                        border: activePhoto.label === c ? "2px solid #fff" : "none",
-                        boxShadow: activePhoto.label === c ? `0 0 8px ${labelColors[c]}` : "none",
-                        borderRadius: "8px",
+                        height: "26px",
+                        background: labelColors[colorName],
+                        border: activePhoto.label === colorName ? `2px solid ${dm ? "#fff" : "#000"}` : "none",
+                        boxShadow: activePhoto.label === colorName ? `0 0 10px ${labelColors[colorName]}` : "none",
+                        borderRadius: "6px",
                         cursor: "pointer",
-                        transition: "all 0.15s"
+                        transform: activePhoto.label === colorName ? "scale(1.08)" : "none",
+                        transition: "all 0.15s ease"
                       }}
-                      title={c}
+                      title={`Set label to ${colorName}`}
                     />
                   ))}
                   <button
                     onClick={() => updateActivePhotoRating(0, "")}
                     style={{
-                      flex: 1,
-                      height: "28px",
+                      flex: 1.2,
+                      height: "26px",
                       background: "transparent",
-                      border: `1px solid ${dm ? "#374151" : "#e5e7eb"}`,
-                      color: dm ? "#9ca3af" : "#4b5563",
+                      border: `1px solid ${dm ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.15)"}`,
+                      color: dm ? "#d1d5db" : "#4b5563",
                       fontSize: "11px",
-                      borderRadius: "8px",
-                      cursor: "pointer"
+                      fontWeight: 700,
+                      borderRadius: "6px",
+                      cursor: "pointer",
+                      transition: "all 0.15s"
                     }}
                   >
-                    Clear
+                    Clear [0]
                   </button>
                 </div>
               </div>
 
-              <hr style={{ border: "none", height: "1px", background: dm ? "#374151" : "#e5e7eb", margin: "4px 0" }} />
+              <hr style={{ border: "none", height: "1px", background: dm ? "rgba(255, 255, 255, 0.06)" : "rgba(0, 0, 0, 0.06)" }} />
 
-              {/* Metadata Warnings Info */}
+              {/* AI Details / Warnings HUD */}
               <div>
-                <span style={{ fontSize: "12px", color: "#9ca3af" }}>Warnings / Flags:</span>
-                <div style={{ display: "flex", flexDirection: "column", gap: "6px", marginTop: "6px" }}>
+                <span style={{ fontSize: "12px", color: dm ? "#a1a1aa" : "#71717a", fontWeight: 700 }}>AI Quality Details:</span>
+                
+                <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginTop: "8px" }}>
+                  {/* General flags */}
                   {activePhoto.warnings?.length > 0 ? (
                     activePhoto.warnings.map((w, idx) => (
                       <div
                         key={idx}
                         style={{
-                          background: "rgba(239, 68, 68, 0.1)",
-                          border: "1px solid rgba(239, 68, 68, 0.2)",
+                          background: "rgba(239, 68, 68, 0.06)",
+                          border: "1px solid rgba(239, 68, 68, 0.15)",
                           color: "#ef4444",
                           padding: "8px 12px",
-                          borderRadius: "8px",
+                          borderRadius: "10px",
                           fontSize: "11px",
-                          fontWeight: 600
+                          fontWeight: 700,
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "6px"
                         }}
                       >
-                        ⚠️ {w}
+                        <span>⚠️</span> {w}
                       </div>
                     ))
                   ) : (
-                    <div style={{ color: "#22c55e", fontSize: "11px", fontWeight: 600 }}>
-                      ✓ No issues flagged. Perfect keeper candidate!
+                    <div style={{ color: "#22c55e", fontSize: "11px", fontWeight: 700, display: "flex", alignItems: "center", gap: "6px", background: "rgba(34, 197, 94, 0.05)", padding: "8px 12px", borderRadius: "10px", border: "1px solid rgba(34, 197, 94, 0.15)" }}>
+                      <span>✓</span> Perfect focus. No issues detected!
                     </div>
                   )}
+
+                  {/* Face Analysis List */}
+                  {activePhoto.faces?.map((face, index) => {
+                    const leftOpen = Math.min(100, Math.round((face.metrics?.leftEor / 0.22) * 100));
+                    const rightOpen = Math.min(100, Math.round((face.metrics?.rightEor / 0.22) * 100));
+                    const smileVal = face.metrics?.smileScore || 0;
+                    return (
+                      <div
+                        key={index}
+                        style={{
+                          background: dm ? "rgba(255,255,255,0.01)" : "rgba(0,0,0,0.01)",
+                          border: `1px solid ${dm ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.04)"}`,
+                          padding: "10px",
+                          borderRadius: "10px",
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: "6px"
+                        }}
+                      >
+                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: "11px", fontWeight: 800 }}>
+                          <span>👤 Face #{index + 1} Details</span>
+                          {face.metrics?.blinkDetected ? (
+                            <span style={{ color: "#ef4444" }}>⚠️ Blinking</span>
+                          ) : (
+                            <span style={{ color: "#22c55e" }}>✓ Eyes Open</span>
+                          )}
+                        </div>
+
+                        <div style={{ display: "flex", flexDirection: "column", gap: "4px", fontSize: "10px", color: dm ? "#aaa" : "#555" }}>
+                          <div style={{ display: "flex", justifyContent: "space-between" }}>
+                            <span>Left Eye openness:</span>
+                            <span>{leftOpen}%</span>
+                          </div>
+                          <div style={{ width: "100%", height: "3px", background: dm ? "#222" : "#ddd", borderRadius: "2px", overflow: "hidden" }}>
+                            <div style={{ height: "100%", width: `${leftOpen}%`, background: leftOpen < 65 ? "#ef4444" : "#22c55e" }} />
+                          </div>
+
+                          <div style={{ display: "flex", justifyContent: "space-between", marginTop: "2px" }}>
+                            <span>Right Eye openness:</span>
+                            <span>{rightOpen}%</span>
+                          </div>
+                          <div style={{ width: "100%", height: "3px", background: dm ? "#222" : "#ddd", borderRadius: "2px", overflow: "hidden" }}>
+                            <div style={{ height: "100%", width: `${rightOpen}%`, background: rightOpen < 65 ? "#ef4444" : "#22c55e" }} />
+                          </div>
+
+                          <div style={{ display: "flex", justifyContent: "space-between", marginTop: "2px" }}>
+                            <span>Smile score:</span>
+                            <span>{smileVal}% {smileVal > 60 ? "😊" : "😐"}</span>
+                          </div>
+                          <div style={{ width: "100%", height: "3px", background: dm ? "#222" : "#ddd", borderRadius: "2px", overflow: "hidden" }}>
+                            <div style={{ height: "100%", width: `${smileVal}%`, background: "linear-gradient(90deg, #6c63ff, #06b6d4)" }} />
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             </div>
 
-            {/* Alternates Deck Grid */}
+            {/* 2. Alternates Selection Deck */}
             <div
+              className="glass-panel"
               style={{
                 flex: 1,
-                background: cardBg,
-                border: `1px solid ${cardBdr}`,
-                borderRadius: "16px",
-                padding: "16px",
+                borderRadius: "20px",
+                padding: "20px",
                 display: "flex",
                 flexDirection: "column",
                 gap: "12px",
-                overflowY: "auto"
+                maxHeight: "35vh",
+                overflowY: "auto",
+                boxShadow: dm ? "0 10px 40px rgba(0,0,0,0.3)" : "0 10px 30px rgba(0,0,0,0.03)"
               }}
             >
-              <span style={{ fontSize: "12px", fontWeight: 700, color: "#9ca3af" }}>
-                Alternates in current cluster (Group {activeGroupIndex + 1})
+              <span style={{ fontSize: "12px", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.5px", color: dm ? "#a1a1aa" : "#4b5563" }}>
+                Alternates in Cluster
               </span>
 
               <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
@@ -846,24 +1088,25 @@ export default function CullPage({
                         display: "flex",
                         gap: "10px",
                         padding: "8px",
-                        background: isCurrent ? (dm ? "#1f2937" : "#f3f4f6") : "transparent",
+                        background: isCurrent ? (dm ? "rgba(255,255,255,0.05)" : "#f3f4f6") : "transparent",
                         border: `1px solid ${isCurrent ? accent : "transparent"}`,
                         borderRadius: "10px",
                         cursor: "pointer",
-                        transition: "all 0.15s"
+                        transition: "all 0.15s ease"
                       }}
                     >
                       {/* Alternate thumbnail */}
                       <div
                         style={{
-                          width: "60px",
-                          height: "45px",
+                          width: "64px",
+                          height: "48px",
                           background: "#000",
                           borderRadius: "6px",
                           overflow: "hidden",
                           display: "flex",
                           alignItems: "center",
-                          justifyContent: "center"
+                          justifyContent: "center",
+                          border: `1px solid ${dm ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)"}`
                         }}
                       >
                         <img
@@ -873,14 +1116,18 @@ export default function CullPage({
                         />
                       </div>
 
-                      {/* Alternate metadata text */}
-                      <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", gap: "2px" }}>
+                      {/* Alternate details */}
+                      <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", gap: "3px" }}>
                         <span style={{ fontSize: "11px", fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "160px" }}>
                           {item.name}
                         </span>
-                        <div style={{ display: "flex", gap: "8px", fontSize: "10px", color: "#9ca3af" }}>
+                        <div style={{ display: "flex", gap: "10px", fontSize: "10px", color: dm ? "#a1a1aa" : "#71717a" }}>
                           <span>Focus: {item.sharpness}%</span>
-                          {item.isKeyPhoto && <span style={{ color: "#22c55e", fontWeight: 700 }}>Key Photo</span>}
+                          {item.isKeyPhoto ? (
+                            <span style={{ color: "#22c55e", fontWeight: 800 }}>★ Key Photo</span>
+                          ) : (
+                            item.warnings?.length > 0 && <span style={{ color: "#ef4444" }}>⚠️ Warning</span>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -892,17 +1139,28 @@ export default function CullPage({
             {/* Direct XMP Sync Ratings Trigger */}
             <button
               onClick={handleExportXmp}
+              disabled={!outputHandle}
               style={{
                 padding: "16px",
-                background: outputHandle ? `linear-gradient(135deg, ${accent}, #5b54d6)` : (dm ? "#374151" : "#e5e7eb"),
-                color: outputHandle ? "#fff" : (dm ? "#9ca3af" : "#4b5563"),
+                background: outputHandle ? `linear-gradient(135deg, ${accent}, #5b54d6)` : (dm ? "#222" : "#eee"),
+                color: outputHandle ? "#fff" : (dm ? "#555" : "#aaa"),
                 border: "none",
-                borderRadius: "12px",
+                borderRadius: "14px",
                 cursor: outputHandle ? "pointer" : "not-allowed",
                 fontSize: "14px",
                 fontWeight: 700,
-                boxShadow: outputHandle ? "0 4px 14px rgba(108, 99, 255, 0.3)" : "none",
-                transition: "all 0.2s"
+                boxShadow: outputHandle ? "0 4px 14px rgba(108, 99, 255, 0.25)" : "none",
+                transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)"
+              }}
+              onMouseEnter={(e) => {
+                if (outputHandle) {
+                  e.currentTarget.style.transform = "translateY(-1px)";
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (outputHandle) {
+                  e.currentTarget.style.transform = "none";
+                }
               }}
             >
               💾 Save XMP Sidecars to Output Folder
@@ -914,31 +1172,32 @@ export default function CullPage({
       {/* BOTTOM FILMSTRIP TIMELINE */}
       {groups.length > 0 && (
         <div
+          className="glass-panel"
           style={{
-            background: cardBg,
-            border: `1px solid ${cardBdr}`,
-            borderRadius: "16px",
-            padding: "12px",
+            borderRadius: "20px",
+            padding: "16px",
             display: "flex",
             flexDirection: "column",
-            gap: "8px"
+            gap: "12px",
+            boxShadow: dm ? "0 10px 40px rgba(0,0,0,0.3)" : "0 10px 30px rgba(0,0,0,0.03)"
           }}
         >
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span style={{ fontSize: "11px", fontWeight: 700, color: "#9ca3af", textTransform: "uppercase" }}>
-              Duplicate Timeline (Use Left / Right Arrows)
+            <span style={{ fontSize: "11px", fontWeight: 800, color: dm ? "#a1a1aa" : "#71717a", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+              Duplicate Clusters Timeline
             </span>
-            <span style={{ fontSize: "11px", color: accent, fontWeight: 700 }}>
-              Group {activeGroupIndex + 1} of {groups.length}
+            <span style={{ fontSize: "11px", color: accent, fontWeight: 800 }}>
+              Cluster {activeGroupIndex + 1} of {groups.length}
             </span>
           </div>
 
           <div
             style={{
               display: "flex",
-              gap: "10px",
+              gap: "12px",
               overflowX: "auto",
-              paddingBottom: "4px"
+              paddingBottom: "8px",
+              scrollBehavior: "smooth"
             }}
           >
             {groups.map((grp, idx) => {
@@ -953,35 +1212,43 @@ export default function CullPage({
                   }}
                   style={{
                     flexShrink: 0,
-                    width: "80px",
-                    height: "60px",
-                    borderRadius: "8px",
+                    width: "90px",
+                    height: "64px",
+                    borderRadius: "10px",
                     border: `2px solid ${isCurrent ? accent : "transparent"}`,
                     overflow: "hidden",
                     cursor: "pointer",
                     position: "relative",
                     background: "#000",
-                    transition: "all 0.15s"
+                    transition: "all 0.15s ease",
+                    boxShadow: isCurrent ? "0 4px 12px rgba(108, 99, 255, 0.2)" : "none"
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!isCurrent) e.currentTarget.style.borderColor = "rgba(108, 99, 255, 0.4)";
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!isCurrent) e.currentTarget.style.borderColor = "transparent";
                   }}
                 >
                   <img
                     src={rep.previewUrl}
                     alt=""
-                    style={{ width: "100%", height: "100%", objectFit: "cover", opacity: isCurrent ? 1.0 : 0.6 }}
+                    style={{ width: "100%", height: "100%", objectFit: "cover", opacity: isCurrent ? 1.0 : 0.55 }}
                   />
 
                   {/* Group Count Badge */}
                   <div
                     style={{
                       position: "absolute",
-                      bottom: "2px",
-                      right: "2px",
-                      background: "rgba(0,0,0,0.8)",
+                      bottom: "4px",
+                      right: "4px",
+                      background: "rgba(10, 10, 15, 0.95)",
                       color: "#fff",
                       fontSize: "9px",
                       fontWeight: 800,
-                      padding: "2px 4px",
-                      borderRadius: "4px"
+                      padding: "2px 5px",
+                      borderRadius: "5px",
+                      border: "1px solid rgba(255,255,255,0.05)"
                     }}
                   >
                     x{grp.length}
@@ -991,6 +1258,94 @@ export default function CullPage({
             })}
           </div>
         </div>
+      )}
+
+      {/* KEYBOARD SHORTCUTS INSTRUCTIONS */}
+      {groups.length > 0 && showShortcutsHelp && (
+        <div
+          className="glass-panel"
+          style={{
+            borderRadius: "16px",
+            padding: "16px 20px",
+            display: "flex",
+            flexDirection: "column",
+            gap: "12px",
+            boxShadow: dm ? "0 10px 40px rgba(0,0,0,0.3)" : "0 10px 30px rgba(0,0,0,0.03)"
+          }}
+        >
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span style={{ fontSize: "12px", fontWeight: 800, display: "flex", alignItems: "center", gap: "6px" }}>
+              <span>⌨️</span> Keyboard Shortcuts Guide
+            </span>
+            <button
+              onClick={() => setShowShortcutsHelp(false)}
+              style={{
+                background: "transparent",
+                border: "none",
+                color: dm ? "#a1a1aa" : "#71717a",
+                cursor: "pointer",
+                fontSize: "11px",
+                fontWeight: 700
+              }}
+            >
+              Hide Guide
+            </button>
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "12px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "11px" }}>
+              <kbd style={{ background: dm ? "#333" : "#e5e7eb", padding: "2px 6px", borderRadius: "4px", fontWeight: 700, fontFamily: "monospace" }}>←</kbd>
+              <kbd style={{ background: dm ? "#333" : "#e5e7eb", padding: "2px 6px", borderRadius: "4px", fontWeight: 700, fontFamily: "monospace" }}>→</kbd>
+              <span>Cycle Duplicate Groups</span>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "11px" }}>
+              <kbd style={{ background: dm ? "#333" : "#e5e7eb", padding: "2px 6px", borderRadius: "4px", fontWeight: 700, fontFamily: "monospace" }}>↑</kbd>
+              <kbd style={{ background: dm ? "#333" : "#e5e7eb", padding: "2px 6px", borderRadius: "4px", fontWeight: 700, fontFamily: "monospace" }}>↓</kbd>
+              <span>Select Alternate inside Group</span>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "11px" }}>
+              <kbd style={{ background: dm ? "#333" : "#e5e7eb", padding: "2px 6px", borderRadius: "4px", fontWeight: 700, fontFamily: "monospace" }}>Space</kbd>
+              <span>Keeper (5★, Green)</span>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "11px" }}>
+              <kbd style={{ background: dm ? "#333" : "#e5e7eb", padding: "2px 6px", borderRadius: "4px", fontWeight: 700, fontFamily: "monospace" }}>1</kbd>
+              <span>-</span>
+              <kbd style={{ background: dm ? "#333" : "#e5e7eb", padding: "2px 6px", borderRadius: "4px", fontWeight: 700, fontFamily: "monospace" }}>5</kbd>
+              <span>Set Stars</span>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "11px" }}>
+              <kbd style={{ background: dm ? "#333" : "#e5e7eb", padding: "2px 6px", borderRadius: "4px", fontWeight: 700, fontFamily: "monospace" }}>6</kbd>
+              <span>-</span>
+              <kbd style={{ background: dm ? "#333" : "#e5e7eb", padding: "2px 6px", borderRadius: "4px", fontWeight: 700, fontFamily: "monospace" }}>9</kbd>
+              <span>Set Colors (G/B/Y/R)</span>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "11px" }}>
+              <kbd style={{ background: dm ? "#333" : "#e5e7eb", padding: "2px 6px", borderRadius: "4px", fontWeight: 700, fontFamily: "monospace" }}>S</kbd>
+              <span>Promote to Key Photo</span>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {groups.length > 0 && !showShortcutsHelp && (
+        <button
+          onClick={() => setShowShortcutsHelp(true)}
+          style={{
+            alignSelf: "flex-start",
+            background: "transparent",
+            border: "none",
+            color: dm ? "#a1a1aa" : "#71717a",
+            cursor: "pointer",
+            fontSize: "12px",
+            fontWeight: 700,
+            display: "flex",
+            alignItems: "center",
+            gap: "4px",
+            marginTop: "-10px"
+          }}
+        >
+          <span>⌨️</span> Show Keyboard Shortcuts Guide
+        </button>
       )}
     </div>
   );
