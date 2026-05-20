@@ -40,6 +40,72 @@ export function ApertureLogo({ size = 26, className = "" }) {
   );
 }
 
+export function getTabIcon(id, isActive, dm) {
+  const color = isActive ? "url(#logoGlow)" : (dm ? "#a1a1aa" : "#666677");
+  const strokeWidth = 2;
+  const size = 15;
+  
+  switch (id) {
+    case "home":
+      return (
+        <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" style={{ transition: "stroke 0.2s" }}>
+          <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+          <polyline points="9 22 9 12 15 12 15 22" />
+        </svg>
+      );
+    case "edit":
+      return (
+        <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" style={{ transition: "stroke 0.2s" }}>
+          <line x1="4" y1="21" x2="4" y2="14" />
+          <line x1="4" y1="10" x2="4" y2="3" />
+          <line x1="12" y1="21" x2="12" y2="12" />
+          <line x1="12" y1="8" x2="12" y2="3" />
+          <line x1="20" y1="21" x2="20" y2="16" />
+          <line x1="20" y1="12" x2="20" y2="3" />
+          <line x1="1" y1="14" x2="7" y2="14" />
+          <line x1="9" y1="8" x2="15" y2="8" />
+          <line x1="17" y1="16" x2="23" y2="16" />
+        </svg>
+      );
+    case "adjust":
+      return (
+        <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" style={{ transition: "stroke 0.2s" }}>
+          <path d="M6.13 1L6 16a2 2 0 0 0 2 2h15" />
+          <path d="M1 6.13L16 6a2 2 0 0 1 2 2v15" />
+        </svg>
+      );
+    case "overlay":
+      return (
+        <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" style={{ transition: "stroke 0.2s" }}>
+          <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
+        </svg>
+      );
+    case "tools":
+      return (
+        <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" style={{ transition: "stroke 0.2s" }}>
+          <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
+        </svg>
+      );
+    case "cull":
+      return (
+        <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" style={{ transition: "stroke 0.2s" }}>
+          <circle cx="11" cy="11" r="8" />
+          <line x1="21" y1="21" x2="16.65" y2="16.65" />
+          <path d="M11 7v8M7 11h8" strokeWidth={1.5} opacity={0.8} />
+        </svg>
+      );
+    case "batch":
+      return (
+        <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" style={{ transition: "stroke 0.2s" }}>
+          <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+        </svg>
+      );
+    default:
+      return null;
+  }
+}
+
 export default function App() {
   const [image, setImage] = useState(null);
   const [filters, setFilters] = useState(DEFAULT_FILTERS);
@@ -1364,16 +1430,51 @@ export default function App() {
           </div>
         </div>
         <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
-          <button onClick={() => setDarkMode(!darkMode)} style={{ background: 'transparent', border: 'none', fontSize: '18px', cursor: 'pointer', padding: '4px 8px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all .2s', color: dm ? '#ffd43b' : '#666' }} title={dm ? 'Light Mode' : 'Dark Mode'}>
-            {dm ? '☀️' : '🌙'}
+          <button onClick={() => setDarkMode(!darkMode)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '6px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all .2s', color: dm ? '#ffd43b' : '#666' }} title={dm ? 'Light Mode' : 'Dark Mode'}>
+            {dm ? (
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="5" fill="#ffd43b" />
+                <line x1="12" y1="1" x2="12" y2="3" />
+                <line x1="12" y1="21" x2="12" y2="23" />
+                <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
+                <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
+                <line x1="1" y1="12" x2="3" y2="12" />
+                <line x1="21" y1="12" x2="23" y2="12" />
+                <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
+                <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
+              </svg>
+            ) : (
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" fill="#666" />
+              </svg>
+            )}
           </button>
-          <div style={{ display: "flex", background: dm ? '#2a2a2a' : '#f2f2f8', borderRadius: "10px", padding: "3px", gap: "2px", overflowX: "auto" }}>
-            {[["home", "🏠", "Home"], ["edit", "✏️", "Edit"], ["adjust", "✂️", "Adjust"], ["overlay", "🔤", "Overlay"], ["tools", "🛠", "Tools"], ["cull", "🔍", "Cull AI"], ["batch", "📦", "Batch"]].map(([id, ic, lb]) => (
-              <button key={id} onClick={() => setActiveTab(id)}
-                style={{ padding: isMobile ? "5px 8px" : "5px 12px", fontSize: "12px", fontWeight: 600, border: "none", cursor: "pointer", background: activeTab === id ? (dm ? '#444' : '#fff') : 'transparent', color: activeTab === id ? '#6c63ff' : (dm ? '#aaa' : '#888'), borderRadius: "8px", boxShadow: activeTab === id ? "0 1px 4px rgba(0,0,0,.1)" : "none", transition: "all .18s", whiteSpace: "nowrap" }}>
-                {isMobile ? ic : `${ic} ${lb}`}
-              </button>
-            ))}
+          <div style={{ display: "flex", background: dm ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.04)', border: `1px solid ${dm ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'}`, backdropFilter: "blur(8px)", borderRadius: "12px", padding: "3px", gap: "3px", overflowX: "auto" }}>
+            {[["home", "Home"], ["edit", "Edit"], ["adjust", "Adjust"], ["overlay", "Overlay"], ["tools", "Tools"], ["cull", "Cull AI"], ["batch", "Batch"]].map(([id, lb]) => {
+              const isActive = activeTab === id;
+              return (
+                <button key={id} onClick={() => setActiveTab(id)}
+                  style={{ 
+                    padding: isMobile ? "5px 10px" : "6px 12px", 
+                    fontSize: "12px", 
+                    fontWeight: 600, 
+                    border: "none", 
+                    cursor: "pointer", 
+                    background: isActive ? (dm ? '#333' : '#fff') : 'transparent', 
+                    color: isActive ? (dm ? '#fff' : '#1a1a2e') : (dm ? '#a1a1aa' : '#666677'), 
+                    borderRadius: "9px", 
+                    boxShadow: isActive ? "0 2px 8px rgba(0,0,0,.08)" : "none", 
+                    transition: "all .2s", 
+                    whiteSpace: "nowrap",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "6px"
+                  }}>
+                  {getTabIcon(id, isActive, dm)}
+                  {!isMobile && <span>{lb}</span>}
+                </button>
+              );
+            })}
           </div>
           {image && (
             <button onClick={() => setShowExport(true)}
