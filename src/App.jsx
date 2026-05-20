@@ -16,6 +16,29 @@ import {
 import { createSkinMask } from "./faceMasking";
 import { restoreFaceLocal } from "./faceRestore";
 import { decodeRaw } from "./rawProcessor";
+import { LandingPage } from "./LandingPage";
+
+export function ApertureLogo({ size = 26, className = "" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" className={`aperture-logo ${className}`} style={{ display: 'inline-block', verticalAlign: 'middle' }}>
+      <defs>
+        <linearGradient id="logoGlow" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#06b6d4" />
+          <stop offset="50%" stopColor="#6c63ff" />
+          <stop offset="100%" stopColor="#ec4899" />
+        </linearGradient>
+      </defs>
+      <circle cx="50" cy="50" r="46" stroke="url(#logoGlow)" strokeWidth="6" strokeLinecap="round" style={{ opacity: 0.9 }} />
+      <g stroke="url(#logoGlow)" strokeWidth="4" strokeLinecap="round" opacity="0.9">
+        <path d="M50 10 L68 40 L45 35 Z" fill="url(#logoGlow)" fillOpacity="0.15" />
+        <path d="M90 50 L60 68 L65 45 Z" fill="url(#logoGlow)" fillOpacity="0.15" />
+        <path d="M50 90 L32 60 L55 65 Z" fill="url(#logoGlow)" fillOpacity="0.15" />
+        <path d="M10 50 L40 32 L35 55 Z" fill="url(#logoGlow)" fillOpacity="0.15" />
+      </g>
+      <circle cx="50" cy="50" r="14" stroke="url(#logoGlow)" strokeWidth="3" fill="none" />
+    </svg>
+  );
+}
 
 export default function App() {
   const [image, setImage] = useState(null);
@@ -28,7 +51,7 @@ export default function App() {
   const [cropAspect, setCropAspect] = useState("free");
   const [texts, setTexts] = useState([]);
   const [selText, setSelText] = useState(null);
-  const [activeTab, setActiveTab] = useState("edit");
+  const [activeTab, setActiveTab] = useState("home");
   const [filterGroup, setFilterGroup] = useState("basic");
   const [showBefore, setShowBefore] = useState(false);
   const [splitPos, setSplitPos] = useState(50);
@@ -1333,16 +1356,19 @@ export default function App() {
       `}</style>
 
       <header className="glass-panel" style={{ height: "52px", padding: "0 14px", display: "flex", alignItems: "center", justifyContent: "space-between", position: "sticky", top: 0, zIndex: 50, borderBottom: `1px solid ${dm ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'}` }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "9px" }}>
-          <div style={{ width: "30px", height: "30px", background: "linear-gradient(135deg,#6c63ff,#a78bfa)", borderRadius: "8px", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "15px", flexShrink: 0 }}>✨</div>
-          <div style={{ fontSize: "16px", fontWeight: 700, color: dm ? '#f0f0f0' : '#1a1a2e', letterSpacing: "-.3px" }}>PHOTOlab</div>
+        <div style={{ display: "flex", alignItems: "center", gap: "9px", cursor: "pointer" }} onClick={() => setActiveTab("home")}>
+          <ApertureLogo size={30} />
+          <div style={{ fontSize: "16px", fontWeight: 800, color: dm ? '#f0f0f0' : '#1a1a2e', letterSpacing: "-.3px", display: "flex", alignItems: "center", gap: "4px" }}>
+            <span>PHOTO</span>
+            <span style={{ fontStyle: "italic", background: "linear-gradient(135deg, #06b6d4, #6c63ff)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>LAB</span>
+          </div>
         </div>
         <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
           <button onClick={() => setDarkMode(!darkMode)} style={{ background: 'transparent', border: 'none', fontSize: '18px', cursor: 'pointer', padding: '4px 8px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all .2s', color: dm ? '#ffd43b' : '#666' }} title={dm ? 'Light Mode' : 'Dark Mode'}>
             {dm ? '☀️' : '🌙'}
           </button>
           <div style={{ display: "flex", background: dm ? '#2a2a2a' : '#f2f2f8', borderRadius: "10px", padding: "3px", gap: "2px", overflowX: "auto" }}>
-            {[["edit", "✏️", "Edit"], ["adjust", "✂️", "Adjust"], ["overlay", "🔤", "Overlay"], ["tools", "🛠", "Tools"], ["cull", "🔍", "Cull AI"], ["batch", "📦", "Batch"]].map(([id, ic, lb]) => (
+            {[["home", "🏠", "Home"], ["edit", "✏️", "Edit"], ["adjust", "✂️", "Adjust"], ["overlay", "🔤", "Overlay"], ["tools", "🛠", "Tools"], ["cull", "🔍", "Cull AI"], ["batch", "📦", "Batch"]].map(([id, ic, lb]) => (
               <button key={id} onClick={() => setActiveTab(id)}
                 style={{ padding: isMobile ? "5px 8px" : "5px 12px", fontSize: "12px", fontWeight: 600, border: "none", cursor: "pointer", background: activeTab === id ? (dm ? '#444' : '#fff') : 'transparent', color: activeTab === id ? '#6c63ff' : (dm ? '#aaa' : '#888'), borderRadius: "8px", boxShadow: activeTab === id ? "0 1px 4px rgba(0,0,0,.1)" : "none", transition: "all .18s", whiteSpace: "nowrap" }}>
                 {isMobile ? ic : `${ic} ${lb}`}
@@ -1359,7 +1385,9 @@ export default function App() {
       </header>
 
       {!isMobile && (
-        activeTab === "batch" ? (
+        activeTab === "home" ? (
+          <LandingPage {...{ dm, loadImage, setActiveTab }} />
+        ) : activeTab === "batch" ? (
           <BatchPage {...{ dm, cardBg, cardBdr, inputSt, sourceHandle, outputHandle, batchImages, selectSourceFolder, selectRawSourceFolder, selectOutputFolder, batchResizeMode, setBatchResizeMode, batchResizePreset, setBatchResizePreset, batchCustomW, setBatchCustomW, batchCustomH, setBatchCustomH, batchKeepAspect, setBatchKeepAspect, batchLongEdgePx, setBatchLongEdgePx, batchAutoLevels, setBatchAutoLevels, batchAutoContrast, setBatchAutoContrast, batchSharpen, setBatchSharpen, batchSharpenAmt, setBatchSharpenAmt, batchSharpenRad, setBatchSharpenRad, batchDenoise, setBatchDenoise, batchDenoiseAmt, setBatchDenoiseAmt, batchLogo, setBatchLogo, batchLogoFile, setBatchLogoFile, handleBatchLogoUpload, batchLogoScale, setBatchLogoScale, batchLogoScalePortrait, setBatchLogoScalePortrait, batchLogoOpacity, setBatchLogoOpacity, batchLogoPos, setBatchLogoPos, batchLogoMargin, setBatchLogoMargin, batchOutputFmt, setBatchOutputFmt, batchOutputQ, setBatchOutputQ, batchPrefix, setBatchPrefix, batchSuffix, setBatchSuffix, batchProcessing, batchProgress, batchDone, handleBatchProcess, batchPreviewIdx, batchPreviewOrigUrl, batchPreviewAfterUrl, batchPreviewLoading, batchPreviewSplit, setBatchPreviewSplit, batchPreviewDragging, setBatchPreviewDragging, batchPreviewOpen, setBatchPreviewOpen, generateBatchPreview, filters, setFilters, resetAll, batchFilterGroup, setBatchFilterGroup, calcBatchDims, batchAiUpscale, setBatchAiUpscale, batchAiBeauty, setBatchAiBeauty, batchAiScale, setBatchAiScale, batchAiBeautySmooth, setBatchAiBeautySmooth, batchAiBeautyClarity, setBatchAiBeautyClarity, batchAiBeautyGlow, setBatchAiBeautyGlow, batchAiFaceRestore, setBatchAiFaceRestore, batchAiBeautyUseMask, setBatchAiBeautyUseMask, batchSection, setBatchSection, batchRawFiles, setBatchRawFiles, handleRawBatchProcess, batchLogs, addBatchLog }} />
         ) : activeTab === "cull" ? (
           <CullPage {...{ dm, cardBg, cardBdr, inputSt, sourceHandle, outputHandle, batchImages, selectSourceFolder, selectRawSourceFolder, selectOutputFolder, batchLogs, addBatchLog, batchSection, setBatchSection }} />
@@ -1376,7 +1404,11 @@ export default function App() {
       )}
 
       {isMobile && (
-        activeTab === "batch" ? (
+        activeTab === "home" ? (
+          <div style={{ height: "calc(100vh - 52px)", overflowY: "auto" }}>
+            <LandingPage {...{ dm, loadImage, setActiveTab }} />
+          </div>
+        ) : activeTab === "batch" ? (
           <div style={{ height: "calc(100vh - 52px)", overflowY: "auto" }}>
             <BatchPage {...{ dm, cardBg, cardBdr, inputSt, isMobile: true, sourceHandle, outputHandle, batchImages, selectSourceFolder, selectRawSourceFolder, selectOutputFolder, batchResizeMode, setBatchResizeMode, batchResizePreset, setBatchResizePreset, batchCustomW, setBatchCustomW, batchCustomH, setBatchCustomH, batchKeepAspect, setBatchKeepAspect, batchLongEdgePx, setBatchLongEdgePx, batchAutoLevels, setBatchAutoLevels, batchAutoContrast, setBatchAutoContrast, batchSharpen, setBatchSharpen, batchSharpenAmt, setBatchSharpenAmt, batchSharpenRad, setBatchSharpenRad, batchDenoise, setBatchDenoise, batchDenoiseAmt, setBatchDenoiseAmt, batchLogo, setBatchLogo, batchLogoFile, setBatchLogoFile, handleBatchLogoUpload, batchLogoScale, setBatchLogoScale, batchLogoScalePortrait, setBatchLogoScalePortrait, batchLogoOpacity, setBatchLogoOpacity, batchLogoPos, setBatchLogoPos, batchLogoMargin, setBatchLogoMargin, batchOutputFmt, setBatchOutputFmt, batchOutputQ, setBatchOutputQ, batchPrefix, setBatchPrefix, batchSuffix, setBatchSuffix, batchProcessing, batchProgress, batchDone, handleBatchProcess, batchPreviewIdx, batchPreviewOrigUrl, batchPreviewAfterUrl, batchPreviewLoading, batchPreviewSplit, setBatchPreviewSplit, batchPreviewDragging, setBatchPreviewDragging, batchPreviewOpen, setBatchPreviewOpen, generateBatchPreview, filters, setFilters, resetAll, batchFilterGroup, setBatchFilterGroup, calcBatchDims, batchAiUpscale, setBatchAiUpscale, batchAiBeauty, setBatchAiBeauty, batchAiScale, setBatchAiScale, batchAiBeautySmooth, setBatchAiBeautySmooth, batchAiBeautyClarity, setBatchAiBeautyClarity, batchAiBeautyGlow, setBatchAiBeautyGlow, batchAiFaceRestore, setBatchAiFaceRestore, batchAiBeautyUseMask, setBatchAiBeautyUseMask, batchSection, setBatchSection, batchRawFiles, setBatchRawFiles, handleRawBatchProcess, batchLogs, addBatchLog }} />
           </div>

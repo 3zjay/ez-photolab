@@ -62,14 +62,32 @@
   animation: pulse-glow 2s infinite ease-in-out;
 }
 
+/* Hover cards micro-animations */
+.animate-hover-card {
+  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.animate-hover-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 30px rgba(108, 99, 255, 0.15);
+  border-color: rgba(108, 99, 255, 0.3) !important;
+}
+
+/* Aperture logo interactive rotation */
+.aperture-logo {
+  transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.aperture-logo:hover {
+  transform: rotate(180deg) scale(1.05);
+}
+
 /* Base Gradient Background */
 .app-bg-dark {
-  background: radial-gradient(circle at top left, #1a1a2e, #121212 40%),
-              radial-gradient(circle at bottom right, #2a1538, #121212 50%);
+  background: radial-gradient(circle at 10% 20%, rgba(26, 26, 46, 0.95), #121212 50%),
+              radial-gradient(circle at 90% 80%, rgba(42, 21, 56, 0.95), #121212 60%);
   background-attachment: fixed;
 }
 .app-bg-light {
-  background: radial-gradient(circle at top left, #f3f0ff, #f7f8fa 40%),
-              radial-gradient(circle at bottom right, #fff0f5, #f7f8fa 50%);
+  background: radial-gradient(circle at 10% 20%, #f4f2ff, #f7f8fa 50%),
+              radial-gradient(circle at 90% 80%, #fff2f7, #f7f8fa 60%);
   background-attachment: fixed;
 }
