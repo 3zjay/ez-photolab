@@ -133,13 +133,15 @@ export default function App() {
     setIsIOS(ios);
 
     const checkInstalled = () => {
-      const isStandalone = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone;
+      const isStandalone = window.matchMedia('(display-mode: fullscreen)').matches || window.matchMedia('(display-mode: standalone)').matches || navigator.standalone;
       setIsInstalled(isStandalone);
     };
     checkInstalled();
     
-    const mediaQuery = window.matchMedia('(display-mode: standalone)');
-    mediaQuery.addEventListener('change', checkInstalled);
+    const mqFullscreen = window.matchMedia('(display-mode: fullscreen)');
+    const mqStandalone = window.matchMedia('(display-mode: standalone)');
+    mqFullscreen.addEventListener('change', checkInstalled);
+    mqStandalone.addEventListener('change', checkInstalled);
 
     const handleBeforeInstall = (e) => {
       e.preventDefault();
@@ -149,7 +151,8 @@ export default function App() {
     window.addEventListener('beforeinstallprompt', handleBeforeInstall);
     return () => {
       window.removeEventListener('beforeinstallprompt', handleBeforeInstall);
-      mediaQuery.removeEventListener('change', checkInstalled);
+      mqFullscreen.removeEventListener('change', checkInstalled);
+      mqStandalone.removeEventListener('change', checkInstalled);
     };
   }, []);
 
