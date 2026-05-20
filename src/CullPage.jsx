@@ -64,7 +64,7 @@ export default function CullPage({
   const [isExporting, setIsExporting] = useState(false);
   const [exportProgress, setExportProgress] = useState({ current: 0, total: 0, currentFile: "" });
   const [exportMethod, setExportMethod] = useState("folders"); // "folders" or "xmp"
-  const [layoutMode, setLayoutMode] = useState("keepers_rejects"); // "keepers_rejects", "keepers_only", "clusters"
+  const [layoutMode, setLayoutMode] = useState("full_sort"); // "full_sort", "keepers_rejects", "keepers_only", "clusters"
 
   // Toast / Status state
   const [toastMessage, setToastMessage] = useState(null);
@@ -221,22 +221,29 @@ export default function CullPage({
 
     try {
       const allImages = groups.flat();
-      
+
       // Determine what files will actually be copied
-      const filesToCopy = mode === "keepers_only" 
-        ? allImages.filter(item => item.isKeyPhoto) 
+      const filesToCopy = mode === "keepers_only"
+        ? allImages.filter(item => item.isKeyPhoto || item.category === "keeper")
         : allImages;
 
       if (filesToCopy.length === 0) {
-        throw new Error("No files matched the current export criteria (e.g. no Keepers marked).");
+        throw new Error("No files matched the current export criteria.");
       }
 
-      // Initialize directories
+      // Pre-create directories as needed
       let keepersDir = null;
       let alternatesDir = null;
+      let blurryDir = null;
+      let rejectedDir = null;
 
-      if (mode === "keepers_rejects") {
-        keepersDir = await outputHandle.getDirectoryHandle("Keepers", { create: true });
+      if (mode === "full_sort") {
+        keepersDir   = await outputHandle.getDirectoryHandle("📗 Keepers",   { create: true });
+        alternatesDir = await outputHandle.getDirectoryHandle("📘 Alternates", { create: true });
+        blurryDir    = await outputHandle.getDirectoryHandle("📙 Blurry",     { create: true });
+        rejectedDir  = await outputHandle.getDirectoryHandle("📕 Rejected",   { create: true });
+      } else if (mode === "keepers_rejects") {
+        keepersDir   = await outputHandle.getDirectoryHandle("Keepers",            { create: true });
         alternatesDir = await outputHandle.getDirectoryHandle("Rejected & Alternates", { create: true });
       } else if (mode === "keepers_only") {
         keepersDir = await outputHandle.getDirectoryHandle("Keepers", { create: true });
@@ -248,38 +255,35 @@ export default function CullPage({
       for (let i = 0; i < total; i++) {
         const item = filesToCopy[i];
 
-        setExportProgress({
-          current: i + 1,
-          total,
-          currentFile: item.name
-        });
+        setExportProgress({ current: i + 1, total, currentFile: item.name });
 
         if (item.file) {
-          // Determine target directory
           let targetDir = outputHandle;
           let destName = item.name;
 
-          if (mode === "keepers_rejects") {
+          if (mode === "full_sort") {
+            // Route by category (set by cullEngine 4-tier logic)
+            const cat = item.category || (item.isKeyPhoto ? "keeper" : "alternate");
+            if (cat === "keeper")    targetDir = keepersDir;
+            else if (cat === "alternate") targetDir = alternatesDir;
+            else if (cat === "blurry")    targetDir = blurryDir;
+            else                          targetDir = rejectedDir; // rejected
+          } else if (mode === "keepers_rejects") {
             targetDir = item.isKeyPhoto ? keepersDir : alternatesDir;
           } else if (mode === "keepers_only") {
             targetDir = keepersDir;
           } else if (mode === "clusters") {
             const clusterFolder = `Group_${item.cullGroup + 1}`;
             targetDir = await outputHandle.getDirectoryHandle(clusterFolder, { create: true });
-            
-            // Mark the Key Photo visually inside the cluster folder
-            if (item.isKeyPhoto) {
-              destName = `KEEPER_${item.name}`;
-            }
+            if (item.isKeyPhoto) destName = `KEEPER_${item.name}`;
           }
 
-          // Write file content directly
+          // Write file
           const arrayBuffer = await item.file.arrayBuffer();
           const fileRef = await targetDir.getFileHandle(destName, { create: true });
           const writable = await fileRef.createWritable();
           await writable.write(new Uint8Array(arrayBuffer));
           await writable.close();
-
           copiedCount++;
         }
       }
@@ -752,6 +756,50 @@ export default function CullPage({
           </div>
         </div>
       )}
+
+      {/* RESULTS SUMMARY BAR — appears after culling */}
+      {groups.length > 0 && (() => {
+        const all = groups.flat();
+        const keepers   = all.filter(x => x.category === "keeper"   || (x.isKeyPhoto && !x.category)).length;
+        const alternates = all.filter(x => x.category === "alternate" || (!x.isKeyPhoto && !x.category && x.rating === 3)).length;
+        const blurry    = all.filter(x => x.category === "blurry").length;
+        const rejected  = all.filter(x => x.category === "rejected"  || (x.rating === 1 && !x.category)).length;
+        return (
+          <div className="glass-panel" style={{
+            borderRadius: "18px",
+            padding: "18px 24px",
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
+            flexWrap: "wrap",
+            boxShadow: dm ? "0 8px 32px rgba(0,0,0,0.3)" : "0 8px 24px rgba(0,0,0,0.04)"
+          }}>
+            <span style={{ fontSize: "12px", fontWeight: 800, color: dm ? "#a1a1aa" : "#71717a", textTransform: "uppercase", letterSpacing: "0.5px", marginRight: "4px" }}>AI Results:</span>
+            {[
+              { label: "Keepers",   count: keepers,   color: "#22c55e", icon: "★",   desc: "5★ Green" },
+              { label: "Alternates",count: alternates, color: "#3b82f6", icon: "●",   desc: "3★ Blue" },
+              { label: "Blurry",    count: blurry,    color: "#eab308", icon: "◐",   desc: "2★ Yellow" },
+              { label: "Rejected",  count: rejected,  color: "#ef4444", icon: "✕",   desc: "1★ Red" },
+            ].map(tier => (
+              <div key={tier.label} style={{
+                display: "flex", alignItems: "center", gap: "6px",
+                background: `${tier.color}18`,
+                border: `1px solid ${tier.color}44`,
+                borderRadius: "10px",
+                padding: "6px 12px"
+              }}>
+                <span style={{ color: tier.color, fontSize: "14px", fontWeight: 800 }}>{tier.icon}</span>
+                <span style={{ fontSize: "12px", fontWeight: 800, color: tier.color }}>{tier.count}</span>
+                <span style={{ fontSize: "11px", fontWeight: 600, color: dm ? "#ccc" : "#555" }}>{tier.label}</span>
+                <span style={{ fontSize: "10px", color: dm ? "#666" : "#999" }}>({tier.desc})</span>
+              </div>
+            ))}
+            <div style={{ marginLeft: "auto", fontSize: "11px", color: dm ? "#555" : "#bbb", fontWeight: 600 }}>
+              {all.length} total · {groups.length} clusters
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ACTIVE CULLING REVIEW WORKSPACE */}
       {groups.length > 0 && activePhoto && (
@@ -1307,9 +1355,10 @@ export default function CullPage({
                   {/* Folder Layout Options */}
                   <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
                     {[
-                      { id: "keepers_rejects", title: "Keepers vs Rejected", desc: "Creates /Keepers and /Rejected & Alternates folders." },
-                      { id: "keepers_only", title: "Keepers Only", desc: "Only saves the best designated photos to a /Keepers folder." },
-                      { id: "clusters", title: "AI Duplicate Groups", desc: "Puts duplicates into /Group_1, /Group_2, etc. folders." }
+                      { id: "full_sort",       title: "★ Full 4-Folder Sort (Recommended)", desc: "Separates into 📗 Keepers · 📘 Alternates · 📙 Blurry · 📕 Rejected based on AI ratings." },
+                      { id: "keepers_rejects", title: "Keepers vs Rejected",                desc: "Creates /Keepers and /Rejected & Alternates folders." },
+                      { id: "keepers_only",    title: "Keepers Only",                       desc: "Only saves the best 5-star photos to a /Keepers folder." },
+                      { id: "clusters",        title: "AI Duplicate Groups",                desc: "Puts each duplicate burst into /Group_1, /Group_2, etc. folders." }
                     ].map((opt) => (
                       <label
                         key={opt.id}
@@ -1451,7 +1500,18 @@ export default function CullPage({
           >
             {groups.map((grp, idx) => {
               const isCurrent = idx === activeGroupIndex;
-              const rep = grp[0]; // Representative key photo
+              const rep = grp[0]; // Representative / key photo
+
+              // Color-code strip border by the key photo's tier
+              const catColorMap = { keeper: "#22c55e", alternate: "#3b82f6", blurry: "#eab308", rejected: "#ef4444" };
+              const repCat = rep.category || (rep.isKeyPhoto ? "keeper" : "alternate");
+              const tierColor = catColorMap[repCat] || accent;
+
+              // Count each tier inside this group
+              const gKeepers   = grp.filter(x => (x.category || "alternate") === "keeper").length;
+              const gBlurry    = grp.filter(x => x.category === "blurry").length;
+              const gRejected  = grp.filter(x => x.category === "rejected").length;
+
               return (
                 <div
                   key={idx}
@@ -1462,18 +1522,17 @@ export default function CullPage({
                   style={{
                     flexShrink: 0,
                     width: "90px",
-                    height: "64px",
                     borderRadius: "10px",
-                    border: `2px solid ${isCurrent ? accent : "transparent"}`,
+                    border: `2px solid ${isCurrent ? tierColor : "transparent"}`,
                     overflow: "hidden",
                     cursor: "pointer",
                     position: "relative",
                     background: "#000",
                     transition: "all 0.15s ease",
-                    boxShadow: isCurrent ? "0 4px 12px rgba(108, 99, 255, 0.2)" : "none"
+                    boxShadow: isCurrent ? `0 4px 12px ${tierColor}44` : "none"
                   }}
                   onMouseEnter={(e) => {
-                    if (!isCurrent) e.currentTarget.style.borderColor = "rgba(108, 99, 255, 0.4)";
+                    if (!isCurrent) e.currentTarget.style.borderColor = `${tierColor}88`;
                   }}
                   onMouseLeave={(e) => {
                     if (!isCurrent) e.currentTarget.style.borderColor = "transparent";
@@ -1482,26 +1541,38 @@ export default function CullPage({
                   <img
                     src={rep.previewUrl}
                     alt=""
-                    style={{ width: "100%", height: "100%", objectFit: "cover", opacity: isCurrent ? 1.0 : 0.55 }}
+                    style={{ width: "100%", height: "64px", objectFit: "cover", opacity: isCurrent ? 1.0 : 0.6, display: "block" }}
                   />
 
+                  {/* Tier color dot top-left */}
+                  <div style={{
+                    position: "absolute", top: "4px", left: "4px",
+                    width: "8px", height: "8px", borderRadius: "50%",
+                    background: tierColor,
+                    boxShadow: `0 0 5px ${tierColor}`
+                  }} />
+
                   {/* Group Count Badge */}
-                  <div
-                    style={{
-                      position: "absolute",
-                      bottom: "4px",
-                      right: "4px",
-                      background: "rgba(10, 10, 15, 0.95)",
-                      color: "#fff",
-                      fontSize: "9px",
-                      fontWeight: 800,
-                      padding: "2px 5px",
-                      borderRadius: "5px",
-                      border: "1px solid rgba(255,255,255,0.05)"
-                    }}
-                  >
+                  <div style={{
+                    position: "absolute", bottom: "4px", right: "4px",
+                    background: "rgba(10,10,15,0.92)", color: "#fff",
+                    fontSize: "9px", fontWeight: 800,
+                    padding: "2px 5px", borderRadius: "5px",
+                    border: "1px solid rgba(255,255,255,0.05)"
+                  }}>
                     x{grp.length}
                   </div>
+
+                  {/* Warn badges */}
+                  {(gBlurry > 0 || gRejected > 0) && (
+                    <div style={{
+                      position: "absolute", bottom: "4px", left: "4px",
+                      display: "flex", gap: "2px"
+                    }}>
+                      {gBlurry > 0 && <span style={{ fontSize: "8px", background: "#eab30888", color: "#fff", padding: "1px 3px", borderRadius: "3px", fontWeight: 800 }}>◐{gBlurry}</span>}
+                      {gRejected > 0 && <span style={{ fontSize: "8px", background: "#ef444488", color: "#fff", padding: "1px 3px", borderRadius: "3px", fontWeight: 800 }}>✕{gRejected}</span>}
+                    </div>
+                  )}
                 </div>
               );
             })}

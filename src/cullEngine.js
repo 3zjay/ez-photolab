@@ -387,30 +387,50 @@ export async function cullBatch(images, options = {}, onProgress) {
     currentGroupId++;
   }
 
-  // 7. AUTO-PROMOTE "KEY PHOTO" (Best of each duplicate group)
+  // 7. AUTO-PROMOTE "KEY PHOTO" with 4-Tier Quality Classification
+  // ---------------------------------------------------------------
+  // Tier 1 — KEEPER     : Best in group, sharp & clear → 5★ 🟢 Green
+  // Tier 2 — ALTERNATE  : Good duplicate, not the best → 3★ 🔵 Blue
+  // Tier 3 — BLURRY     : Out-of-focus / soft image    → 2★ 🟡 Yellow
+  // Tier 4 — REJECTED   : Eyes closed / blink / severe quality fail → 1★ 🔴 Red
   for (const group of groups) {
-    // Sort group members by quality score
+    // Sort group members by quality score (highest first)
     group.sort((a, b) => b.cullScore - a.cullScore);
-    
-    // Promote the winner
-    const winner = group[0];
-    winner.isKeyPhoto = true;
-    winner.rating = 5;       // 5 Stars for keepers
-    winner.label = "green";  // Green label for keepers
 
-    // The other items in the group get 3-stars or Blue labels
-    for (let k = 1; k < group.length; k++) {
-      const alternate = group[k];
-      alternate.isKeyPhoto = false;
-      alternate.rating = 3;       // 3 Stars for duplicate alternates
-      alternate.label = "blue";   // Blue label for alternates
-    }
+    for (let k = 0; k < group.length; k++) {
+      const item = group[k];
+      const isWinner = k === 0;
 
-    // Adjust ratings for elements with severe warning flags
-    for (const item of group) {
-      if (item.warnings.length > 0 && !item.isKeyPhoto) {
-        item.rating = 1;          // 1 Star for warning photos
-        item.label = "red";       // Red label for warnings
+      const hasBlink = item.warnings.some(w =>
+        w.toLowerCase().includes("blink") || w.toLowerCase().includes("closed")
+      );
+      const isBlurry = item.sharpness < blurStrictness;
+      const isSeverelyBad = item.cullScore < 15; // Near-zero quality
+
+      if (hasBlink || isSeverelyBad) {
+        // Tier 4 — REJECTED: Eye blink, or catastrophically low score
+        item.category = "rejected";
+        item.rating = 1;
+        item.label = "red";
+        item.isKeyPhoto = false;
+      } else if (isBlurry) {
+        // Tier 3 — BLURRY: Soft / out-of-focus
+        item.category = "blurry";
+        item.rating = 2;
+        item.label = "yellow";
+        item.isKeyPhoto = isWinner; // Mark as "best of the blurry group" if winner
+      } else if (isWinner) {
+        // Tier 1 — KEEPER: Best in group, sharp, eyes open
+        item.category = "keeper";
+        item.rating = 5;
+        item.label = "green";
+        item.isKeyPhoto = true;
+      } else {
+        // Tier 2 — ALTERNATE: Good but not the winner
+        item.category = "alternate";
+        item.rating = 3;
+        item.label = "blue";
+        item.isKeyPhoto = false;
       }
     }
   }
