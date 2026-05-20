@@ -224,6 +224,7 @@ export function LandingPage({ dm, loadImage, setActiveTab, handleInstallClick, d
   const [isDraggingSlider, setIsDraggingSlider] = useState(false);
   const [activeNode, setActiveNode] = useState(null);
   const [isDropOver, setIsDropOver] = useState(false);
+  const [pricingPeriod, setPricingPeriod] = useState("lifetime");
 
   const sliderRef = useRef(null);
 
@@ -1018,6 +1019,321 @@ export function LandingPage({ dm, loadImage, setActiveTab, handleInstallClick, d
             <p style={{ fontSize: "12.5px", color: dm ? "#9ca3af" : "#4b5563", lineHeight: 1.55 }}>
               Fine-tune exposure, apply studio LUT presets, restore faces, overlay watermark graphics, and download lossless JPEGs with non-destructive XMP.
             </p>
+          </div>
+        </div>
+      </div>
+      {/* Premium Interactive Pricing Section */}
+      <div 
+        style={{ 
+          maxWidth: "900px", 
+          width: "100%", 
+          marginTop: "80px", 
+          display: "flex", 
+          flexDirection: "column", 
+          alignItems: "center", 
+          gap: "36px",
+          textAlign: "center"
+        }}
+      >
+        {/* Header */}
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "10px", maxWidth: "680px" }}>
+          <div style={{
+            background: "linear-gradient(135deg, rgba(249, 115, 22, 0.15) 0%, rgba(250, 204, 21, 0.1) 100%)",
+            border: `1px solid ${dm ? "rgba(249, 115, 22, 0.3)" : "rgba(249, 115, 22, 0.2)"}`,
+            borderRadius: "30px",
+            padding: "6px 16px",
+            fontSize: "11px",
+            fontWeight: 800,
+            color: "#f97316",
+            letterSpacing: "1.5px",
+            fontFamily: "'Outfit', sans-serif",
+            textTransform: "uppercase"
+          }}>
+            💳 Transparent Pricing
+          </div>
+          <h2 style={{
+            fontSize: "clamp(24px, 5vw, 32px)",
+            fontWeight: 900,
+            color: dm ? "#ffffff" : "#111827",
+            fontFamily: "'Outfit', sans-serif",
+            letterSpacing: "-0.8px"
+          }}>
+            Simple, Zero-Marginal-Cost Pricing
+          </h2>
+          <p style={{ 
+            fontSize: "14px", 
+            color: dm ? "#9ca3af" : "#4b5563", 
+            lineHeight: 1.6,
+            marginTop: "4px"
+          }}>
+            Because PHOTOlab processes RAW files and AI models <strong>100% locally on your device</strong> using secure WebAssembly, we have no backend cloud hosting bills. We pass these architectural savings directly to you—no subscription fatigue, just desktop-class speed.
+          </p>
+        </div>
+
+        {/* Pricing Switcher Switch */}
+        <div style={{
+          background: dm ? "rgba(255, 255, 255, 0.03)" : "rgba(0, 0, 0, 0.02)",
+          border: `1px solid ${dm ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.06)"}`,
+          borderRadius: "50px",
+          padding: "6px",
+          display: "inline-flex",
+          position: "relative",
+          gap: "4px"
+        }}>
+          <button
+            onClick={() => setPricingPeriod("lifetime")}
+            style={{
+              background: pricingPeriod === "lifetime" ? 'linear-gradient(135deg, #f97316 0%, #facc15 100%)' : "transparent",
+              color: pricingPeriod === "lifetime" ? "#ffffff" : (dm ? "#cbd5e1" : "#4b5563"),
+              border: "none",
+              borderRadius: "40px",
+              padding: "10px 24px",
+              fontSize: "13px",
+              fontWeight: 800,
+              cursor: "pointer",
+              transition: "all 0.3s cubic-bezier(0.16, 1, 0.3, 1)",
+              fontFamily: "'Outfit', sans-serif",
+              display: "flex",
+              alignItems: "center",
+              gap: "6px"
+            }}
+          >
+            <span>🌟</span> Pay Once, Own Forever
+          </button>
+          <button
+            onClick={() => setPricingPeriod("subscription")}
+            style={{
+              background: pricingPeriod === "subscription" ? 'linear-gradient(135deg, #f97316 0%, #facc15 100%)' : "transparent",
+              color: pricingPeriod === "subscription" ? "#ffffff" : (dm ? "#cbd5e1" : "#4b5563"),
+              border: "none",
+              borderRadius: "40px",
+              padding: "10px 24px",
+              fontSize: "13px",
+              fontWeight: 800,
+              cursor: "pointer",
+              transition: "all 0.3s cubic-bezier(0.16, 1, 0.3, 1)",
+              fontFamily: "'Outfit', sans-serif",
+              display: "flex",
+              alignItems: "center",
+              gap: "6px"
+            }}
+          >
+            <span>💳</span> Flexible Subscription
+          </button>
+        </div>
+
+        {/* Pricing Cards Grid */}
+        <div style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+          gap: "28px",
+          width: "100%",
+          alignItems: "stretch"
+        }}>
+          {/* Card 1: Starter Sandbox */}
+          <div style={{
+            background: dm ? "rgba(255, 255, 255, 0.02)" : "rgba(255, 255, 255, 0.8)",
+            backdropFilter: "blur(12px)",
+            WebkitBackdropFilter: "blur(12px)",
+            border: `1px solid ${dm ? "rgba(255, 255, 255, 0.06)" : "rgba(0, 0, 0, 0.05)"}`,
+            borderRadius: "24px",
+            padding: "32px",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            textAlign: "center",
+            justifyContent: "space-between",
+            gap: "24px",
+            transition: "all 0.3s ease"
+          }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: "12px", width: "100%" }}>
+              <span style={{ fontSize: "12px", fontWeight: 700, color: dm ? "#9ca3af" : "#6b7280", letterSpacing: "1px", textTransform: "uppercase" }}>
+                Starter Sandbox
+              </span>
+              <h3 style={{ fontSize: "22px", fontWeight: 900, color: dm ? "#ffffff" : "#111827", fontFamily: "'Outfit', sans-serif" }}>
+                Free Access
+              </h3>
+              <div style={{ display: "flex", alignItems: "baseline", justifyContent: "center", margin: "8px 0" }}>
+                <span style={{ fontSize: "36px", fontWeight: 900, color: dm ? "#ffffff" : "#111827", fontFamily: "'Outfit', sans-serif" }}>$0</span>
+                <span style={{ fontSize: "13px", color: dm ? "#9ca3af" : "#6b7280", marginLeft: "4px" }}>/ forever</span>
+              </div>
+              <p style={{ fontSize: "13px", color: dm ? "#9ca3af" : "#4b5563", lineHeight: 1.5 }}>
+                Perfect for quick, casual browser editing on standard camera formats.
+              </p>
+              
+              {/* Divider */}
+              <div style={{ height: "1px", background: dm ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.06)", margin: "12px 0" }} />
+              
+              {/* Features */}
+              <ul style={{ 
+                listStyle: "none", 
+                padding: 0, 
+                margin: 0, 
+                display: "flex", 
+                flexDirection: "column", 
+                gap: "12px", 
+                textAlign: "left",
+                fontSize: "13px",
+                color: dm ? "#cbd5e1" : "#374151"
+              }}>
+                <li style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <span style={{ color: "#10b981", fontWeight: "bold" }}>✓</span> Standard JPEG, PNG, WebP Edits
+                </li>
+                <li style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <span style={{ color: "#10b981", fontWeight: "bold" }}>✓</span> Basic focus culling (10 files/batch)
+                </li>
+                <li style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <span style={{ color: "#10b981", fontWeight: "bold" }}>✓</span> Live browser-only application shell
+                </li>
+                <li style={{ display: "flex", alignItems: "center", gap: "8px", opacity: 0.4 }}>
+                  <span style={{ color: "#ef4444" }}>✗</span> No RAW camera file developer
+                </li>
+                <li style={{ display: "flex", alignItems: "center", gap: "8px", opacity: 0.4 }}>
+                  <span style={{ color: "#ef4444" }}>✗</span> No offline standalone PWA installation
+                </li>
+              </ul>
+            </div>
+
+            <button
+              onClick={() => setActiveTab("edit")}
+              style={{
+                width: "100%",
+                background: dm ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.05)",
+                border: "none",
+                borderRadius: "14px",
+                padding: "12px 24px",
+                fontSize: "14px",
+                fontWeight: 700,
+                color: dm ? "#ffffff" : "#111827",
+                cursor: "pointer",
+                transition: "all 0.2s ease"
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.background = dm ? "rgba(255, 255, 255, 0.12)" : "rgba(0, 0, 0, 0.08)"}
+              onMouseLeave={(e) => e.currentTarget.style.background = dm ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.05)"}
+            >
+              Launch Editor Free
+            </button>
+          </div>
+
+          {/* Card 2: Professional Studio */}
+          <div style={{
+            background: dm 
+              ? "radial-gradient(circle at top right, rgba(249, 115, 22, 0.08), rgba(17, 24, 39, 0.95))" 
+              : "radial-gradient(circle at top right, rgba(249, 115, 22, 0.04), rgba(255, 255, 255, 0.98))",
+            backdropFilter: "blur(12px)",
+            WebkitBackdropFilter: "blur(12px)",
+            border: `1.5px solid rgba(249, 115, 22, ${dm ? "0.35" : "0.25"})`,
+            borderRadius: "24px",
+            padding: "32px",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            textAlign: "center",
+            justifyContent: "space-between",
+            gap: "24px",
+            position: "relative",
+            boxShadow: "0 10px 30px rgba(249, 115, 22, 0.06)",
+            transition: "all 0.3s ease"
+          }}>
+            {/* Pulsing Badge */}
+            <div style={{
+              position: "absolute",
+              top: "-12px",
+              background: 'linear-gradient(135deg, #f97316 0%, #facc15 100%)',
+              color: "#ffffff",
+              padding: "4px 14px",
+              borderRadius: "20px",
+              fontSize: "10px",
+              fontWeight: 800,
+              letterSpacing: "1px",
+              textTransform: "uppercase",
+              boxShadow: "0 4px 12px rgba(249, 115, 22, 0.3)"
+            }}>
+              ⭐ Best Value
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: "12px", width: "100%" }}>
+              <span style={{ fontSize: "12px", fontWeight: 700, color: "#f97316", letterSpacing: "1px", textTransform: "uppercase" }}>
+                Professional Studio
+              </span>
+              <h3 style={{ fontSize: "22px", fontWeight: 900, color: dm ? "#ffffff" : "#111827", fontFamily: "'Outfit', sans-serif" }}>
+                {pricingPeriod === "lifetime" ? "Lifetime License" : "Premium Access"}
+              </h3>
+              <div style={{ display: "flex", alignItems: "baseline", justifyContent: "center", margin: "8px 0" }}>
+                <span style={{ fontSize: "36px", fontWeight: 900, color: dm ? "#ffffff" : "#111827", fontFamily: "'Outfit', sans-serif" }}>
+                  {pricingPeriod === "lifetime" ? "$49" : "$7"}
+                </span>
+                <span style={{ fontSize: "13px", color: dm ? "#9ca3af" : "#6b7280", marginLeft: "4px" }}>
+                  {pricingPeriod === "lifetime" ? "once" : "/ month"}
+                </span>
+              </div>
+              <p style={{ fontSize: "13px", color: dm ? "#cbd5e1" : "#4b5563", lineHeight: 1.5 }}>
+                {pricingPeriod === "lifetime" 
+                  ? "Pay once, own forever. Secure all offline capabilities with no recurring costs." 
+                  : "Enjoy flexible monthly access. Upgrade and cancel anytime."}
+              </p>
+              
+              {/* Divider */}
+              <div style={{ height: "1px", background: "rgba(249, 115, 22, 0.15)", margin: "12px 0" }} />
+              
+              {/* Features */}
+              <ul style={{ 
+                listStyle: "none", 
+                padding: 0, 
+                margin: 0, 
+                display: "flex", 
+                flexDirection: "column", 
+                gap: "12px", 
+                textAlign: "left",
+                fontSize: "13px",
+                color: dm ? "#cbd5e1" : "#374151"
+              }}>
+                <li style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <span style={{ color: "#f97316", fontWeight: "bold" }}>★</span> <strong>C++ WebAssembly RAW Developer</strong>
+                </li>
+                <li style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <span style={{ color: "#f97316", fontWeight: "bold" }}>★</span> <strong>Unlimited Focus Culling Batching</strong>
+                </li>
+                <li style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <span style={{ color: "#f97316", fontWeight: "bold" }}>★</span> <strong>Offline PWA Standalone App Install</strong>
+                </li>
+                <li style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <span style={{ color: "#f97316", fontWeight: "bold" }}>★</span> MediaPipe Local Facial Retouch Presets
+                </li>
+                <li style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <span style={{ color: "#f97316", fontWeight: "bold" }}>★</span> Lifetime priority feature upgrades
+                </li>
+              </ul>
+            </div>
+
+            <button
+              onClick={() => {
+                alert(`Redirecting to premium checkout... Plan: ${pricingPeriod === "lifetime" ? "Lifetime Pro ($49 One-Time)" : "Monthly Pro ($7/month)"}`);
+              }}
+              style={{
+                width: "100%",
+                background: 'linear-gradient(135deg, #f97316 0%, #facc15 100%)',
+                border: "none",
+                borderRadius: "14px",
+                padding: "12px 24px",
+                fontSize: "14px",
+                fontWeight: 800,
+                color: "#ffffff",
+                cursor: "pointer",
+                boxShadow: "0 4px 14px rgba(249, 115, 22, 0.25)",
+                transition: "all 0.2s ease"
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.transform = 'translateY(-1px)';
+                e.currentTarget.style.boxShadow = '0 6px 18px rgba(249, 115, 22, 0.35)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = 'none';
+                e.currentTarget.style.boxShadow = '0 4px 14px rgba(249, 115, 22, 0.25)';
+              }}
+            >
+              {pricingPeriod === "lifetime" ? "Unlock Lifetime Pro" : "Get Premium Access"}
+            </button>
           </div>
         </div>
       </div>
