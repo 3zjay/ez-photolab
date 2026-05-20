@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { BatchPage } from "./BatchPage";
+import CullPage from "./CullPage";
 import { ToolsPanel } from "./components/panels/ToolsPanel";
 import { AdjustPanel } from "./components/panels/AdjustPanel";
 import { OverlayPanel } from "./components/panels/OverlayPanel";
@@ -1299,6 +1300,12 @@ export default function App() {
           Batch mode opens as a full-page view.
         </div>
       )}
+      {activeTab === "cull" && (
+        <div style={{ padding: "16px", color: dm ? '#aaa' : '#888', fontSize: "13px", textAlign: "center" }}>
+          <div style={{ fontSize: "32px", marginBottom: "8px" }}>🔍</div>
+          Cull AI mode opens as a full-page view.
+        </div>
+      )}
     </div>
   );
 
@@ -1335,7 +1342,7 @@ export default function App() {
             {dm ? '☀️' : '🌙'}
           </button>
           <div style={{ display: "flex", background: dm ? '#2a2a2a' : '#f2f2f8', borderRadius: "10px", padding: "3px", gap: "2px", overflowX: "auto" }}>
-            {[["edit", "✏️", "Edit"], ["adjust", "✂️", "Adjust"], ["overlay", "🔤", "Overlay"], ["tools", "🛠", "Tools"], ["batch", "📦", "Batch"]].map(([id, ic, lb]) => (
+            {[["edit", "✏️", "Edit"], ["adjust", "✂️", "Adjust"], ["overlay", "🔤", "Overlay"], ["tools", "🛠", "Tools"], ["cull", "🔍", "Cull AI"], ["batch", "📦", "Batch"]].map(([id, ic, lb]) => (
               <button key={id} onClick={() => setActiveTab(id)}
                 style={{ padding: isMobile ? "5px 8px" : "5px 12px", fontSize: "12px", fontWeight: 600, border: "none", cursor: "pointer", background: activeTab === id ? (dm ? '#444' : '#fff') : 'transparent', color: activeTab === id ? '#6c63ff' : (dm ? '#aaa' : '#888'), borderRadius: "8px", boxShadow: activeTab === id ? "0 1px 4px rgba(0,0,0,.1)" : "none", transition: "all .18s", whiteSpace: "nowrap" }}>
                 {isMobile ? ic : `${ic} ${lb}`}
@@ -1354,6 +1361,8 @@ export default function App() {
       {!isMobile && (
         activeTab === "batch" ? (
           <BatchPage {...{ dm, cardBg, cardBdr, inputSt, sourceHandle, outputHandle, batchImages, selectSourceFolder, selectRawSourceFolder, selectOutputFolder, batchResizeMode, setBatchResizeMode, batchResizePreset, setBatchResizePreset, batchCustomW, setBatchCustomW, batchCustomH, setBatchCustomH, batchKeepAspect, setBatchKeepAspect, batchLongEdgePx, setBatchLongEdgePx, batchAutoLevels, setBatchAutoLevels, batchAutoContrast, setBatchAutoContrast, batchSharpen, setBatchSharpen, batchSharpenAmt, setBatchSharpenAmt, batchSharpenRad, setBatchSharpenRad, batchDenoise, setBatchDenoise, batchDenoiseAmt, setBatchDenoiseAmt, batchLogo, setBatchLogo, batchLogoFile, setBatchLogoFile, handleBatchLogoUpload, batchLogoScale, setBatchLogoScale, batchLogoScalePortrait, setBatchLogoScalePortrait, batchLogoOpacity, setBatchLogoOpacity, batchLogoPos, setBatchLogoPos, batchLogoMargin, setBatchLogoMargin, batchOutputFmt, setBatchOutputFmt, batchOutputQ, setBatchOutputQ, batchPrefix, setBatchPrefix, batchSuffix, setBatchSuffix, batchProcessing, batchProgress, batchDone, handleBatchProcess, batchPreviewIdx, batchPreviewOrigUrl, batchPreviewAfterUrl, batchPreviewLoading, batchPreviewSplit, setBatchPreviewSplit, batchPreviewDragging, setBatchPreviewDragging, batchPreviewOpen, setBatchPreviewOpen, generateBatchPreview, filters, setFilters, resetAll, batchFilterGroup, setBatchFilterGroup, calcBatchDims, batchAiUpscale, setBatchAiUpscale, batchAiBeauty, setBatchAiBeauty, batchAiScale, setBatchAiScale, batchAiBeautySmooth, setBatchAiBeautySmooth, batchAiBeautyClarity, setBatchAiBeautyClarity, batchAiBeautyGlow, setBatchAiBeautyGlow, batchAiFaceRestore, setBatchAiFaceRestore, batchAiBeautyUseMask, setBatchAiBeautyUseMask, batchSection, setBatchSection, batchRawFiles, setBatchRawFiles, handleRawBatchProcess, batchLogs, addBatchLog }} />
+        ) : activeTab === "cull" ? (
+          <CullPage {...{ dm, cardBg, cardBdr, inputSt, sourceHandle, outputHandle, batchImages, selectSourceFolder, selectRawSourceFolder, selectOutputFolder, batchLogs, addBatchLog, batchSection, setBatchSection }} />
         ) : (
           <div style={{ display: "flex", height: "calc(100vh - 52px)" }}>
             <div className="glass-panel" style={{ width: "310px", borderRight: `1px solid ${dm ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'}`, overflowY: "auto", flexShrink: 0 }}>
@@ -1370,6 +1379,10 @@ export default function App() {
         activeTab === "batch" ? (
           <div style={{ height: "calc(100vh - 52px)", overflowY: "auto" }}>
             <BatchPage {...{ dm, cardBg, cardBdr, inputSt, isMobile: true, sourceHandle, outputHandle, batchImages, selectSourceFolder, selectRawSourceFolder, selectOutputFolder, batchResizeMode, setBatchResizeMode, batchResizePreset, setBatchResizePreset, batchCustomW, setBatchCustomW, batchCustomH, setBatchCustomH, batchKeepAspect, setBatchKeepAspect, batchLongEdgePx, setBatchLongEdgePx, batchAutoLevels, setBatchAutoLevels, batchAutoContrast, setBatchAutoContrast, batchSharpen, setBatchSharpen, batchSharpenAmt, setBatchSharpenAmt, batchSharpenRad, setBatchSharpenRad, batchDenoise, setBatchDenoise, batchDenoiseAmt, setBatchDenoiseAmt, batchLogo, setBatchLogo, batchLogoFile, setBatchLogoFile, handleBatchLogoUpload, batchLogoScale, setBatchLogoScale, batchLogoScalePortrait, setBatchLogoScalePortrait, batchLogoOpacity, setBatchLogoOpacity, batchLogoPos, setBatchLogoPos, batchLogoMargin, setBatchLogoMargin, batchOutputFmt, setBatchOutputFmt, batchOutputQ, setBatchOutputQ, batchPrefix, setBatchPrefix, batchSuffix, setBatchSuffix, batchProcessing, batchProgress, batchDone, handleBatchProcess, batchPreviewIdx, batchPreviewOrigUrl, batchPreviewAfterUrl, batchPreviewLoading, batchPreviewSplit, setBatchPreviewSplit, batchPreviewDragging, setBatchPreviewDragging, batchPreviewOpen, setBatchPreviewOpen, generateBatchPreview, filters, setFilters, resetAll, batchFilterGroup, setBatchFilterGroup, calcBatchDims, batchAiUpscale, setBatchAiUpscale, batchAiBeauty, setBatchAiBeauty, batchAiScale, setBatchAiScale, batchAiBeautySmooth, setBatchAiBeautySmooth, batchAiBeautyClarity, setBatchAiBeautyClarity, batchAiBeautyGlow, setBatchAiBeautyGlow, batchAiFaceRestore, setBatchAiFaceRestore, batchAiBeautyUseMask, setBatchAiBeautyUseMask, batchSection, setBatchSection, batchRawFiles, setBatchRawFiles, handleRawBatchProcess, batchLogs, addBatchLog }} />
+          </div>
+        ) : activeTab === "cull" ? (
+          <div style={{ height: "calc(100vh - 52px)", overflowY: "auto", padding: "16px" }}>
+            <CullPage {...{ dm, cardBg, cardBdr, inputSt, sourceHandle, outputHandle, batchImages, selectSourceFolder, selectRawSourceFolder, selectOutputFolder, batchLogs, addBatchLog, batchSection, setBatchSection }} />
           </div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", height: "calc(100vh - 52px)", overflow: "hidden" }}>

@@ -10,13 +10,14 @@ Built with React + Vite — runs entirely in your browser with zero server costs
 
 ---
 
-## 🚀 What's New in v2.2.0
+## 🚀 What's New in v2.3.0 (EZ-Cull AI Release)
 
-- **Robust RAW Previews & Full-Range Scanning**: Enlarged the embedded RAW JPEG preview scanner to scan full files, successfully extracting high-fidelity previews instantly (under 20ms) from large RAW formats (e.g., Nikon `.NEF` or Sony `.ARW` of 25MB+) without booted WASM engine overhead.
-- **Cross-Origin Isolated Dev Environment**: Pre-configured COOP (`Cross-Origin-Opener-Policy`) and COEP (`Cross-Origin-Embedder-Policy`) headers in the Vite dev server, securely unlocking browser `SharedArrayBuffer` memory space for the multithreaded WASM fallback engine.
-- **Queue Metadata Integrity**: Corrected real-time queue name reference displays in the batch comparison slider footer to dynamically reference active RAW files.
-- **Universal Keyboard Slider Accessibility**: Full arrow and navigation keys (`ArrowLeft`/`Right`, `ArrowDown`/`Up`, `PageUp`/`Down`, `Home`/`End`) are supported on all range sliders. Slider state is immediately and smoothly committed on `onKeyUp` while preserving 60fps uncontrolled drag rendering.
-- **Deterministic Memory Cleanup**: Zero native browser memory leaks. Built-in automatic `URL.revokeObjectURL` lifecycle management reactive to background removals, RAW batch queues (on file removal, queue clearing, and unmounting), and JIT-decoded RAW loops using try-finally protection blocks.
+- **Local AI Culling Engine (EZ-Cull AI)**: Fully client-side, 100% in-browser duplicate similarity grouping and face/eye quality scoring.
+  - **dHash Perceptual Hashing**: Instantly (under 1ms) clusters consecutive similarity bursts using horizontal difference gradients.
+  - **Laplacian Focus Scoring**: Measures local edge contrast sharpness over face regions or center crops to identify soft/blurry captures.
+  - **Shared MediaPipe Landmarking**: Shared singleton FaceLandmarker integration with `faceRestore.js` optimizes memory and WebGL context load, detecting eye openness (blink warning) and smile ratios.
+  - **High-Speed Comparison Dashboard**: Premium glassmorphic workspace featuring dual-pane split review, alternates deck, real-time quality HUD, and arrow/hotkey control loops (`Space` for Keeper, `S` to Swap Key Photos, numbers for ratings & color labels).
+- **Direct Adobe-Compliant XMP Sidecars**: Writes non-destructive `.xmp` metadata (stars/colors) directly to your local hard drive using the File System Access API.
 
 ---
 
@@ -50,6 +51,7 @@ All AI tools run **locally on your device** using WebAssembly and the Canvas API
 | **Smart Upscale** | Multi-pass bicubic upscaling (2×, 3×, 4×) with unsharp mask sharpening between each pass | Canvas API |
 | **Beauty Filter** | Adaptive skin smoothing, edge clarity, and glow — with optional face-targeted skin masking | MediaPipe Face Mesh + Canvas |
 | **Face Restore** | Multi-pass local face enhancement: noise reduction, detail sharpening, contrast & color correction | MediaPipe Face Landmarker + Canvas |
+| **EZ-Cull AI** | In-browser similarity duplicate clustering, blur/blink analysis, and auto-keeper selection | dHash + Laplacian + MediaPipe (Shared WASM) |
 | **Object Removal** | Paint a mask over anything to erase it with context-aware LaMa inpainting | Claid.ai API *(50 free credits)* |
 
 ---
@@ -162,10 +164,13 @@ To prevent progressive browser memory leaks from high-resolution image editing, 
 src/
 ├── App.jsx                    # Central state, processing pipelines, layout
 ├── BatchPage.jsx              # Batch processor — UI, settings, live preview
+├── CullPage.jsx               # Cull workspace dashboard — UI, alternate comparison, hotkeys
 ├── Preview.jsx                # Single-photo preview with split-view & crop overlay
+├── cullEngine.js              # Perceptual grouping, Laplacian focus, and blink/smile analytics
 ├── faceMasking.js             # MediaPipe Face Mesh → per-pixel skin mask
 ├── faceRestore.js             # Local multi-pass face enhancement pipeline
 ├── utils.js                   # Image processing: filters, sharpen, denoise, upscale, RAW decode
+├── xmpExporter.js             # Adobe-compliant rating and color label XMP exporter
 ├── constants.js               # Filter definitions, group metadata, presets, defaults
 ├── index.css                  # Global styles, CSS custom properties
 ├── main.jsx                   # React entry point

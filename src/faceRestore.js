@@ -5,9 +5,9 @@
  */
 import { FaceLandmarker, FilesetResolver } from "@mediapipe/tasks-vision";
 
-let landmarker = null;
+export let landmarker = null;
 
-async function getLandmarker() {
+export async function getLandmarker() {
   if (landmarker) return landmarker;
   const vision = await FilesetResolver.forVisionTasks(
     "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm"
@@ -18,7 +18,7 @@ async function getLandmarker() {
       delegate: "GPU",
     },
     runningMode: "IMAGE",
-    numFaces: 5,
+    numFaces: 10,
   });
   return landmarker;
 }
