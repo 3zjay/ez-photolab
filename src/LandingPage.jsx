@@ -224,7 +224,7 @@ export function LandingPage({ dm, loadImage, setActiveTab, handleInstallClick, d
   const [isDraggingSlider, setIsDraggingSlider] = useState(false);
   const [activeNode, setActiveNode] = useState(null);
   const [isDropOver, setIsDropOver] = useState(false);
-  const [pricingPeriod, setPricingPeriod] = useState("lifetime");
+  const [pricingPeriod, setPricingPeriod] = useState("monthly");
 
   const sliderRef = useRef(null);
 
@@ -1025,7 +1025,7 @@ export function LandingPage({ dm, loadImage, setActiveTab, handleInstallClick, d
       {/* Premium Interactive Pricing Section */}
       <div 
         style={{ 
-          maxWidth: "900px", 
+          maxWidth: "1080px", 
           width: "100%", 
           marginTop: "80px", 
           display: "flex", 
@@ -1049,7 +1049,7 @@ export function LandingPage({ dm, loadImage, setActiveTab, handleInstallClick, d
             fontFamily: "'Outfit', sans-serif",
             textTransform: "uppercase"
           }}>
-            💳 Transparent Pricing
+            💳 Transparent Subscription Plans
           </div>
           <h2 style={{
             fontSize: "clamp(24px, 5vw, 32px)",
@@ -1058,7 +1058,7 @@ export function LandingPage({ dm, loadImage, setActiveTab, handleInstallClick, d
             fontFamily: "'Outfit', sans-serif",
             letterSpacing: "-0.8px"
           }}>
-            Simple, Zero-Marginal-Cost Pricing
+            Simple, Zero-Marginal-Cost SaaS Plans
           </h2>
           <p style={{ 
             fontSize: "14px", 
@@ -1066,7 +1066,7 @@ export function LandingPage({ dm, loadImage, setActiveTab, handleInstallClick, d
             lineHeight: 1.6,
             marginTop: "4px"
           }}>
-            Because PHOTOlab processes RAW files and AI models <strong>100% locally on your device</strong> using secure WebAssembly, we have no backend cloud hosting bills. We pass these architectural savings directly to you—no subscription fatigue, just desktop-class speed.
+            Because PHOTOlab processes RAW files and AI models <strong>100% locally on your device</strong> using secure WebAssembly, we avoid costly cloud databases and server nodes. We pass these architectural savings directly to you with low pricing.
           </p>
         </div>
 
@@ -1081,10 +1081,10 @@ export function LandingPage({ dm, loadImage, setActiveTab, handleInstallClick, d
           gap: "4px"
         }}>
           <button
-            onClick={() => setPricingPeriod("lifetime")}
+            onClick={() => setPricingPeriod("monthly")}
             style={{
-              background: pricingPeriod === "lifetime" ? 'linear-gradient(135deg, #f97316 0%, #facc15 100%)' : "transparent",
-              color: pricingPeriod === "lifetime" ? "#ffffff" : (dm ? "#cbd5e1" : "#4b5563"),
+              background: pricingPeriod === "monthly" ? 'linear-gradient(135deg, #f97316 0%, #facc15 100%)' : "transparent",
+              color: pricingPeriod === "monthly" ? "#ffffff" : (dm ? "#cbd5e1" : "#4b5563"),
               border: "none",
               borderRadius: "40px",
               padding: "10px 24px",
@@ -1098,13 +1098,13 @@ export function LandingPage({ dm, loadImage, setActiveTab, handleInstallClick, d
               gap: "6px"
             }}
           >
-            <span>🌟</span> Pay Once, Own Forever
+            <span>💳</span> Bill Monthly
           </button>
           <button
-            onClick={() => setPricingPeriod("subscription")}
+            onClick={() => setPricingPeriod("annual")}
             style={{
-              background: pricingPeriod === "subscription" ? 'linear-gradient(135deg, #f97316 0%, #facc15 100%)' : "transparent",
-              color: pricingPeriod === "subscription" ? "#ffffff" : (dm ? "#cbd5e1" : "#4b5563"),
+              background: pricingPeriod === "annual" ? 'linear-gradient(135deg, #f97316 0%, #facc15 100%)' : "transparent",
+              color: pricingPeriod === "annual" ? "#ffffff" : (dm ? "#cbd5e1" : "#4b5563"),
               border: "none",
               borderRadius: "40px",
               padding: "10px 24px",
@@ -1118,19 +1118,19 @@ export function LandingPage({ dm, loadImage, setActiveTab, handleInstallClick, d
               gap: "6px"
             }}
           >
-            <span>💳</span> Flexible Subscription
+            <span>🎁</span> Bill Annually (Save 25%+)
           </button>
         </div>
 
         {/* Pricing Cards Grid */}
         <div style={{
           display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+          gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
           gap: "28px",
           width: "100%",
           alignItems: "stretch"
         }}>
-          {/* Card 1: Starter Sandbox */}
+          {/* Card 1: Hobbyist (Free) */}
           <div style={{
             background: dm ? "rgba(255, 255, 255, 0.02)" : "rgba(255, 255, 255, 0.8)",
             backdropFilter: "blur(12px)",
@@ -1148,17 +1148,17 @@ export function LandingPage({ dm, loadImage, setActiveTab, handleInstallClick, d
           }}>
             <div style={{ display: "flex", flexDirection: "column", gap: "12px", width: "100%" }}>
               <span style={{ fontSize: "12px", fontWeight: 700, color: dm ? "#9ca3af" : "#6b7280", letterSpacing: "1px", textTransform: "uppercase" }}>
-                Starter Sandbox
+                Hobbyist
               </span>
               <h3 style={{ fontSize: "22px", fontWeight: 900, color: dm ? "#ffffff" : "#111827", fontFamily: "'Outfit', sans-serif" }}>
-                Free Access
+                Free Sandbox
               </h3>
               <div style={{ display: "flex", alignItems: "baseline", justifyContent: "center", margin: "8px 0" }}>
                 <span style={{ fontSize: "36px", fontWeight: 900, color: dm ? "#ffffff" : "#111827", fontFamily: "'Outfit', sans-serif" }}>$0</span>
                 <span style={{ fontSize: "13px", color: dm ? "#9ca3af" : "#6b7280", marginLeft: "4px" }}>/ forever</span>
               </div>
               <p style={{ fontSize: "13px", color: dm ? "#9ca3af" : "#4b5563", lineHeight: 1.5 }}>
-                Perfect for quick, casual browser editing on standard camera formats.
+                Standard web-based basic editing. Casual browser editing on standard camera formats.
               </p>
               
               {/* Divider */}
@@ -1180,13 +1180,13 @@ export function LandingPage({ dm, loadImage, setActiveTab, handleInstallClick, d
                   <span style={{ color: "#10b981", fontWeight: "bold" }}>✓</span> Standard JPEG, PNG, WebP Edits
                 </li>
                 <li style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                  <span style={{ color: "#10b981", fontWeight: "bold" }}>✓</span> Basic focus culling (10 files/batch)
+                  <span style={{ color: "#10b981", fontWeight: "bold" }}>✓</span> Basic focus culling (up to 10 photos/batch)
                 </li>
                 <li style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                  <span style={{ color: "#10b981", fontWeight: "bold" }}>✓</span> Live browser-only application shell
+                  <span style={{ color: "#10b981", fontWeight: "bold" }}>✓</span> Online browser-only application shell
                 </li>
                 <li style={{ display: "flex", alignItems: "center", gap: "8px", opacity: 0.4 }}>
-                  <span style={{ color: "#ef4444" }}>✗</span> No RAW camera file developer
+                  <span style={{ color: "#ef4444" }}>✗</span> No C++ RAW file developer engine
                 </li>
                 <li style={{ display: "flex", alignItems: "center", gap: "8px", opacity: 0.4 }}>
                   <span style={{ color: "#ef4444" }}>✗</span> No offline standalone PWA installation
@@ -1215,7 +1215,7 @@ export function LandingPage({ dm, loadImage, setActiveTab, handleInstallClick, d
             </button>
           </div>
 
-          {/* Card 2: Professional Studio */}
+          {/* Card 2: Creator Pro (Most Popular) */}
           <div style={{
             background: dm 
               ? "radial-gradient(circle at top right, rgba(249, 115, 22, 0.08), rgba(17, 24, 39, 0.95))" 
@@ -1249,28 +1249,28 @@ export function LandingPage({ dm, loadImage, setActiveTab, handleInstallClick, d
               textTransform: "uppercase",
               boxShadow: "0 4px 12px rgba(249, 115, 22, 0.3)"
             }}>
-              ⭐ Best Value
+              ⭐ Most Popular
             </div>
 
             <div style={{ display: "flex", flexDirection: "column", gap: "12px", width: "100%" }}>
               <span style={{ fontSize: "12px", fontWeight: 700, color: "#f97316", letterSpacing: "1px", textTransform: "uppercase" }}>
-                Professional Studio
+                Creator Pro
               </span>
               <h3 style={{ fontSize: "22px", fontWeight: 900, color: dm ? "#ffffff" : "#111827", fontFamily: "'Outfit', sans-serif" }}>
-                {pricingPeriod === "lifetime" ? "Lifetime License" : "Premium Access"}
+                Professional Studio
               </h3>
               <div style={{ display: "flex", alignItems: "baseline", justifyContent: "center", margin: "8px 0" }}>
                 <span style={{ fontSize: "36px", fontWeight: 900, color: dm ? "#ffffff" : "#111827", fontFamily: "'Outfit', sans-serif" }}>
-                  {pricingPeriod === "lifetime" ? "$49" : "$7"}
+                  {pricingPeriod === "annual" ? "$6.58" : "$9"}
                 </span>
                 <span style={{ fontSize: "13px", color: dm ? "#9ca3af" : "#6b7280", marginLeft: "4px" }}>
-                  {pricingPeriod === "lifetime" ? "once" : "/ month"}
+                  / month
                 </span>
               </div>
-              <p style={{ fontSize: "13px", color: dm ? "#cbd5e1" : "#4b5563", lineHeight: 1.5 }}>
-                {pricingPeriod === "lifetime" 
-                  ? "Pay once, own forever. Secure all offline capabilities with no recurring costs." 
-                  : "Enjoy flexible monthly access. Upgrade and cancel anytime."}
+              <p style={{ fontSize: "12.5px", color: dm ? "#cbd5e1" : "#4b5563", lineHeight: 1.5 }}>
+                {pricingPeriod === "annual" 
+                  ? "Billed annually ($79/yr). Complete local desktop-class engine offline." 
+                  : "Billed monthly ($9/mo). Complete local desktop-class engine offline."}
               </p>
               
               {/* Divider */}
@@ -1301,14 +1301,14 @@ export function LandingPage({ dm, loadImage, setActiveTab, handleInstallClick, d
                   <span style={{ color: "#f97316", fontWeight: "bold" }}>★</span> MediaPipe Local Facial Retouch Presets
                 </li>
                 <li style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                  <span style={{ color: "#f97316", fontWeight: "bold" }}>★</span> Lifetime priority feature upgrades
+                  <span style={{ color: "#f97316", fontWeight: "bold" }}>★</span> Priority local feature upgrades
                 </li>
               </ul>
             </div>
 
             <button
               onClick={() => {
-                alert(`Redirecting to premium checkout... Plan: ${pricingPeriod === "lifetime" ? "Lifetime Pro ($49 One-Time)" : "Monthly Pro ($7/month)"}`);
+                alert(`Redirecting to Creator Pro checkout... Plan: ${pricingPeriod === "annual" ? "Annual Pro ($79 Billed Annually)" : "Monthly Pro ($9/month)"}`);
               }}
               style={{
                 width: "100%",
@@ -1332,7 +1332,100 @@ export function LandingPage({ dm, loadImage, setActiveTab, handleInstallClick, d
                 e.currentTarget.style.boxShadow = '0 4px 14px rgba(249, 115, 22, 0.25)';
               }}
             >
-              {pricingPeriod === "lifetime" ? "Unlock Lifetime Pro" : "Get Premium Access"}
+              Start Pro Trial
+            </button>
+          </div>
+
+          {/* Card 3: Studio Team (Scale) */}
+          <div style={{
+            background: dm ? "rgba(255, 255, 255, 0.02)" : "rgba(255, 255, 255, 0.8)",
+            backdropFilter: "blur(12px)",
+            WebkitBackdropFilter: "blur(12px)",
+            border: `1px solid ${dm ? "rgba(255, 255, 255, 0.06)" : "rgba(0, 0, 0, 0.05)"}`,
+            borderRadius: "24px",
+            padding: "32px",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            textAlign: "center",
+            justifyContent: "space-between",
+            gap: "24px",
+            transition: "all 0.3s ease"
+          }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: "12px", width: "100%" }}>
+              <span style={{ fontSize: "12px", fontWeight: 700, color: dm ? "#9ca3af" : "#6b7280", letterSpacing: "1px", textTransform: "uppercase" }}>
+                Studio Team
+              </span>
+              <h3 style={{ fontSize: "22px", fontWeight: 900, color: dm ? "#ffffff" : "#111827", fontFamily: "'Outfit', sans-serif" }}>
+                Agency Scale
+              </h3>
+              <div style={{ display: "flex", alignItems: "baseline", justifyContent: "center", margin: "8px 0" }}>
+                <span style={{ fontSize: "36px", fontWeight: 900, color: dm ? "#ffffff" : "#111827", fontFamily: "'Outfit', sans-serif" }}>
+                  {pricingPeriod === "annual" ? "$20.75" : "$29"}
+                </span>
+                <span style={{ fontSize: "13px", color: dm ? "#9ca3af" : "#6b7280", marginLeft: "4px" }}>
+                  / month
+                </span>
+              </div>
+              <p style={{ fontSize: "12.5px", color: dm ? "#9ca3af" : "#4b5563", lineHeight: 1.5 }}>
+                {pricingPeriod === "annual" 
+                  ? "Billed annually ($249/yr). Multi-device local syncing & sidecars." 
+                  : "Billed monthly ($29/mo). Multi-device local syncing & sidecars."}
+              </p>
+              
+              {/* Divider */}
+              <div style={{ height: "1px", background: dm ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.06)", margin: "12px 0" }} />
+              
+              {/* Features */}
+              <ul style={{ 
+                listStyle: "none", 
+                padding: 0, 
+                margin: 0, 
+                display: "flex", 
+                flexDirection: "column", 
+                gap: "12px", 
+                textAlign: "left",
+                fontSize: "13px",
+                color: dm ? "#cbd5e1" : "#374151"
+              }}>
+                <li style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <span style={{ color: "#10b981", fontWeight: "bold" }}>✓</span> <strong>Everything in Creator Pro</strong>
+                </li>
+                <li style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <span style={{ color: "#10b981", fontWeight: "bold" }}>✓</span> <strong>Local Multi-Tablet Sync</strong>
+                </li>
+                <li style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <span style={{ color: "#10b981", fontWeight: "bold" }}>✓</span> <strong>Custom Watermark Designer</strong>
+                </li>
+                <li style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <span style={{ color: "#10b981", fontWeight: "bold" }}>✓</span> Non-destructive XMP sidecar export
+                </li>
+                <li style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <span style={{ color: "#10b981", fontWeight: "bold" }}>✓</span> Priority local support & custom SLA
+                </li>
+              </ul>
+            </div>
+
+            <button
+              onClick={() => {
+                alert(`Redirecting to Studio Team checkout... Plan: ${pricingPeriod === "annual" ? "Annual Team ($249 Billed Annually)" : "Monthly Team ($29/month)"}`);
+              }}
+              style={{
+                width: "100%",
+                background: dm ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.05)",
+                border: "none",
+                borderRadius: "14px",
+                padding: "12px 24px",
+                fontSize: "14px",
+                fontWeight: 700,
+                color: dm ? "#ffffff" : "#111827",
+                cursor: "pointer",
+                transition: "all 0.2s ease"
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.background = dm ? "rgba(255, 255, 255, 0.12)" : "rgba(0, 0, 0, 0.08)"}
+              onMouseLeave={(e) => e.currentTarget.style.background = dm ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.05)"}
+            >
+              Start Team Trial
             </button>
           </div>
         </div>
