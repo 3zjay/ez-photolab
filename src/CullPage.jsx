@@ -408,11 +408,11 @@ export default function CullPage({
         fontFamily: "'Outfit', 'Inter', sans-serif",
         color: dm ? "#f3f4f6" : "#1f2937",
         height: isMobile ? "auto" : "calc(100vh - 52px)",
-        overflowY: isMobile ? "visible" : "auto",
+        overflowY: "auto",
         display: "flex",
         flexDirection: "column",
-        gap: "24px",
-        padding: isMobile ? "0px" : "24px 32px 40px",
+        gap: "20px",
+        padding: isMobile ? "0px" : "20px 28px 32px",
         boxSizing: "border-box"
       }}
     >
@@ -444,7 +444,7 @@ export default function CullPage({
       )}
 
       {/* Top Header Section */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
         <div>
           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
             <span style={{ fontSize: "20px" }}>🔍</span>
@@ -803,7 +803,7 @@ export default function CullPage({
 
       {/* ACTIVE CULLING REVIEW WORKSPACE */}
       {groups.length > 0 && activePhoto && (
-        <div style={{ display: "grid", gridTemplateColumns: "2.2fr 1fr", gap: "24px", minHeight: "65vh" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "2.2fr 1fr", gap: "20px", flexShrink: 0 }}>
           
           {/* Left Column: Darkroom Viewport & Group Details */}
           <div
@@ -882,8 +882,8 @@ export default function CullPage({
                 position: "relative",
                 overflow: "hidden",
                 border: `1px solid ${dm ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.05)"}`,
-                minHeight: "55vh",
-                maxHeight: "55vh"
+                minHeight: "45vh",
+                maxHeight: "48vh"
               }}
             >
               <div style={{ position: "relative", display: "inline-block", maxWidth: "100%", maxHeight: "100%" }}>
@@ -892,7 +892,7 @@ export default function CullPage({
                   alt={activePhoto.name}
                   style={{
                     maxWidth: "100%",
-                    maxHeight: "53vh",
+                    maxHeight: "46vh",
                     objectFit: "contain",
                     borderRadius: "8px",
                     display: "block"
@@ -1218,7 +1218,7 @@ export default function CullPage({
                 display: "flex",
                 flexDirection: "column",
                 gap: "12px",
-                maxHeight: "35vh",
+                maxHeight: "28vh",
                 overflowY: "auto",
                 boxShadow: dm ? "0 10px 40px rgba(0,0,0,0.3)" : "0 10px 30px rgba(0,0,0,0.03)"
               }}
@@ -1473,10 +1473,11 @@ export default function CullPage({
           className="glass-panel"
           style={{
             borderRadius: "20px",
-            padding: "16px",
+            padding: "14px 16px",
             display: "flex",
             flexDirection: "column",
-            gap: "12px",
+            gap: "10px",
+            flexShrink: 0,
             boxShadow: dm ? "0 10px 40px rgba(0,0,0,0.3)" : "0 10px 30px rgba(0,0,0,0.03)"
           }}
         >
@@ -1586,10 +1587,11 @@ export default function CullPage({
           className="glass-panel"
           style={{
             borderRadius: "16px",
-            padding: "16px 20px",
+            padding: "14px 20px",
             display: "flex",
             flexDirection: "column",
-            gap: "12px",
+            gap: "10px",
+            flexShrink: 0,
             boxShadow: dm ? "0 10px 40px rgba(0,0,0,0.3)" : "0 10px 30px rgba(0,0,0,0.03)"
           }}
         >

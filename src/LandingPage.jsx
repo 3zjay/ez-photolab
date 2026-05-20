@@ -106,6 +106,119 @@ function getPipelineNodeIcon(id, color) {
   }
 }
 
+export function SparklesIcon({ size = 16, className = "" }) {
+  return (
+    <svg 
+      width={size} 
+      height={size} 
+      viewBox="0 0 24 24" 
+      fill="none" 
+      xmlns="http://www.w3.org/2000/svg" 
+      className={`sparkles-shimmer ${className}`} 
+      style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: "6px" }}
+    >
+      <defs>
+        <linearGradient id="sparkleGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#06b6d4" />
+          <stop offset="50%" stopColor="#6c63ff" />
+          <stop offset="100%" stopColor="#ec4899" />
+        </linearGradient>
+      </defs>
+      <path d="M10 3C10 7.5 7.5 10 3 10C7.5 10 10 12.5 10 17C10 12.5 12.5 10 17 10C12.5 10 10 7.5 10 3Z" fill="url(#sparkleGradient)" />
+      <path d="M18 12C18 14.5 16.5 16 14 16C16.5 16 18 17.5 18 20C18 17.5 19.5 16 22 16C19.5 16 18 14.5 18 12Z" fill="url(#sparkleGradient)" />
+    </svg>
+  );
+}
+
+export function RocketIcon({ size = 16, className = "" }) {
+  return (
+    <svg 
+      width={size} 
+      height={size} 
+      viewBox="0 0 24 24" 
+      fill="none" 
+      xmlns="http://www.w3.org/2000/svg" 
+      className={`rocket-icon ${className}`}
+      style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: "8px", transition: 'transform 0.3s cubic-bezier(0.16, 1, 0.3, 1)' }}
+    >
+      <defs>
+        <linearGradient id="rocketGlow" x1="0%" y1="100%" x2="100%" y2="0%">
+          <stop offset="0%" stopColor="#8b5cf6" />
+          <stop offset="50%" stopColor="#6c63ff" />
+          <stop offset="100%" stopColor="#06b6d4" />
+        </linearGradient>
+        <linearGradient id="rocketFlame" x1="0%" y1="100%" x2="100%" y2="0%">
+          <stop offset="0%" stopColor="#ec4899" />
+          <stop offset="100%" stopColor="#f59e0b" />
+        </linearGradient>
+      </defs>
+      <path 
+        d="M4.5 19.5C5.5 16.5 7.5 14.5 9 14M4.5 19.5C6.5 20.5 8.5 20 10 18.5M4.5 19.5L2 22L4.5 19.5Z" 
+        stroke="url(#rocketFlame)" 
+        strokeWidth="2" 
+        strokeLinecap="round" 
+        strokeLinejoin="round" 
+      />
+      <path 
+        d="M12 12L19 5C20.5 3.5 22.5 3.5 22.5 3.5S22.5 5.5 21 7L14 14L12 12Z" 
+        fill="url(#rocketGlow)" 
+        stroke="url(#rocketGlow)" 
+        strokeWidth="1.5" 
+        strokeLinecap="round" 
+        strokeLinejoin="round" 
+      />
+      <path 
+        d="M9 14.5L6.5 18C5.5 19 5.5 20.5 5.5 20.5S7 20.5 8 19.5L11.5 17" 
+        stroke="url(#rocketGlow)" 
+        strokeWidth="2" 
+        strokeLinecap="round" 
+        strokeLinejoin="round" 
+      />
+      <path 
+        d="M14.5 9L18 6.5C19 5.5 20.5 5.5 20.5 5.5S20.5 7 19.5 8L17 11.5" 
+        stroke="url(#rocketGlow)" 
+        strokeWidth="2" 
+        strokeLinecap="round" 
+        strokeLinejoin="round" 
+      />
+      <circle cx="16.5" cy="7.5" r="1.5" fill="#ffffff" />
+    </svg>
+  );
+}
+
+export function CameraIcon({ size = 16, className = "" }) {
+  return (
+    <svg 
+      width={size} 
+      height={size} 
+      viewBox="0 0 24 24" 
+      fill="none" 
+      xmlns="http://www.w3.org/2000/svg" 
+      className={`camera-icon ${className}`}
+      style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: "8px", transition: 'transform 0.3s cubic-bezier(0.16, 1, 0.3, 1)' }}
+    >
+      <defs>
+        <linearGradient id="cameraGlow" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#06b6d4" />
+          <stop offset="50%" stopColor="#6c63ff" />
+          <stop offset="100%" stopColor="#ec4899" />
+        </linearGradient>
+      </defs>
+      <path 
+        d="M23 19C23 20.1046 22.1046 21 21 21H3C1.89543 21 1 20.1046 1 19V8C1 6.89543 1.89543 6 3 6H7L8.5 3.5C8.8 3 9.5 3 10 3H14C14.5 3 15.2 3 15.5 3.5L17 6H21C22.1046 6 23 6.89543 23 8V19Z" 
+        stroke="currentColor" 
+        strokeWidth="2" 
+        strokeLinecap="round" 
+        strokeLinejoin="round" 
+      />
+      <path d="M7 6H10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+      <circle cx="12" cy="13.5" r="4.5" stroke="url(#cameraGlow)" strokeWidth="2" />
+      <path d="M10.5 12C11 11.5 12 11.5 12.5 12" stroke="url(#cameraGlow)" strokeWidth="1.5" strokeLinecap="round" />
+      <circle cx="19" cy="9" r="1" fill="#ec4899" />
+    </svg>
+  );
+}
+
 export function LandingPage({ dm, loadImage, setActiveTab }) {
   const [sliderPos, setSliderPos] = useState(50);
   const [isDraggingSlider, setIsDraggingSlider] = useState(false);
@@ -269,6 +382,29 @@ export function LandingPage({ dm, loadImage, setActiveTab }) {
         .tech-node-active {
           filter: drop-shadow(0 0 8px rgba(108, 99, 255, 0.3));
         }
+        
+        .sparkles-shimmer {
+          animation: sparkles-shimmer 3s ease-in-out infinite;
+        }
+        
+        @keyframes sparkles-shimmer {
+          0%, 100% {
+            transform: scale(1) rotate(0deg);
+            filter: drop-shadow(0 0 2px rgba(6, 182, 212, 0.4));
+          }
+          50% {
+            transform: scale(1.15) rotate(15deg);
+            filter: drop-shadow(0 0 6px rgba(108, 99, 255, 0.8));
+          }
+        }
+
+        .active-workspace-btn:hover .rocket-icon {
+          transform: translateY(-2px) translateX(2px) scale(1.1);
+        }
+
+        .active-upload-box:hover .camera-icon {
+          transform: scale(1.15) rotate(8deg);
+        }
       `}</style>
 
       {/* Page Ingestion Drop Overlay */}
@@ -340,7 +476,7 @@ export function LandingPage({ dm, loadImage, setActiveTab }) {
           letterSpacing: "1px",
           marginBottom: "16px"
         }}>
-          ✨ Ultra-Fast Offline Web Processor
+          <SparklesIcon size={16} /> Ultra-Fast Offline Web Processor
         </div>
         <h1 style={{
           fontSize: "clamp(32px, 5vw, 56px)",
@@ -372,6 +508,7 @@ export function LandingPage({ dm, loadImage, setActiveTab }) {
         <div style={{ display: "flex", gap: "14px", justifyContent: "center", flexWrap: "wrap" }}>
           <button
             onClick={() => setActiveTab("edit")}
+            className="active-workspace-btn"
             style={{
               padding: "13px 30px",
               background: "linear-gradient(135deg, #6c63ff, #8b5cf6)",
@@ -382,7 +519,10 @@ export function LandingPage({ dm, loadImage, setActiveTab }) {
               fontWeight: 700,
               cursor: "pointer",
               boxShadow: "0 4px 18px rgba(108, 99, 255, 0.4)",
-              transition: "transform 0.2s, box-shadow 0.2s"
+              transition: "transform 0.2s, box-shadow 0.2s",
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center"
             }}
             onMouseEnter={(e) => {
               e.currentTarget.style.transform = "translateY(-2px)";
@@ -393,9 +533,10 @@ export function LandingPage({ dm, loadImage, setActiveTab }) {
               e.currentTarget.style.boxShadow = "0 4px 18px rgba(108, 99, 255, 0.4)";
             }}
           >
-            🚀 Open Studio Workspace
+            <RocketIcon size={18} /> Open Studio Workspace
           </button>
           <div
+            className="active-upload-box"
             style={{
               padding: "13px 30px",
               background: dm ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.03)",
@@ -405,7 +546,10 @@ export function LandingPage({ dm, loadImage, setActiveTab }) {
               fontWeight: 600,
               color: dm ? "#d1d5db" : "#374151",
               cursor: "pointer",
-              transition: "all 0.2s"
+              transition: "all 0.2s",
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center"
             }}
             onMouseEnter={(e) => {
               e.currentTarget.style.borderColor = "#6c63ff";
@@ -428,7 +572,7 @@ export function LandingPage({ dm, loadImage, setActiveTab }) {
               fileInput.click();
             }}
           >
-            📸 Drop Photo here or Click to load
+            <CameraIcon size={18} /> Drop Photo here or Click to load
           </div>
         </div>
       </div>

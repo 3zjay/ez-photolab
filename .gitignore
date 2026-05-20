@@ -2,3 +2,4 @@ node_modules/
 dist/
 .idx/
 .DS_Store
+.vercel
