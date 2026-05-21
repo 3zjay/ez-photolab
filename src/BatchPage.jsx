@@ -476,7 +476,7 @@ export function BatchPage({ dm, cardBg, cardBdr, inputSt, isMobile = false,
           </Card>
 
           {isRaw && (
-            <RawBatchPanel {...{ dm, cardBg, cardBdr, inputSt, accent, batchRawFiles, setBatchRawFiles, batchProcessing, batchProgress, handleRawBatchProcess, batchDone, inline: true, batchLogs, addBatchLog }} />
+            <RawBatchPanel {...{ user, setActiveTab, dm, cardBg, cardBdr, inputSt, accent, batchRawFiles, setBatchRawFiles, batchProcessing, batchProgress, handleRawBatchProcess, batchDone, inline: true, batchLogs, addBatchLog }} />
           )}
 
           <Card>

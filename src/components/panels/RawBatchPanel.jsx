@@ -4,10 +4,62 @@ import { RAW_EXTENSIONS, decodeRaw } from '../../rawProcessor';
 
 export function RawBatchPanel({ dm, cardBg, cardBdr, inputSt, accent = '#6c63ff', 
   batchRawFiles, setBatchRawFiles, batchProcessing, batchProgress, 
-  handleRawBatchProcess, batchDone, inline = false, batchLogs = [], addBatchLog }) {
+  handleRawBatchProcess, batchDone, inline = false, batchLogs = [], addBatchLog,
+  user, setActiveTab }) {
   
   const [isOver, setIsOver] = useState(false);
   const [decoding, setDecoding] = useState(false);
+
+  if (user && user.tier === "free") {
+    return (
+      <div style={{
+        border: `1.5px dashed rgba(249, 115, 22, ${dm ? "0.2" : "0.15"})`,
+        borderRadius: "16px",
+        padding: "32px 20px",
+        textAlign: "center",
+        background: dm ? "rgba(249, 115, 22, 0.02)" : "rgba(249, 115, 22, 0.01)",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        gap: "12px",
+        fontFamily: "'Outfit', sans-serif"
+      }}>
+        <span style={{ fontSize: "32px" }}>📸</span>
+        <div style={{ fontSize: "14px", fontWeight: 800, color: dm ? '#ffffff' : '#1a1a2e' }}>
+          Creator Pro Required for RAW Engine
+        </div>
+        <p style={{ fontSize: "12px", color: dm ? "#cbd5e1" : "#4b5563", lineHeight: 1.5, margin: 0, maxWidth: "320px" }}>
+          High-fidelity RAW decoding (NEF, CR2, ARW) and WebGPU C++ JIT compilation require the Creator Pro plan.
+        </p>
+        <button
+          onClick={() => {
+            if (setActiveTab) {
+              setActiveTab("home");
+              setTimeout(() => {
+                const el = document.getElementById("pricing-container");
+                if (el) el.scrollIntoView({ behavior: "smooth" });
+              }, 100);
+            }
+          }}
+          style={{
+            background: "linear-gradient(135deg, #f97316 0%, #facc15 100%)",
+            color: "#ffffff",
+            border: "none",
+            borderRadius: "8px",
+            padding: "8px 16px",
+            fontSize: "12px",
+            fontWeight: 800,
+            cursor: "pointer",
+            boxShadow: "0 4px 12px rgba(249, 115, 22, 0.2)",
+            fontFamily: "inherit",
+            transition: "transform 0.2s"
+          }}
+        >
+          ⭐ Upgrade to Creator Pro
+        </button>
+      </div>
+    );
+  }
 
   const handleFiles = useCallback(async (files) => {
     setDecoding(true);
