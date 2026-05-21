@@ -91,6 +91,7 @@ const BatchFilterSlider = memo(function BatchFilterSlider({ f, value, setFilters
 
 export function BatchPage({ dm, cardBg, cardBdr, inputSt, isMobile = false,
   sourceHandle, outputHandle, batchImages, selectSourceFolder, selectRawSourceFolder, selectOutputFolder,
+  user, setActiveTab,
   batchResizeMode, setBatchResizeMode, batchResizePreset, setBatchResizePreset,
   batchCustomW, setBatchCustomW, batchCustomH, setBatchCustomH,
   batchKeepAspect, setBatchKeepAspect, batchLongEdgePx, setBatchLongEdgePx,
@@ -754,20 +755,72 @@ export function BatchPage({ dm, cardBg, cardBdr, inputSt, isMobile = false,
         </div>
 
         <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-          <Card>
-            <SecLabel icon="🏷">Logo / Watermark</SecLabel>
-            <label style={{ display: "block", padding: "16px 12px", border: `2px dashed ${batchLogo ? accent : cardBdr}`, borderRadius: "10px", cursor: "pointer", textAlign: "center", transition: "all .2s", background: batchLogo ? (dm ? '#1e1a3a' : '#faf9ff') : dm ? '#252525' : '#fafafa' }}>
-              <input type="file" accept="image/*" onChange={handleBatchLogoUpload} style={{ display: "none" }} />
-              {batchLogo
-                ? <><div style={{ fontSize: "26px", marginBottom: "5px" }}>✅</div><div style={{ fontSize: "12px", fontWeight: 600, color: accent, marginBottom: "2px" }}>{batchLogoFile?.name}</div><div style={{ fontSize: "11px", color: "#bbb" }}>Click to replace</div></>
-                : <><div style={{ fontSize: "26px", marginBottom: "5px" }}>🖼</div><div style={{ fontSize: "12px", fontWeight: 600, color: dm ? '#ccc' : '#555', marginBottom: "2px" }}>Click to upload logo</div><div style={{ fontSize: "11px", color: "#bbb" }}>PNG with transparency works best</div></>}
-            </label>
-            {batchLogo && (
-              <button onClick={() => { setBatchLogo(null); setBatchLogoFile(null); }} style={{ padding: "7px", background: "#fee2e2", border: "none", borderRadius: "7px", fontSize: "12px", color: "#ef4444", fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
-                ✕ Remove Logo
-              </button>
-            )}
-          </Card>
+          {(!user || user.tier !== "team") ? (
+            <Card style={{
+              position: "relative",
+              overflow: "hidden",
+              border: `1.5px dashed rgba(108, 99, 255, ${dm ? "0.2" : "0.15"})`,
+              background: dm ? "rgba(108, 99, 255, 0.02)" : "rgba(108, 99, 255, 0.015)"
+            }}>
+              <SecLabel icon="🏷">Logo / Watermark</SecLabel>
+              <div style={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                textAlign: "center",
+                gap: "12px",
+                padding: "20px 10px"
+              }}>
+                <span style={{ fontSize: "24px" }}>💎</span>
+                <div style={{ fontSize: "13px", fontWeight: 800, color: dm ? "#ffffff" : "#111827" }}>
+                  Studio Team Plan Required
+                </div>
+                <p style={{ fontSize: "11.5px", color: dm ? "#cbd5e1" : "#4b5563", lineHeight: 1.5, margin: 0 }}>
+                  Custom brand watermarking and asset layout design require the Studio Team Plan. Update your subscription to unlock.
+                </p>
+                <button
+                  onClick={() => {
+                    if (setActiveTab) {
+                      setActiveTab("home");
+                      setTimeout(() => {
+                        const el = document.getElementById("pricing-container");
+                        if (el) el.scrollIntoView({ behavior: "smooth" });
+                      }, 100);
+                    }
+                  }}
+                  style={{
+                    background: "linear-gradient(135deg, #06b6d4 0%, #6c63ff 100%)",
+                    color: "#ffffff",
+                    border: "none",
+                    borderRadius: "8px",
+                    padding: "8px 16px",
+                    fontSize: "12px",
+                    fontWeight: 800,
+                    cursor: "pointer",
+                    boxShadow: "0 4px 12px rgba(108, 99, 255, 0.2)",
+                    fontFamily: "inherit"
+                  }}
+                >
+                  💎 Upgrade to Studio Team
+                </button>
+              </div>
+            </Card>
+          ) : (
+            <Card>
+              <SecLabel icon="🏷">Logo / Watermark</SecLabel>
+              <label style={{ display: "block", padding: "16px 12px", border: `2px dashed ${batchLogo ? accent : cardBdr}`, borderRadius: "10px", cursor: "pointer", textAlign: "center", transition: "all .2s", background: batchLogo ? (dm ? '#1e1a3a' : '#faf9ff') : dm ? '#252525' : '#fafafa' }}>
+                <input type="file" accept="image/*" onChange={handleBatchLogoUpload} style={{ display: "none" }} />
+                {batchLogo
+                  ? <><div style={{ fontSize: "26px", marginBottom: "5px" }}>✅</div><div style={{ fontSize: "12px", fontWeight: 600, color: accent, marginBottom: "2px" }}>{batchLogoFile?.name}</div><div style={{ fontSize: "11px", color: "#bbb" }}>Click to replace</div></>
+                  : <><div style={{ fontSize: "26px", marginBottom: "5px" }}>🖼</div><div style={{ fontSize: "12px", fontWeight: 600, color: dm ? '#ccc' : '#555', marginBottom: "2px" }}>Click to upload logo</div><div style={{ fontSize: "11px", color: "#bbb" }}>PNG with transparency works best</div></>}
+              </label>
+              {batchLogo && (
+                <button onClick={() => { setBatchLogo(null); setBatchLogoFile(null); }} style={{ padding: "7px", background: "#fee2e2", border: "none", borderRadius: "7px", fontSize: "12px", color: "#ef4444", fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
+                  ✕ Remove Logo
+                </button>
+              )}
+            </Card>
+          )}
 
           {batchLogo && (<>
             <Card>

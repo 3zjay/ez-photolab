@@ -41,7 +41,9 @@ export default function CullPage({
   addBatchLog,
   batchSection,
   setBatchSection,
-  isMobile = false
+  isMobile = false,
+  user,
+  setActiveTab
 }) {
   // Option Parameters
   const [sensitivity, setSensitivity] = useState(12);
@@ -416,6 +418,113 @@ export default function CullPage({
         boxSizing: "border-box"
       }}
     >
+      <style>{`
+        @keyframes pulse-glow {
+          0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(249, 115, 22, 0.4); }
+          50% { transform: scale(1.05); box-shadow: 0 0 20px 8px rgba(249, 115, 22, 0.2); }
+        }
+      `}</style>
+
+      {/* SaaS Feature Gating Overlay for Free Tier > 10 images */}
+      {user && user.tier === "free" && activeInputFiles && activeInputFiles.length > 10 && (
+        <div style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: "rgba(10, 14, 23, 0.7)",
+          backdropFilter: "blur(18px)",
+          WebkitBackdropFilter: "blur(18px)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          zIndex: 999,
+          padding: "24px",
+          textAlign: "center",
+          borderRadius: "20px",
+          animation: "fadein 0.4s ease forwards"
+        }}>
+          <div style={{
+            maxWidth: "500px",
+            background: dm ? "rgba(18, 24, 38, 0.95)" : "#ffffff",
+            border: `1.5px solid ${dm ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.08)"}`,
+            boxShadow: "0 24px 70px rgba(0, 0, 0, 0.4)",
+            borderRadius: "28px",
+            padding: "40px",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            gap: "20px"
+          }}>
+            <div style={{
+              width: "64px",
+              height: "64px",
+              borderRadius: "50%",
+              background: "rgba(249, 115, 22, 0.15)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: "32px",
+              color: "#f97316",
+              animation: "pulse-glow 2s infinite"
+            }}>
+              ⚡
+            </div>
+            <h2 style={{
+              fontSize: "24px",
+              fontWeight: 900,
+              fontFamily: "'Outfit', sans-serif",
+              color: dm ? "#ffffff" : "#111827",
+              letterSpacing: "-0.5px"
+            }}>
+              Creator Pro Upgrade Required
+            </h2>
+            <p style={{
+              fontSize: "14px",
+              color: dm ? "#cbd5e1" : "#4b5563",
+              lineHeight: 1.6
+            }}>
+              Batch AI focus culling is capped at a maximum of <strong>10 photos</strong> on the Hobbyist Free sandbox. Unlock unlimited batching, advanced C++ local WASM processing, and active device lease synchronization.
+            </p>
+
+            <div style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: "12px",
+              width: "100%",
+              marginTop: "8px"
+            }}>
+              <button
+                onClick={() => {
+                  setActiveTab("home");
+                  setTimeout(() => {
+                    const el = document.getElementById("pricing-container");
+                    if (el) el.scrollIntoView({ behavior: "smooth" });
+                  }, 100);
+                }}
+                style={{
+                  background: 'linear-gradient(135deg, #f97316 0%, #facc15 100%)',
+                  color: "#ffffff",
+                  border: "none",
+                  borderRadius: "14px",
+                  padding: "14px 24px",
+                  fontSize: "14.5px",
+                  fontWeight: 800,
+                  cursor: "pointer",
+                  boxShadow: "0 6px 20px rgba(249, 115, 22, 0.35)",
+                  transition: "transform 0.2s",
+                  fontFamily: "'Outfit', sans-serif",
+                  width: "100%"
+                }}
+              >
+                ⭐ Upgrade to Creator Pro
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Dynamic Toast Alert */}
       {toastMessage && (
         <div

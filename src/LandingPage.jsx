@@ -219,7 +219,7 @@ export function CameraIcon({ size = 16, className = "" }) {
   );
 }
 
-export function LandingPage({ dm, loadImage, setActiveTab, handleInstallClick, deferredPrompt, isIOS, isInstalled }) {
+export function LandingPage({ dm, loadImage, setActiveTab, handleInstallClick, deferredPrompt, isIOS, isInstalled, onSelectPlan }) {
   const [sliderPos, setSliderPos] = useState(50);
   const [isDraggingSlider, setIsDraggingSlider] = useState(false);
   const [activeNode, setActiveNode] = useState(null);
@@ -1118,7 +1118,18 @@ export function LandingPage({ dm, loadImage, setActiveTab, handleInstallClick, d
               gap: "6px"
             }}
           >
-            <span>🎁</span> Bill Annually (Save 25%+)
+            <span>🎁</span> Bill Annually
+            {pricingPeriod === "annual" && (
+              <span style={{
+                background: "rgba(255,255,255,0.25)",
+                borderRadius: "20px",
+                padding: "2px 8px",
+                fontSize: "11px",
+                fontWeight: 900,
+                letterSpacing: "0.5px",
+                animation: "pulse-soft 1.8s ease-in-out infinite"
+              }}>27% OFF</span>
+            )}
           </button>
         </div>
 
@@ -1308,7 +1319,13 @@ export function LandingPage({ dm, loadImage, setActiveTab, handleInstallClick, d
 
             <button
               onClick={() => {
-                alert(`Redirecting to Creator Pro checkout... Plan: ${pricingPeriod === "annual" ? "Annual Pro ($79 Billed Annually)" : "Monthly Pro ($9/month)"}`);
+                onSelectPlan && onSelectPlan({
+                  name: `Creator Pro (${pricingPeriod === "annual" ? "Annual" : "Monthly"})`,
+                  price: pricingPeriod === "annual" ? "$79" : "$9",
+                  tier: "pro",
+                  period: pricingPeriod,
+                  savingBadge: pricingPeriod === "annual" ? "Save 27%" : ""
+                });
               }}
               style={{
                 width: "100%",
@@ -1408,7 +1425,13 @@ export function LandingPage({ dm, loadImage, setActiveTab, handleInstallClick, d
 
             <button
               onClick={() => {
-                alert(`Redirecting to Studio Team checkout... Plan: ${pricingPeriod === "annual" ? "Annual Team ($249 Billed Annually)" : "Monthly Team ($29/month)"}`);
+                onSelectPlan && onSelectPlan({
+                  name: `Studio Team (${pricingPeriod === "annual" ? "Annual" : "Monthly"})`,
+                  price: pricingPeriod === "annual" ? "$249" : "$29",
+                  tier: "team",
+                  period: pricingPeriod,
+                  savingBadge: pricingPeriod === "annual" ? "Save 28%" : ""
+                });
               }}
               style={{
                 width: "100%",
@@ -1429,6 +1452,174 @@ export function LandingPage({ dm, loadImage, setActiveTab, handleInstallClick, d
             </button>
           </div>
         </div>
+
+        {/* Competitor Comparison Table */}
+        <div style={{
+          width: "100%",
+          maxWidth: "1080px",
+          marginTop: "48px",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          gap: "20px"
+        }}>
+          <div style={{
+            fontSize: "11px",
+            fontWeight: 800,
+            color: dm ? "#9ca3af" : "#6b7280",
+            letterSpacing: "1.5px",
+            textTransform: "uppercase",
+            fontFamily: "'Outfit', sans-serif"
+          }}>
+            PHOTOlab vs. the competition
+          </div>
+          <div style={{
+            width: "100%",
+            overflowX: "auto",
+            borderRadius: "20px",
+            border: `1px solid ${dm ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.06)"}`,
+            backdropFilter: "blur(12px)",
+            WebkitBackdropFilter: "blur(12px)"
+          }}>
+            <table style={{
+              width: "100%",
+              borderCollapse: "collapse",
+              fontFamily: "'Outfit', sans-serif",
+              fontSize: "13px",
+              color: dm ? "#cbd5e1" : "#374151"
+            }}>
+              <thead>
+                <tr style={{ borderBottom: `1px solid ${dm ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)"}` }}>
+                  {["Feature", "PHOTOlab Pro", "Adobe Lightroom", "Capture One", "Aftershoot"].map((h, i) => (
+                    <th key={h} style={{
+                      padding: "14px 18px",
+                      fontWeight: 900,
+                      fontSize: "12px",
+                      letterSpacing: i === 0 ? "0px" : "0.5px",
+                      textAlign: "center",
+                      background: i === 1
+                        ? dm ? "rgba(249,115,22,0.08)" : "rgba(249,115,22,0.05)"
+                        : dm ? "rgba(255,255,255,0.02)" : "rgba(0,0,0,0.01)",
+                      color: i === 1 ? "#f97316" : (dm ? "#e2e8f0" : "#111827")
+                    }}>
+                      {i === 1 ? "⭐ " + h : h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {[
+                  ["Monthly Price", "$9 / mo", "$22.99 / mo", "$24 / mo", "$15 / mo"],
+                  ["Annual Price", "$79 / yr", "$263 / yr", "$192 / yr", "$132 / yr"],
+                  ["Local RAW Processing", "✅ Yes (WASM)", "⚠️ Cloud Sync Required", "✅ Yes", "✅ Yes"],
+                  ["100% Offline Mode", "✅ Full PWA", "❌ No", "⚠️ Partial", "❌ No"],
+                  ["Privacy (No Uploads)", "✅ Zero uploads", "❌ Cloud sync", "⚠️ Optional", "❌ Cloud AI"],
+                  ["AI Culling", "✅ Local MediaPipe", "✅ Sensei AI", "❌ No", "✅ Cloud AI"],
+                  ["Browser / PWA", "✅ Yes", "❌ Desktop Only", "❌ Desktop Only", "❌ Desktop Only"],
+                  ["Free Tier", "✅ Always Free", "❌ No", "❌ Trial Only", "✅ Limited"],
+                ].map((row, ri) => (
+                  <tr key={ri} style={{
+                    borderBottom: ri < 7 ? `1px solid ${dm ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.04)"}` : "none",
+                    background: ri % 2 === 0
+                      ? (dm ? "rgba(255,255,255,0.01)" : "rgba(0,0,0,0.005)")
+                      : "transparent"
+                  }}>
+                    {row.map((cell, ci) => (
+                      <td key={ci} style={{
+                        padding: "12px 18px",
+                        textAlign: ci === 0 ? "left" : "center",
+                        fontWeight: ci === 0 ? 700 : 500,
+                        fontSize: ci === 0 ? "13px" : "13px",
+                        background: ci === 1
+                          ? dm ? "rgba(249,115,22,0.05)" : "rgba(249,115,22,0.03)"
+                          : "transparent",
+                        color: ci === 1
+                          ? (cell.startsWith("✅") ? "#f97316" : (dm ? "#cbd5e1" : "#374151"))
+                          : (cell.startsWith("✅") ? (dm ? "#10b981" : "#059669")
+                            : cell.startsWith("❌") ? (dm ? "#6b7280" : "#9ca3af")
+                            : (dm ? "#cbd5e1" : "#374151"))
+                      }}>
+                        {cell}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p style={{ fontSize: "11.5px", color: dm ? "#6b7280" : "#9ca3af" }}>
+            Pricing comparisons based on publicly listed rates as of 2025–2026.
+          </p>
+        </div>
+
+        {/* FAQ Section */}
+        <div style={{
+          width: "100%",
+          maxWidth: "720px",
+          marginTop: "48px",
+          display: "flex",
+          flexDirection: "column",
+          gap: "12px"
+        }}>
+          <div style={{
+            fontSize: "11px",
+            fontWeight: 800,
+            color: dm ? "#9ca3af" : "#6b7280",
+            letterSpacing: "1.5px",
+            textTransform: "uppercase",
+            fontFamily: "'Outfit', sans-serif",
+            textAlign: "center",
+            marginBottom: "8px"
+          }}>
+            Common Questions
+          </div>
+          {[
+            {
+              q: "Does it really work 100% offline?",
+              a: "Yes. PHOTOlab uses a 30-day cryptographic offline lease stored on your device. Once verified, the full RAW engine and AI culling works on-site with zero internet connection."
+            },
+            {
+              q: "Can I cancel at any time?",
+              a: "Absolutely. Monthly plans can be cancelled in one click. Annual plans are refundable within 14 days if you're not satisfied."
+            },
+            {
+              q: "What RAW camera formats are supported?",
+              a: "Over 750 RAW formats via the C++ libraw engine — Canon CR2/CR3, Nikon NEF, Sony ARW, Fuji RAF, Hasselblad 3FR, DNG, and more."
+            },
+            {
+              q: "Is my photo data ever uploaded?",
+              a: "Never. Every pixel is decoded and processed entirely within your browser memory using WebAssembly. We have no access to your images."
+            }
+          ].map((item, idx) => (
+            <div key={idx} style={{
+              background: dm ? "rgba(255,255,255,0.02)" : "rgba(255,255,255,0.8)",
+              backdropFilter: "blur(8px)",
+              WebkitBackdropFilter: "blur(8px)",
+              border: `1px solid ${dm ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)"}`,
+              borderRadius: "16px",
+              padding: "20px 24px",
+              textAlign: "left"
+            }}>
+              <p style={{
+                fontSize: "14px",
+                fontWeight: 800,
+                color: dm ? "#ffffff" : "#111827",
+                fontFamily: "'Outfit', sans-serif",
+                marginBottom: "8px"
+              }}>
+                {item.q}
+              </p>
+              <p style={{
+                fontSize: "13px",
+                color: dm ? "#9ca3af" : "#4b5563",
+                lineHeight: 1.6
+              }}>
+                {item.a}
+              </p>
+            </div>
+          ))}
+        </div>
+
       </div>
 
       {/* Premium PWA Installation Card (Section 7) */}

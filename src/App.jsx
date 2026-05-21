@@ -17,6 +17,8 @@ import { createSkinMask } from "./faceMasking";
 import { restoreFaceLocal } from "./faceRestore";
 import { decodeRaw } from "./rawProcessor";
 import { LandingPage } from "./LandingPage";
+import { StripeCheckout } from "./components/ui/StripeCheckout";
+import { AccountDashboard } from "./components/panels/AccountDashboard";
 
 export function ApertureLogo({ size = 26, className = "" }) {
   return (
@@ -110,6 +112,20 @@ export function getTabIcon(id, isActive, dm) {
         <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" style={{ transition: "stroke 0.2s" }}>
           <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
           <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+        </svg>
+      );
+    case "account":
+      return (
+        <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" style={{ transition: "stroke 0.2s" }}>
+          {isActive && (
+            <defs>
+              <linearGradient id="accountTabGlow" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stopColor="#f97316" /><stop offset="100%" stopColor="#facc15" />
+              </linearGradient>
+            </defs>
+          )}
+          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" stroke={isActive ? "url(#accountTabGlow)" : color} />
+          <circle cx="12" cy="7" r="4" stroke={isActive ? "url(#accountTabGlow)" : color} />
         </svg>
       );
     default:
@@ -252,6 +268,44 @@ export default function App() {
   const [batchAiBeautyUseMask, setBatchAiBeautyUseMask] = useState(true);
   const [batchRawFiles, setBatchRawFiles] = useState([]);
   const [batchLogs, setBatchLogs] = useState([]);
+
+  // ─── SaaS Subscription State ───────────────────────────────────────
+  const [user, setUser] = useState(() => {
+    try {
+      const stored = localStorage.getItem("photolab_saas_user");
+      if (stored) return JSON.parse(stored);
+    } catch (e) { console.error(e); }
+    return { loggedIn: false, email: "", tier: "free", billingPeriod: "monthly", offlineLeaseExpires: null };
+  });
+  const [checkoutPlan, setCheckoutPlan] = useState(null);
+
+  const saveUser = (updatedUser) => {
+    setUser(updatedUser);
+    localStorage.setItem("photolab_saas_user", JSON.stringify(updatedUser));
+  };
+  const handleLogout = () => {
+    saveUser({ loggedIn: false, email: "", tier: "free", billingPeriod: "monthly", offlineLeaseExpires: null });
+    setActiveTab("home");
+  };
+  const handlePaymentSuccess = ({ email, tier, billingPeriod }) => {
+    const expiry = new Date();
+    expiry.setDate(expiry.getDate() + 30);
+    saveUser({ loggedIn: true, email, tier, billingPeriod, offlineLeaseExpires: expiry.toISOString() });
+  };
+  const handleCancelSubscription = () => {
+    saveUser({ loggedIn: user.loggedIn, email: user.email, tier: "free", billingPeriod: "monthly", offlineLeaseExpires: null });
+  };
+  const handleChangeBillingPeriod = (period) => { saveUser({ ...user, billingPeriod: period }); };
+  const handleChangeTier = (tier) => {
+    const expiry = new Date();
+    expiry.setDate(expiry.getDate() + 30);
+    saveUser({ ...user, tier, offlineLeaseExpires: expiry.toISOString() });
+  };
+  const handleRenewLease = () => {
+    const expiry = new Date();
+    expiry.setDate(expiry.getDate() + 30);
+    saveUser({ ...user, offlineLeaseExpires: expiry.toISOString() });
+  };
 
   const addBatchLog = useCallback((msg, type = 'info') => {
     if (msg === "__CLEAR__") { setBatchLogs([]); return; }
@@ -1561,20 +1615,27 @@ export default function App() {
             )}
           </button>
           <div style={{ display: "flex", background: dm ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.04)', border: `1px solid ${dm ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'}`, backdropFilter: "blur(8px)", borderRadius: "12px", padding: "3px", gap: "3px", overflowX: "auto" }}>
-            {[["home", "Home"], ["edit", "Edit"], ["adjust", "Adjust"], ["overlay", "Overlay"], ["tools", "Tools"], ["cull", "Cull AI"], ["batch", "Batch"]].map(([id, lb]) => {
+            {[["home", "Home"], ["edit", "Edit"], ["adjust", "Adjust"], ["overlay", "Overlay"], ["tools", "Tools"], ["cull", "Cull AI"], ["batch", "Batch"], ["account", user.tier === "pro" ? "⭐ Pro" : user.tier === "team" ? "💎 Team" : "Account"]].map(([id, lb]) => {
               const isActive = activeTab === id;
+              const isPremiumAccount = id === "account" && user.tier !== "free";
               return (
                 <button key={id} onClick={() => setActiveTab(id)}
                   style={{ 
                     padding: isMobile ? "5px 10px" : "6px 12px", 
                     fontSize: "12px", 
                     fontWeight: 600, 
-                    border: "none", 
+                    border: isPremiumAccount ? (isActive ? "1px solid #f97316" : "1px solid rgba(249, 115, 22, 0.3)") : "none", 
                     cursor: "pointer", 
-                    background: isActive ? (dm ? '#333' : '#fff') : 'transparent', 
-                    color: isActive ? (dm ? '#fff' : '#1a1a2e') : (dm ? '#a1a1aa' : '#666677'), 
+                    background: isPremiumAccount
+                      ? (isActive ? "linear-gradient(135deg, rgba(249,115,22,0.15), rgba(250,204,21,0.10))" : "linear-gradient(135deg, rgba(249,115,22,0.06), rgba(250,204,21,0.04))")
+                      : (isActive ? (dm ? '#333' : '#fff') : 'transparent'), 
+                    color: isPremiumAccount
+                      ? "#f97316"
+                      : (isActive ? (dm ? '#fff' : '#1a1a2e') : (dm ? '#a1a1aa' : '#666677')), 
                     borderRadius: "9px", 
-                    boxShadow: isActive ? "0 2px 8px rgba(0,0,0,.08)" : "none", 
+                    boxShadow: isPremiumAccount
+                      ? (isActive ? "0 0 12px rgba(249, 115, 22, 0.25)" : "none")
+                      : (isActive ? "0 2px 8px rgba(0,0,0,.08)" : "none"), 
                     transition: "all .2s", 
                     whiteSpace: "nowrap",
                     display: "flex",
@@ -1598,11 +1659,15 @@ export default function App() {
 
       {!isMobile && (
         activeTab === "home" ? (
-          <LandingPage {...{ dm, loadImage, setActiveTab, handleInstallClick, deferredPrompt, isIOS, isInstalled }} />
+          <LandingPage {...{ dm, loadImage, setActiveTab, handleInstallClick, deferredPrompt, isIOS, isInstalled }} onSelectPlan={(plan) => setCheckoutPlan(plan)} />
         ) : activeTab === "batch" ? (
-          <BatchPage {...{ dm, cardBg, cardBdr, inputSt, sourceHandle, outputHandle, batchImages, selectSourceFolder, selectRawSourceFolder, selectOutputFolder, batchResizeMode, setBatchResizeMode, batchResizePreset, setBatchResizePreset, batchCustomW, setBatchCustomW, batchCustomH, setBatchCustomH, batchKeepAspect, setBatchKeepAspect, batchLongEdgePx, setBatchLongEdgePx, batchAutoLevels, setBatchAutoLevels, batchAutoContrast, setBatchAutoContrast, batchSharpen, setBatchSharpen, batchSharpenAmt, setBatchSharpenAmt, batchSharpenRad, setBatchSharpenRad, batchDenoise, setBatchDenoise, batchDenoiseAmt, setBatchDenoiseAmt, batchLogo, setBatchLogo, batchLogoFile, setBatchLogoFile, handleBatchLogoUpload, batchLogoScale, setBatchLogoScale, batchLogoScalePortrait, setBatchLogoScalePortrait, batchLogoOpacity, setBatchLogoOpacity, batchLogoPos, setBatchLogoPos, batchLogoMargin, setBatchLogoMargin, batchOutputFmt, setBatchOutputFmt, batchOutputQ, setBatchOutputQ, batchPrefix, setBatchPrefix, batchSuffix, setBatchSuffix, batchProcessing, batchProgress, batchDone, handleBatchProcess, batchPreviewIdx, batchPreviewOrigUrl, batchPreviewAfterUrl, batchPreviewLoading, batchPreviewSplit, setBatchPreviewSplit, batchPreviewDragging, setBatchPreviewDragging, batchPreviewOpen, setBatchPreviewOpen, generateBatchPreview, filters, setFilters, resetAll, batchFilterGroup, setBatchFilterGroup, calcBatchDims, batchAiUpscale, setBatchAiUpscale, batchAiBeauty, setBatchAiBeauty, batchAiScale, setBatchAiScale, batchAiBeautySmooth, setBatchAiBeautySmooth, batchAiBeautyClarity, setBatchAiBeautyClarity, batchAiBeautyGlow, setBatchAiBeautyGlow, batchAiFaceRestore, setBatchAiFaceRestore, batchAiBeautyUseMask, setBatchAiBeautyUseMask, batchSection, setBatchSection, batchRawFiles, setBatchRawFiles, handleRawBatchProcess, batchLogs, addBatchLog }} />
+          <BatchPage {...{ dm, cardBg, cardBdr, inputSt, user, setActiveTab, sourceHandle, outputHandle, batchImages, selectSourceFolder, selectRawSourceFolder, selectOutputFolder, batchResizeMode, setBatchResizeMode, batchResizePreset, setBatchResizePreset, batchCustomW, setBatchCustomW, batchCustomH, setBatchCustomH, batchKeepAspect, setBatchKeepAspect, batchLongEdgePx, setBatchLongEdgePx, batchAutoLevels, setBatchAutoLevels, batchAutoContrast, setBatchAutoContrast, batchSharpen, setBatchSharpen, batchSharpenAmt, setBatchSharpenAmt, batchSharpenRad, setBatchSharpenRad, batchDenoise, setBatchDenoise, batchDenoiseAmt, setBatchDenoiseAmt, batchLogo, setBatchLogo, batchLogoFile, setBatchLogoFile, handleBatchLogoUpload, batchLogoScale, setBatchLogoScale, batchLogoScalePortrait, setBatchLogoScalePortrait, batchLogoOpacity, setBatchLogoOpacity, batchLogoPos, setBatchLogoPos, batchLogoMargin, setBatchLogoMargin, batchOutputFmt, setBatchOutputFmt, batchOutputQ, setBatchOutputQ, batchPrefix, setBatchPrefix, batchSuffix, setBatchSuffix, batchProcessing, batchProgress, batchDone, handleBatchProcess, batchPreviewIdx, batchPreviewOrigUrl, batchPreviewAfterUrl, batchPreviewLoading, batchPreviewSplit, setBatchPreviewSplit, batchPreviewDragging, setBatchPreviewDragging, batchPreviewOpen, setBatchPreviewOpen, generateBatchPreview, filters, setFilters, resetAll, batchFilterGroup, setBatchFilterGroup, calcBatchDims, batchAiUpscale, setBatchAiUpscale, batchAiBeauty, setBatchAiBeauty, batchAiScale, setBatchAiScale, batchAiBeautySmooth, setBatchAiBeautySmooth, batchAiBeautyClarity, setBatchAiBeautyClarity, batchAiBeautyGlow, setBatchAiBeautyGlow, batchAiFaceRestore, setBatchAiFaceRestore, batchAiBeautyUseMask, setBatchAiBeautyUseMask, batchSection, setBatchSection, batchRawFiles, setBatchRawFiles, handleRawBatchProcess, batchLogs, addBatchLog }} />
         ) : activeTab === "cull" ? (
-          <CullPage {...{ dm, cardBg, cardBdr, inputSt, sourceHandle, outputHandle, batchImages, selectSourceFolder, selectRawSourceFolder, selectOutputFolder, batchLogs, addBatchLog, batchSection, setBatchSection, isMobile }} />
+          <CullPage {...{ dm, cardBg, cardBdr, inputSt, sourceHandle, outputHandle, batchImages, selectSourceFolder, selectRawSourceFolder, selectOutputFolder, batchLogs, addBatchLog, batchSection, setBatchSection, isMobile, user, setActiveTab }} />
+        ) : activeTab === "account" ? (
+          <div style={{ display: "flex", justifyContent: "center", minHeight: "calc(100vh - 52px)", overflowY: "auto", background: dm ? "#0a0e17" : "#f3f4f6" }}>
+            <AccountDashboard user={user} onLogout={handleLogout} onCancelSubscription={handleCancelSubscription} onChangeBillingPeriod={handleChangeBillingPeriod} onChangeTier={handleChangeTier} onRenewLease={handleRenewLease} dm={dm} />
+          </div>
         ) : (
           <div style={{ display: "flex", height: "calc(100vh - 52px)" }}>
             <div className="glass-panel" style={{ width: "310px", borderRight: `1px solid ${dm ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'}`, overflowY: "auto", flexShrink: 0 }}>
@@ -1618,15 +1683,19 @@ export default function App() {
       {isMobile && (
         activeTab === "home" ? (
           <div style={{ height: "calc(100vh - 52px)", overflowY: "auto" }}>
-            <LandingPage {...{ dm, loadImage, setActiveTab, handleInstallClick, deferredPrompt, isIOS, isInstalled }} />
+            <LandingPage {...{ dm, loadImage, setActiveTab, handleInstallClick, deferredPrompt, isIOS, isInstalled }} onSelectPlan={(plan) => setCheckoutPlan(plan)} />
           </div>
         ) : activeTab === "batch" ? (
           <div style={{ height: "calc(100vh - 52px)", overflowY: "auto" }}>
-            <BatchPage {...{ dm, cardBg, cardBdr, inputSt, isMobile: true, sourceHandle, outputHandle, batchImages, selectSourceFolder, selectRawSourceFolder, selectOutputFolder, batchResizeMode, setBatchResizeMode, batchResizePreset, setBatchResizePreset, batchCustomW, setBatchCustomW, batchCustomH, setBatchCustomH, batchKeepAspect, setBatchKeepAspect, batchLongEdgePx, setBatchLongEdgePx, batchAutoLevels, setBatchAutoLevels, batchAutoContrast, setBatchAutoContrast, batchSharpen, setBatchSharpen, batchSharpenAmt, setBatchSharpenAmt, batchSharpenRad, setBatchSharpenRad, batchDenoise, setBatchDenoise, batchDenoiseAmt, setBatchDenoiseAmt, batchLogo, setBatchLogo, batchLogoFile, setBatchLogoFile, handleBatchLogoUpload, batchLogoScale, setBatchLogoScale, batchLogoScalePortrait, setBatchLogoScalePortrait, batchLogoOpacity, setBatchLogoOpacity, batchLogoPos, setBatchLogoPos, batchLogoMargin, setBatchLogoMargin, batchOutputFmt, setBatchOutputFmt, batchOutputQ, setBatchOutputQ, batchPrefix, setBatchPrefix, batchSuffix, setBatchSuffix, batchProcessing, batchProgress, batchDone, handleBatchProcess, batchPreviewIdx, batchPreviewOrigUrl, batchPreviewAfterUrl, batchPreviewLoading, batchPreviewSplit, setBatchPreviewSplit, batchPreviewDragging, setBatchPreviewDragging, batchPreviewOpen, setBatchPreviewOpen, generateBatchPreview, filters, setFilters, resetAll, batchFilterGroup, setBatchFilterGroup, calcBatchDims, batchAiUpscale, setBatchAiUpscale, batchAiBeauty, setBatchAiBeauty, batchAiScale, setBatchAiScale, batchAiBeautySmooth, setBatchAiBeautySmooth, batchAiBeautyClarity, setBatchAiBeautyClarity, batchAiBeautyGlow, setBatchAiBeautyGlow, batchAiFaceRestore, setBatchAiFaceRestore, batchAiBeautyUseMask, setBatchAiBeautyUseMask, batchSection, setBatchSection, batchRawFiles, setBatchRawFiles, handleRawBatchProcess, batchLogs, addBatchLog }} />
+            <BatchPage {...{ dm, cardBg, cardBdr, inputSt, isMobile: true, user, setActiveTab, sourceHandle, outputHandle, batchImages, selectSourceFolder, selectRawSourceFolder, selectOutputFolder, batchResizeMode, setBatchResizeMode, batchResizePreset, setBatchResizePreset, batchCustomW, setBatchCustomW, batchCustomH, setBatchCustomH, batchKeepAspect, setBatchKeepAspect, batchLongEdgePx, setBatchLongEdgePx, batchAutoLevels, setBatchAutoLevels, batchAutoContrast, setBatchAutoContrast, batchSharpen, setBatchSharpen, batchSharpenAmt, setBatchSharpenAmt, batchSharpenRad, setBatchSharpenRad, batchDenoise, setBatchDenoise, batchDenoiseAmt, setBatchDenoiseAmt, batchLogo, setBatchLogo, batchLogoFile, setBatchLogoFile, handleBatchLogoUpload, batchLogoScale, setBatchLogoScale, batchLogoScalePortrait, setBatchLogoScalePortrait, batchLogoOpacity, setBatchLogoOpacity, batchLogoPos, setBatchLogoPos, batchLogoMargin, setBatchLogoMargin, batchOutputFmt, setBatchOutputFmt, batchOutputQ, setBatchOutputQ, batchPrefix, setBatchPrefix, batchSuffix, setBatchSuffix, batchProcessing, batchProgress, batchDone, handleBatchProcess, batchPreviewIdx, batchPreviewOrigUrl, batchPreviewAfterUrl, batchPreviewLoading, batchPreviewSplit, setBatchPreviewSplit, batchPreviewDragging, setBatchPreviewDragging, batchPreviewOpen, setBatchPreviewOpen, generateBatchPreview, filters, setFilters, resetAll, batchFilterGroup, setBatchFilterGroup, calcBatchDims, batchAiUpscale, setBatchAiUpscale, batchAiBeauty, setBatchAiBeauty, batchAiScale, setBatchAiScale, batchAiBeautySmooth, setBatchAiBeautySmooth, batchAiBeautyClarity, setBatchAiBeautyClarity, batchAiBeautyGlow, setBatchAiBeautyGlow, batchAiFaceRestore, setBatchAiFaceRestore, batchAiBeautyUseMask, setBatchAiBeautyUseMask, batchSection, setBatchSection, batchRawFiles, setBatchRawFiles, handleRawBatchProcess, batchLogs, addBatchLog }} />
           </div>
         ) : activeTab === "cull" ? (
           <div style={{ height: "calc(100vh - 52px)", overflowY: "auto", padding: "16px" }}>
-            <CullPage {...{ dm, cardBg, cardBdr, inputSt, sourceHandle, outputHandle, batchImages, selectSourceFolder, selectRawSourceFolder, selectOutputFolder, batchLogs, addBatchLog, batchSection, setBatchSection, isMobile: true }} />
+            <CullPage {...{ dm, cardBg, cardBdr, inputSt, sourceHandle, outputHandle, batchImages, selectSourceFolder, selectRawSourceFolder, selectOutputFolder, batchLogs, addBatchLog, batchSection, setBatchSection, isMobile: true, user, setActiveTab }} />
+          </div>
+        ) : activeTab === "account" ? (
+          <div style={{ display: "flex", justifyContent: "center", minHeight: "calc(100vh - 52px)", overflowY: "auto", background: dm ? "#0a0e17" : "#f3f4f6" }}>
+            <AccountDashboard user={user} onLogout={handleLogout} onCancelSubscription={handleCancelSubscription} onChangeBillingPeriod={handleChangeBillingPeriod} onChangeTier={handleChangeTier} onRenewLease={handleRenewLease} dm={dm} />
           </div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", height: "calc(100vh - 52px)", overflow: "hidden" }}>
@@ -1870,6 +1939,9 @@ export default function App() {
             </div>
           </div>
         </div>
+      )}
+      {checkoutPlan && (
+        <StripeCheckout isOpen={!!checkoutPlan} onClose={() => setCheckoutPlan(null)} plan={checkoutPlan} dm={dm} onPaymentSuccess={handlePaymentSuccess} />
       )}
       <canvas ref={canvasRef} style={{ display: "none" }} />
     </div>
