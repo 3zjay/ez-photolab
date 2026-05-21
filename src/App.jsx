@@ -272,6 +272,25 @@ export default function App() {
   // ─── SaaS Subscription State ───────────────────────────────────────
   const [user, setUser] = useState(() => {
     try {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("admin") === "true") {
+        const expiry = new Date();
+        expiry.setDate(expiry.getDate() + 365); // 1-year admin lease
+        const adminUser = { 
+          loggedIn: true, 
+          email: "admin@ez-photolab.internal", 
+          tier: "admin", 
+          billingPeriod: "annual", 
+          offlineLeaseExpires: expiry.toISOString() 
+        };
+        localStorage.setItem("photolab_saas_user", JSON.stringify(adminUser));
+        // Remove ?admin=true from URL cleanly without reload
+        try {
+          const newUrl = window.location.pathname + window.location.hash;
+          window.history.replaceState({}, document.title, newUrl);
+        } catch (e) { console.error(e); }
+        return adminUser;
+      }
       const stored = localStorage.getItem("photolab_saas_user");
       if (stored) return JSON.parse(stored);
     } catch (e) { console.error(e); }
@@ -1615,26 +1634,43 @@ export default function App() {
             )}
           </button>
           <div style={{ display: "flex", background: dm ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.04)', border: `1px solid ${dm ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'}`, backdropFilter: "blur(8px)", borderRadius: "12px", padding: "3px", gap: "3px", overflowX: "auto" }}>
-            {[["home", "Home"], ["edit", "Edit"], ["adjust", "Adjust"], ["overlay", "Overlay"], ["tools", "Tools"], ["cull", "Cull AI"], ["batch", "Batch"], ["account", user.tier === "pro" ? "⭐ Pro" : user.tier === "team" ? "💎 Team" : "Account"]].map(([id, lb]) => {
+            {[["home", "Home"], ["edit", "Edit"], ["adjust", "Adjust"], ["overlay", "Overlay"], ["tools", "Tools"], ["cull", "Cull AI"], ["batch", "Batch"], ["account", user.tier === "pro" ? "⭐ Pro" : user.tier === "team" ? "💎 Team" : user.tier === "admin" ? "⚡ Admin" : "Account"]].map(([id, lb]) => {
               const isActive = activeTab === id;
               const isPremiumAccount = id === "account" && user.tier !== "free";
+              const isAdmin = user.tier === "admin";
+              
+              // Custom colors for admin badge or standard premium badge
+              const activeBorder = isAdmin 
+                ? (isActive ? "1px solid #ef4444" : "1px solid rgba(239, 68, 68, 0.3)")
+                : (isActive ? "1px solid #f97316" : "1px solid rgba(249, 115, 22, 0.3)");
+                
+              const activeBg = isAdmin
+                ? (isActive ? "linear-gradient(135deg, rgba(239,68,68,0.15), rgba(236,72,153,0.10))" : "linear-gradient(135deg, rgba(239,68,68,0.06), rgba(236,72,153,0.04))")
+                : (isActive ? "linear-gradient(135deg, rgba(249,115,22,0.15), rgba(250,204,21,0.10))" : "linear-gradient(135deg, rgba(249,115,22,0.06), rgba(250,204,21,0.04))");
+                
+              const activeColor = isAdmin ? "#ef4444" : "#f97316";
+              
+              const activeShadow = isAdmin
+                ? (isActive ? "0 0 12px rgba(239, 68, 68, 0.25)" : "none")
+                : (isActive ? "0 0 12px rgba(249, 115, 22, 0.25)" : "none");
+
               return (
                 <button key={id} onClick={() => setActiveTab(id)}
                   style={{ 
                     padding: isMobile ? "5px 10px" : "6px 12px", 
                     fontSize: "12px", 
                     fontWeight: 600, 
-                    border: isPremiumAccount ? (isActive ? "1px solid #f97316" : "1px solid rgba(249, 115, 22, 0.3)") : "none", 
+                    border: isPremiumAccount ? activeBorder : "none", 
                     cursor: "pointer", 
                     background: isPremiumAccount
-                      ? (isActive ? "linear-gradient(135deg, rgba(249,115,22,0.15), rgba(250,204,21,0.10))" : "linear-gradient(135deg, rgba(249,115,22,0.06), rgba(250,204,21,0.04))")
+                      ? activeBg
                       : (isActive ? (dm ? '#333' : '#fff') : 'transparent'), 
                     color: isPremiumAccount
-                      ? "#f97316"
+                      ? activeColor
                       : (isActive ? (dm ? '#fff' : '#1a1a2e') : (dm ? '#a1a1aa' : '#666677')), 
                     borderRadius: "9px", 
                     boxShadow: isPremiumAccount
-                      ? (isActive ? "0 0 12px rgba(249, 115, 22, 0.25)" : "none")
+                      ? activeShadow
                       : (isActive ? "0 2px 8px rgba(0,0,0,.08)" : "none"), 
                     transition: "all .2s", 
                     whiteSpace: "nowrap",

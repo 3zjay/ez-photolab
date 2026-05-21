@@ -15,6 +15,13 @@ export function AccountDashboard({ user, onLogout, onCancelSubscription, onChang
 
   const getTierTheme = (tier) => {
     switch (tier) {
+      case "admin":
+        return {
+          title: "System Administrator",
+          badge: "⚡ Super Admin",
+          glow: "linear-gradient(135deg, #ef4444 0%, #ec4899 50%, #f43f5e 100%)",
+          color: "#ef4444"
+        };
       case "team":
         return {
           title: "Studio Team",
@@ -353,8 +360,8 @@ export function AccountDashboard({ user, onLogout, onCancelSubscription, onChang
                     padding: "10px",
                     fontWeight: 800,
                     textAlign: i === 0 ? "left" : "center",
-                    color: i === 0 ? (dm ? "#ffffff" : "#111827") : (i === 1 && user.tier === "free" ? "#10b981" : i === 2 && user.tier === "pro" ? "#f97316" : i === 3 && user.tier === "team" ? "#ec4899" : (dm ? "#9ca3af" : "#6b7280")),
-                    background: (i === 1 && user.tier === "free") || (i === 2 && user.tier === "pro") || (i === 3 && user.tier === "team")
+                    color: i === 0 ? (dm ? "#ffffff" : "#111827") : (i === 1 && user.tier === "free" ? "#10b981" : i === 2 && user.tier === "pro" ? "#f97316" : i === 3 && (user.tier === "team" || user.tier === "admin") ? "#ec4899" : (dm ? "#9ca3af" : "#6b7280")),
+                    background: (i === 1 && user.tier === "free") || (i === 2 && user.tier === "pro") || (i === 3 && (user.tier === "team" || user.tier === "admin"))
                       ? dm ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)"
                       : "transparent"
                   }}>
@@ -375,7 +382,7 @@ export function AccountDashboard({ user, onLogout, onCancelSubscription, onChang
                 <tr key={ri} style={{ borderBottom: ri < 5 ? `1px solid ${dm ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.04)"}` : "none" }}>
                   <td style={{ padding: "10px", fontWeight: 700, color: dm ? "#e2e8f0" : "#111827" }}>{row[0]}</td>
                   {[1, 2, 3].map((colIdx) => {
-                    const isUserCol = (colIdx === 1 && user.tier === "free") || (colIdx === 2 && user.tier === "pro") || (colIdx === 3 && user.tier === "team");
+                    const isUserCol = (colIdx === 1 && user.tier === "free") || (colIdx === 2 && user.tier === "pro") || (colIdx === 3 && (user.tier === "team" || user.tier === "admin"));
                     return (
                       <td key={colIdx} style={{
                         padding: "10px",

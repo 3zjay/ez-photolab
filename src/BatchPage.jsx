@@ -755,7 +755,7 @@ export function BatchPage({ dm, cardBg, cardBdr, inputSt, isMobile = false,
         </div>
 
         <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-          {(!user || user.tier !== "team") ? (
+          {(!user || (user.tier !== "team" && user.tier !== "admin")) ? (
             <Card style={{
               position: "relative",
               overflow: "hidden",
