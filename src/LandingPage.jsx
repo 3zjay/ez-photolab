@@ -300,9 +300,9 @@ export function LandingPage({ dm, loadImage, setActiveTab, handleInstallClick, d
     },
     {
       id: "canvas_render",
-      title: "WebGL Canvas Engine",
-      tech: "2D Canvas & WebGL Shaders",
-      description: "Applies high-speed color grading presets, text overlays, crops, noise-reduction, and sharpness filters directly on the GPU, outputting pristine results in real-time.",
+      title: "WebGL & LUT Engine",
+      tech: "WebGL Shaders & .CUBE Parser",
+      description: "Applies high-speed 3D LUT presets (.CUBE files) in real-time via custom GPU lookup shaders. Manages text overlays, crops, noise reduction, and sharpness on the GPU with zero lag.",
       x: 62, y: 70,
       iconId: "canvas_render"
     },
@@ -505,7 +505,7 @@ export function LandingPage({ dm, loadImage, setActiveTab, handleInstallClick, d
           maxWidth: "700px",
           margin: "0 auto 35px auto"
         }}>
-          PHOTO LAB leverages WebAssembly, MediaPipe AI, and local GPU acceleration to provide a zero-install photo editing studio. Your photos never touch the cloud. Instant previews, fast batch conversion, and intelligent image culling.
+          PHOTO LAB leverages WebAssembly, MediaPipe AI, 3D LUT color shaders, and local GPU acceleration to provide a zero-install photo editing studio. Your photos never touch the cloud. Instant previews, fast batch conversion, and intelligent image culling.
         </p>
         <div style={{ display: "flex", gap: "14px", justifyContent: "center", flexWrap: "wrap" }}>
           <button
@@ -1513,6 +1513,7 @@ export function LandingPage({ dm, loadImage, setActiveTab, handleInstallClick, d
                   ["Monthly Price", "$9 / mo", "$22.99 / mo", "$24 / mo", "$15 / mo"],
                   ["Annual Price", "$79 / yr", "$263 / yr", "$192 / yr", "$132 / yr"],
                   ["Local RAW Processing", "✅ Yes (WASM)", "⚠️ Cloud Sync Required", "✅ Yes", "✅ Yes"],
+                  ["3D LUT (.CUBE) Engine", "✅ Yes (Custom + Presets)", "❌ No (Basic filters only)", "✅ Yes", "❌ No"],
                   ["100% Offline Mode", "✅ Full PWA", "❌ No", "⚠️ Partial", "❌ No"],
                   ["Privacy (No Uploads)", "✅ Zero uploads", "❌ Cloud sync", "⚠️ Optional", "❌ Cloud AI"],
                   ["AI Culling", "✅ Local MediaPipe", "✅ Sensei AI", "❌ No", "✅ Cloud AI"],
@@ -1520,7 +1521,7 @@ export function LandingPage({ dm, loadImage, setActiveTab, handleInstallClick, d
                   ["Free Tier", "✅ Always Free", "❌ No", "❌ Trial Only", "✅ Limited"],
                 ].map((row, ri) => (
                   <tr key={ri} style={{
-                    borderBottom: ri < 7 ? `1px solid ${dm ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.04)"}` : "none",
+                    borderBottom: ri < 8 ? `1px solid ${dm ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.04)"}` : "none",
                     background: ri % 2 === 0
                       ? (dm ? "rgba(255,255,255,0.01)" : "rgba(0,0,0,0.005)")
                       : "transparent"

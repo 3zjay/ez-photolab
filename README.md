@@ -10,6 +10,17 @@ Built with React + Vite — runs entirely in your browser with zero server costs
 
 ---
 
+## 🚀 What's New in v2.6.0 (3D LUT & RAW Ingestion Release)
+
+- **Local 3D LUT (.CUBE) Shading Engine**: Fully client-side 3D Color Lookup Tables (LUTs) processed on the GPU via custom WebGL lookup shaders. Built-in presets include Fortra 400, Fuji Superia, Vintage Gold, Teal & Orange, and Tri-X B&W, with full support for custom `.cube` file uploads.
+- **RAW & 3D LUT Pipelines**: Fully integrated 3D LUT Presets into RAW development pipeline to grade high-resolution raw digital negatives in the browser.
+- **RAW Drag & Drop Ingestion**: Interactive "Drop Photo Here" supports direct ingestion of raw files (.NEF, .CR2, .ARW, etc.), launching studio workspace instantly.
+- **Robust EXIF & TIFF Orientation Readers**: Decodes SubIFDs and multi-directory tags to auto-rotate portrait negatives upright during demosaicing.
+- **Split-Screen Before/After Alignment**: Synchronized CSS scaling and rotation matrices across comparative A/B preview panels.
+- **Deterministic URL Memory Lifespans**: Revokes blob URLs reactively to guarantee zero-leak, crash-free execution during large RAW batch cycles.
+
+---
+
 ## 🚀 What's New in v2.3.0 (EZ-Cull AI Release)
 
 - **Local AI Culling Engine (EZ-Cull AI)**: Fully client-side, 100% in-browser duplicate similarity grouping and face/eye quality scoring.
