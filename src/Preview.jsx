@@ -10,6 +10,65 @@ export function Preview({ image, dragging, setDragging, loadImage, fileInputRef,
   const containerRef = useRef(null);
   const lutCanvasRef = useRef(null);
 
+  // Render LUT preview onto a canvas overlay
+  useEffect(() => {
+    if (!activeLutData || !image || showBefore || activeTab !== 'edit' || lutId === 'none') {
+      // Clear the canvas if LUT is off
+      const c = lutCanvasRef.current;
+      if (c) {
+        const ctx = c.getContext('2d');
+        ctx.clearRect(0, 0, c.width, c.height);
+      }
+      return;
+    }
+    const timer = setTimeout(() => {
+      const imgEl = imgRef.current;
+      const canvas = lutCanvasRef.current;
+      if (!imgEl || !canvas) return;
+      const natW = imgEl.naturalWidth;
+      const natH = imgEl.naturalHeight;
+      if (!natW || !natH) return;
+
+      // Use a scaled-down preview for performance but high enough for sharpness (max 1600px wide)
+      const maxPrev = 1600;
+      const scale = Math.min(1, maxPrev / Math.max(natW, natH));
+      const pW = Math.round(natW * scale);
+      const pH = Math.round(natH * scale);
+
+      canvas.width = pW;
+      canvas.height = pH;
+      const ctx = canvas.getContext('2d');
+
+      // Draw the image with CSS filters baked in
+      ctx.filter = cssFilter;
+      ctx.drawImage(imgEl, 0, 0, pW, pH);
+      ctx.filter = 'none';
+
+      // Apply the LUT
+      const imgData = ctx.getImageData(0, 0, pW, pH);
+      apply3DLut(imgData, activeLutData.data, activeLutData.size, lutIntensity);
+      ctx.putImageData(imgData, 0, 0);
+    }, 50);
+    return () => clearTimeout(timer);
+  }, [activeLutData, lutIntensity, lutId, image, cssFilter, showBefore, activeTab, showSplit]);
+
+  const startDragText = (e, id) => {
+    e.stopPropagation(); setSelText(id); setDragTxt({ id, startX: e.clientX, startY: e.clientY });
+  };
+  useEffect(() => {
+    if (!dragTxt) return;
+    const mm = e => {
+      if (!containerRef.current) return;
+      const r = containerRef.current.getBoundingClientRect();
+      const nx = Math.min(95, Math.max(5, ((e.clientX - r.left) / r.width) * 100));
+      const ny = Math.min(95, Math.max(5, ((e.clientY - r.top) / r.height) * 100));
+      updateText(dragTxt.id, "x", nx); updateText(dragTxt.id, "y", ny);
+    };
+    const up = () => setDragTxt(null);
+    window.addEventListener("mousemove", mm); window.addEventListener("mouseup", up);
+    return () => { window.removeEventListener("mousemove", mm); window.removeEventListener("mouseup", up); };
+  }, [dragTxt]);
+
   // Render glassmorphic loading screen during RAW decoding
   if (rawLoading) {
     return (
@@ -72,65 +131,6 @@ export function Preview({ image, dragging, setDragging, loadImage, fileInputRef,
       </div>
     );
   }
-
-  // Render LUT preview onto a canvas overlay
-  useEffect(() => {
-    if (!activeLutData || !image || showBefore || activeTab !== 'edit' || lutId === 'none') {
-      // Clear the canvas if LUT is off
-      const c = lutCanvasRef.current;
-      if (c) {
-        const ctx = c.getContext('2d');
-        ctx.clearRect(0, 0, c.width, c.height);
-      }
-      return;
-    }
-    const timer = setTimeout(() => {
-      const imgEl = imgRef.current;
-      const canvas = lutCanvasRef.current;
-      if (!imgEl || !canvas) return;
-      const natW = imgEl.naturalWidth;
-      const natH = imgEl.naturalHeight;
-      if (!natW || !natH) return;
-
-      // Use a scaled-down preview for performance but high enough for sharpness (max 1600px wide)
-      const maxPrev = 1600;
-      const scale = Math.min(1, maxPrev / Math.max(natW, natH));
-      const pW = Math.round(natW * scale);
-      const pH = Math.round(natH * scale);
-
-      canvas.width = pW;
-      canvas.height = pH;
-      const ctx = canvas.getContext('2d');
-
-      // Draw the image with CSS filters baked in
-      ctx.filter = cssFilter;
-      ctx.drawImage(imgEl, 0, 0, pW, pH);
-      ctx.filter = 'none';
-
-      // Apply the LUT
-      const imgData = ctx.getImageData(0, 0, pW, pH);
-      apply3DLut(imgData, activeLutData.data, activeLutData.size, lutIntensity);
-      ctx.putImageData(imgData, 0, 0);
-    }, 50);
-    return () => clearTimeout(timer);
-  }, [activeLutData, lutIntensity, lutId, image, cssFilter, showBefore, activeTab, showSplit]);
-
-  const startDragText = (e, id) => {
-    e.stopPropagation(); setSelText(id); setDragTxt({ id, startX: e.clientX, startY: e.clientY });
-  };
-  useEffect(() => {
-    if (!dragTxt) return;
-    const mm = e => {
-      if (!containerRef.current) return;
-      const r = containerRef.current.getBoundingClientRect();
-      const nx = Math.min(95, Math.max(5, ((e.clientX - r.left) / r.width) * 100));
-      const ny = Math.min(95, Math.max(5, ((e.clientY - r.top) / r.height) * 100));
-      updateText(dragTxt.id, "x", nx); updateText(dragTxt.id, "y", ny);
-    };
-    const up = () => setDragTxt(null);
-    window.addEventListener("mousemove", mm); window.addEventListener("mouseup", up);
-    return () => { window.removeEventListener("mousemove", mm); window.removeEventListener("mouseup", up); };
-  }, [dragTxt]);
 
   if (!image) return (
     <div className={`drop ${dragging ? "on" : ""}`}
