@@ -11,7 +11,7 @@ import { Empty, SL, AB, Row, Spin, SmoothSlider } from "./components/ui/common";
 import { DEFAULT_FILTERS, FB_MODES, PRESETS } from "./constants";
 import {
   toCSSFilter, toTransformCSS, saveFile, canvasToBlob, loadImageFromSrc,
-  renderFinal, getExportDims, applyUnsharpMask, applyNoiseReduction, applyAutoLevels, calcBatchDims
+  renderFinal, getExportDims, applyUnsharpMask, applyNoiseReduction, applyAutoLevels, applyAutoContrast, calcBatchDims
 } from "./utils";
 import { createSkinMask } from "./faceMasking";
 import { restoreFaceLocal } from "./faceRestore";
