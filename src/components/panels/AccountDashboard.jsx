@@ -1,9 +1,110 @@
 import { useState } from "react";
 import { Spin } from "../ui/common";
 
-export function AccountDashboard({ user, onLogout, onCancelSubscription, onChangeBillingPeriod, onChangeTier, onRenewLease, dm }) {
+export function AccountDashboard({ user, onLogin, onLogout, onCancelSubscription, onChangeBillingPeriod, onChangeTier, onRenewLease, dm }) {
   const [isRenewing, setIsRenewing] = useState(false);
   const [showPortalModal, setShowPortalModal] = useState(false);
+
+  if (!user || !user.loggedIn) {
+    return (
+      <div style={{
+        width: "100%",
+        maxWidth: "460px",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: "24px",
+        padding: "40px 32px",
+        margin: "auto",
+        background: dm ? "rgba(13, 17, 28, 0.98)" : "#ffffff",
+        border: `1px solid ${dm ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)"}`,
+        boxShadow: "0 20px 50px rgba(0, 0, 0, 0.35)",
+        borderRadius: "28px",
+        fontFamily: "'Outfit', sans-serif",
+        textAlign: "center"
+      }}>
+        <div style={{
+          width: "64px",
+          height: "64px",
+          borderRadius: "18px",
+          background: "linear-gradient(135deg, #f97316 0%, #ec4899 100%)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          fontSize: "32px",
+          boxShadow: "0 8px 24px rgba(249, 115, 22, 0.25)"
+        }}>
+          📸
+        </div>
+
+        <div>
+          <h2 style={{
+            fontSize: "24px",
+            fontWeight: 900,
+            color: dm ? "#ffffff" : "#111827",
+            letterSpacing: "-0.5px",
+            margin: "0 0 8px 0"
+          }}>
+            Welcome to ez-photolab
+          </h2>
+          <p style={{
+            fontSize: "13.5px",
+            color: dm ? "#9ca3af" : "#4b5563",
+            lineHeight: 1.5,
+            margin: 0
+          }}>
+            Sign in to sync your local offline leases, manage watermarks, and access premium tools on any device.
+          </p>
+        </div>
+
+        <button 
+          onClick={onLogin}
+          style={{
+            width: "100%",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: "12px",
+            background: dm ? "#ffffff" : "#111827",
+            color: dm ? "#111827" : "#ffffff",
+            border: "none",
+            borderRadius: "14px",
+            padding: "14px 24px",
+            fontSize: "14px",
+            fontWeight: 800,
+            cursor: "pointer",
+            boxShadow: "0 4px 18px rgba(0,0,0,0.1)",
+            transition: "all 0.2s",
+            fontFamily: "inherit"
+          }}
+        >
+          <svg width="18" height="18" viewBox="0 0 18 18" style={{ display: "block" }}>
+            <path fill="#4285F4" d="M17.64 9.2c0-.63-.06-1.25-.16-1.84H9v3.47h4.84c-.21 1.12-.84 2.07-1.79 2.7v2.24h2.9c1.7-1.57 2.69-3.87 2.69-6.57z"/>
+            <path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.23l-2.9-2.24c-.8.54-1.84.87-3.06.87-2.35 0-4.33-1.58-5.04-3.71H.94v2.32C2.42 15.98 5.48 18 9 18z"/>
+            <path fill="#FBBC05" d="M3.96 10.7c-.18-.54-.28-1.12-.28-1.7s.1-1.16.28-1.7V4.98H.94C.34 6.18 0 7.55 0 9s.34 2.82.94 4.02l3.02-2.32z"/>
+            <path fill="#EA4335" d="M9 3.58c1.32 0 2.5.45 3.44 1.35L15 2.4C13.46.98 11.42 0 9 0 5.48 0 2.42 2.02.94 4.98l3.02 2.32c.71-2.13 2.69-3.71 5.04-3.71z"/>
+          </svg>
+          <span>Sign in with Google</span>
+        </button>
+
+        <div style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: "8px",
+          fontSize: "11px",
+          color: dm ? "#4b5563" : "#9ca3af",
+          textTransform: "uppercase",
+          letterSpacing: "0.5px"
+        }}>
+          <span>⚡ Secure OAuth 2.0</span>
+          <span>•</span>
+          <span>🔒 Direct Google Auth</span>
+        </div>
+      </div>
+    );
+  }
 
   const handleRenew = () => {
     setIsRenewing(true);

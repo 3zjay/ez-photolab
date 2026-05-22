@@ -19,6 +19,9 @@ import { decodeRaw } from "./rawProcessor";
 import { LandingPage } from "./LandingPage";
 import { StripeCheckout } from "./components/ui/StripeCheckout";
 import { AccountDashboard } from "./components/panels/AccountDashboard";
+import { auth, db, googleProvider } from "./firebase";
+import { signInWithPopup, signOut as firebaseSignOut, onAuthStateChanged } from "firebase/auth";
+import { doc, onSnapshot, setDoc } from "firebase/firestore";
 
 export function ApertureLogo({ size = 26, className = "" }) {
   return (
@@ -284,7 +287,6 @@ export default function App() {
           offlineLeaseExpires: expiry.toISOString() 
         };
         localStorage.setItem("photolab_saas_user", JSON.stringify(adminUser));
-        // Remove ?admin=true from URL cleanly without reload
         try {
           const newUrl = window.location.pathname + window.location.hash;
           window.history.replaceState({}, document.title, newUrl);
@@ -296,34 +298,151 @@ export default function App() {
     } catch (e) { console.error(e); }
     return { loggedIn: false, email: "", tier: "free", billingPeriod: "monthly", offlineLeaseExpires: null };
   });
+
   const [checkoutPlan, setCheckoutPlan] = useState(null);
 
-  const saveUser = (updatedUser) => {
-    setUser(updatedUser);
-    localStorage.setItem("photolab_saas_user", JSON.stringify(updatedUser));
+  // Sync state in real time with Firebase Authentication and Firestore database
+  useEffect(() => {
+    let unsubscribeSnapshot = null;
+
+    // Check if URL overrides with local admin mode
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("admin") === "true") return; // Keep the static admin mode
+
+    const unsubscribeAuth = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (unsubscribeSnapshot) {
+        unsubscribeSnapshot();
+        unsubscribeSnapshot = null;
+      }
+
+      if (firebaseUser) {
+        const userDocRef = doc(db, "users", firebaseUser.uid);
+        
+        unsubscribeSnapshot = onSnapshot(userDocRef, async (docSnap) => {
+          if (docSnap.exists()) {
+            const data = docSnap.data();
+            const u = {
+              loggedIn: true,
+              uid: firebaseUser.uid,
+              email: firebaseUser.email,
+              tier: data.tier || "free",
+              billingPeriod: data.billingPeriod || "monthly",
+              offlineLeaseExpires: data.offlineLeaseExpires || null
+            };
+            setUser(u);
+            localStorage.setItem("photolab_saas_user", JSON.stringify(u));
+          } else {
+            const newUser = {
+              uid: firebaseUser.uid,
+              email: firebaseUser.email,
+              tier: "free",
+              billingPeriod: "monthly",
+              offlineLeaseExpires: null,
+              createdAt: new Date().toISOString()
+            };
+            await setDoc(userDocRef, newUser);
+            const u = {
+              loggedIn: true,
+              uid: firebaseUser.uid,
+              email: firebaseUser.email,
+              tier: "free",
+              billingPeriod: "monthly",
+              offlineLeaseExpires: null
+            };
+            setUser(u);
+            localStorage.setItem("photolab_saas_user", JSON.stringify(u));
+          }
+        }, (err) => {
+          console.error("Firestore sync error:", err);
+        });
+      } else {
+        setUser({ loggedIn: false, email: "", tier: "free", billingPeriod: "monthly", offlineLeaseExpires: null });
+        localStorage.removeItem("photolab_saas_user");
+      }
+    });
+
+    return () => {
+      unsubscribeAuth();
+      if (unsubscribeSnapshot) unsubscribeSnapshot();
+    };
+  }, []);
+
+  const handleLogin = async () => {
+    try {
+      await signInWithPopup(auth, googleProvider);
+    } catch (e) {
+      console.error("Login failed:", e);
+      alert("Sign-In failed: " + e.message);
+    }
   };
-  const handleLogout = () => {
-    saveUser({ loggedIn: false, email: "", tier: "free", billingPeriod: "monthly", offlineLeaseExpires: null });
-    setActiveTab("home");
+
+  const handleLogout = async () => {
+    try {
+      await firebaseSignOut(auth);
+      setActiveTab("home");
+    } catch (e) {
+      console.error("Logout failed:", e);
+    }
   };
-  const handlePaymentSuccess = ({ email, tier, billingPeriod }) => {
-    const expiry = new Date();
-    expiry.setDate(expiry.getDate() + 30);
-    saveUser({ loggedIn: true, email, tier, billingPeriod, offlineLeaseExpires: expiry.toISOString() });
+
+  const handlePaymentSuccess = async ({ email, tier, billingPeriod }) => {
+    if (!auth.currentUser) return;
+    try {
+      const expiry = new Date();
+      expiry.setDate(expiry.getDate() + 30);
+      const userDocRef = doc(db, "users", auth.currentUser.uid);
+      await setDoc(userDocRef, { 
+        tier, 
+        billingPeriod, 
+        offlineLeaseExpires: expiry.toISOString() 
+      }, { merge: true });
+    } catch (e) {
+      console.error("Payment success update error:", e);
+    }
   };
-  const handleCancelSubscription = () => {
-    saveUser({ loggedIn: user.loggedIn, email: user.email, tier: "free", billingPeriod: "monthly", offlineLeaseExpires: null });
+
+  const handleCancelSubscription = async () => {
+    if (!auth.currentUser) return;
+    try {
+      const userDocRef = doc(db, "users", auth.currentUser.uid);
+      await setDoc(userDocRef, { tier: "free", offlineLeaseExpires: null }, { merge: true });
+    } catch (e) {
+      console.error(e);
+    }
   };
-  const handleChangeBillingPeriod = (period) => { saveUser({ ...user, billingPeriod: period }); };
-  const handleChangeTier = (tier) => {
-    const expiry = new Date();
-    expiry.setDate(expiry.getDate() + 30);
-    saveUser({ ...user, tier, offlineLeaseExpires: expiry.toISOString() });
+
+  const handleChangeBillingPeriod = async (period) => {
+    if (!auth.currentUser) return;
+    try {
+      const userDocRef = doc(db, "users", auth.currentUser.uid);
+      await setDoc(userDocRef, { billingPeriod: period }, { merge: true });
+    } catch (e) {
+      console.error(e);
+    }
   };
-  const handleRenewLease = () => {
-    const expiry = new Date();
-    expiry.setDate(expiry.getDate() + 30);
-    saveUser({ ...user, offlineLeaseExpires: expiry.toISOString() });
+
+  const handleChangeTier = async (tier) => {
+    if (!auth.currentUser) return;
+    try {
+      const expiry = new Date();
+      expiry.setDate(expiry.getDate() + 30);
+      const userDocRef = doc(db, "users", auth.currentUser.uid);
+      await setDoc(userDocRef, { tier, offlineLeaseExpires: expiry.toISOString() }, { merge: true });
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleRenewLease = async () => {
+    if (!auth.currentUser) return;
+    try {
+      const expiry = new Date();
+      expiry.setDate(expiry.getDate() + 30);
+      const userDocRef = doc(db, "users", auth.currentUser.uid);
+      await setDoc(userDocRef, { offlineLeaseExpires: expiry.toISOString() }, { merge: true });
+    } catch (e) {
+      console.error(e);
+    }
   };
 
   const addBatchLog = useCallback((msg, type = 'info') => {
@@ -1702,7 +1821,7 @@ export default function App() {
           <CullPage {...{ dm, cardBg, cardBdr, inputSt, sourceHandle, outputHandle, batchImages, selectSourceFolder, selectRawSourceFolder, selectOutputFolder, batchLogs, addBatchLog, batchSection, setBatchSection, isMobile, user, setActiveTab }} />
         ) : activeTab === "account" ? (
           <div style={{ display: "flex", justifyContent: "center", minHeight: "calc(100vh - 52px)", overflowY: "auto", background: dm ? "#0a0e17" : "#f3f4f6" }}>
-            <AccountDashboard user={user} onLogout={handleLogout} onCancelSubscription={handleCancelSubscription} onChangeBillingPeriod={handleChangeBillingPeriod} onChangeTier={handleChangeTier} onRenewLease={handleRenewLease} dm={dm} />
+            <AccountDashboard user={user} onLogin={handleLogin} onLogout={handleLogout} onCancelSubscription={handleCancelSubscription} onChangeBillingPeriod={handleChangeBillingPeriod} onChangeTier={handleChangeTier} onRenewLease={handleRenewLease} dm={dm} />
           </div>
         ) : (
           <div style={{ display: "flex", height: "calc(100vh - 52px)" }}>
@@ -1731,7 +1850,7 @@ export default function App() {
           </div>
         ) : activeTab === "account" ? (
           <div style={{ display: "flex", justifyContent: "center", minHeight: "calc(100vh - 52px)", overflowY: "auto", background: dm ? "#0a0e17" : "#f3f4f6" }}>
-            <AccountDashboard user={user} onLogout={handleLogout} onCancelSubscription={handleCancelSubscription} onChangeBillingPeriod={handleChangeBillingPeriod} onChangeTier={handleChangeTier} onRenewLease={handleRenewLease} dm={dm} />
+            <AccountDashboard user={user} onLogin={handleLogin} onLogout={handleLogout} onCancelSubscription={handleCancelSubscription} onChangeBillingPeriod={handleChangeBillingPeriod} onChangeTier={handleChangeTier} onRenewLease={handleRenewLease} dm={dm} />
           </div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", height: "calc(100vh - 52px)", overflow: "hidden" }}>
