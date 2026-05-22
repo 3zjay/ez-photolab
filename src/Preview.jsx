@@ -28,8 +28,8 @@ export function Preview({ image, dragging, setDragging, loadImage, fileInputRef,
       const natH = imgEl.naturalHeight;
       if (!natW || !natH) return;
 
-      // Use a scaled-down preview for performance (max 800px wide)
-      const maxPrev = 800;
+      // Use a scaled-down preview for performance but high enough for sharpness (max 1600px wide)
+      const maxPrev = 1600;
       const scale = Math.min(1, maxPrev / Math.max(natW, natH));
       const pW = Math.round(natW * scale);
       const pH = Math.round(natH * scale);

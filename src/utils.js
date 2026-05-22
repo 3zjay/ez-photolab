@@ -151,6 +151,9 @@ export function apply3DLut(imgData, lutData, size, intensity = 1.0) {
   if (intensity <= 0 || !lutData) return;
   const d = imgData.data;
   const sizeMin1 = size - 1;
+  const size2 = size * size;
+  const scaleFactor = sizeMin1 / 255;
+  const oneMinusIntensity = 1 - intensity;
   
   for (let i = 0; i < d.length; i += 4) {
     const r = d[i];
@@ -158,55 +161,74 @@ export function apply3DLut(imgData, lutData, size, intensity = 1.0) {
     const b = d[i+2];
     
     // Scale normalized coordinates to LUT space
-    const rx = (r / 255) * sizeMin1;
-    const gx = (g / 255) * sizeMin1;
-    const bx = (b / 255) * sizeMin1;
+    const rx = r * scaleFactor;
+    const gx = g * scaleFactor;
+    const bx = b * scaleFactor;
     
-    const r0 = Math.floor(rx);
-    const r1 = Math.min(sizeMin1, r0 + 1);
-    const g0 = Math.floor(gx);
-    const g1 = Math.min(sizeMin1, g0 + 1);
-    const b0 = Math.floor(bx);
-    const b1 = Math.min(sizeMin1, b0 + 1);
+    const r0 = rx | 0;
+    const r1 = r0 < sizeMin1 ? r0 + 1 : sizeMin1;
+    const g0 = gx | 0;
+    const g1 = g0 < sizeMin1 ? g0 + 1 : sizeMin1;
+    const b0 = bx | 0;
+    const b1 = b0 < sizeMin1 ? b0 + 1 : sizeMin1;
     
     const rf = rx - r0;
     const gf = gx - g0;
     const bf = bx - b0;
     
-    const getLutRGB = (ri, gi, bi) => {
-      const idx = (ri + gi * size + bi * size * size) * 3;
-      return [lutData[idx], lutData[idx+1], lutData[idx+2]];
-    };
+    const g0_size = g0 * size;
+    const g1_size = g1 * size;
+    const b0_size2 = b0 * size2;
+    const b1_size2 = b1 * size2;
     
-    // Get the 8 surrounding grid points
-    const c000 = getLutRGB(r0, g0, b0);
-    const c100 = getLutRGB(r1, g0, b0);
-    const c010 = getLutRGB(r0, g1, b0);
-    const c110 = getLutRGB(r1, g1, b0);
-    const c001 = getLutRGB(r0, g0, b1);
-    const c101 = getLutRGB(r1, g0, b1);
-    const c011 = getLutRGB(r0, g1, b1);
-    const c111 = getLutRGB(r1, g1, b1);
+    const idx000 = (r0 + g0_size + b0_size2) * 3;
+    const idx100 = (r1 + g0_size + b0_size2) * 3;
+    const idx010 = (r0 + g1_size + b0_size2) * 3;
+    const idx110 = (r1 + g1_size + b0_size2) * 3;
+    const idx001 = (r0 + g0_size + b1_size2) * 3;
+    const idx101 = (r1 + g0_size + b1_size2) * 3;
+    const idx011 = (r0 + g1_size + b1_size2) * 3;
+    const idx111 = (r1 + g1_size + b1_size2) * 3;
     
     // Interpolate along Red
-    const c00 = [c000[0]*(1-rf)+c100[0]*rf, c000[1]*(1-rf)+c100[1]*rf, c000[2]*(1-rf)+c100[2]*rf];
-    const c10 = [c010[0]*(1-rf)+c110[0]*rf, c010[1]*(1-rf)+c110[1]*rf, c010[2]*(1-rf)+c110[2]*rf];
-    const c01 = [c001[0]*(1-rf)+c101[0]*rf, c001[1]*(1-rf)+c101[1]*rf, c001[2]*(1-rf)+c101[2]*rf];
-    const c11 = [c011[0]*(1-rf)+c111[0]*rf, c011[1]*(1-rf)+c111[1]*rf, c011[2]*(1-rf)+c111[2]*rf];
+    const c00_r = lutData[idx000] * (1 - rf) + lutData[idx100] * rf;
+    const c10_r = lutData[idx010] * (1 - rf) + lutData[idx110] * rf;
+    const c01_r = lutData[idx001] * (1 - rf) + lutData[idx101] * rf;
+    const c11_r = lutData[idx011] * (1 - rf) + lutData[idx111] * rf;
     
     // Interpolate along Green
-    const c0 = [c00[0]*(1-gf)+c10[0]*gf, c00[1]*(1-gf)+c10[1]*gf, c00[2]*(1-gf)+c10[2]*gf];
-    const c1 = [c01[0]*(1-gf)+c11[0]*gf, c01[1]*(1-gf)+c11[1]*gf, c01[2]*(1-gf)+c11[2]*gf];
+    const c0_r = c00_r * (1 - gf) + c10_r * gf;
+    const c1_r = c01_r * (1 - gf) + c11_r * gf;
     
     // Interpolate along Blue
-    const lutR = Math.round((c0[0]*(1-bf)+c1[0]*bf) * 255);
-    const lutG = Math.round((c0[1]*(1-bf)+c1[1]*bf) * 255);
-    const lutB = Math.round((c0[2]*(1-bf)+c1[2]*bf) * 255);
+    const lutR = (c0_r * (1 - bf) + c1_r * bf) * 255;
+    
+    // Interpolate Green channel
+    const c00_g = lutData[idx000 + 1] * (1 - rf) + lutData[idx100 + 1] * rf;
+    const c10_g = lutData[idx010 + 1] * (1 - rf) + lutData[idx110 + 1] * rf;
+    const c01_g = lutData[idx001 + 1] * (1 - rf) + lutData[idx101 + 1] * rf;
+    const c11_g = lutData[idx011 + 1] * (1 - rf) + lutData[idx111 + 1] * rf;
+    
+    const c0_g = c00_g * (1 - gf) + c10_g * gf;
+    const c1_g = c01_g * (1 - gf) + c11_g * gf;
+    
+    const lutG = (c0_g * (1 - bf) + c1_g * bf) * 255;
+    
+    // Interpolate Blue channel
+    const c00_b = lutData[idx000 + 2] * (1 - rf) + lutData[idx100 + 2] * rf;
+    const c10_b = lutData[idx010 + 2] * (1 - rf) + lutData[idx110 + 2] * rf;
+    const c01_b = lutData[idx001 + 2] * (1 - rf) + lutData[idx101 + 2] * rf;
+    const c11_b = lutData[idx011 + 2] * (1 - rf) + lutData[idx111 + 2] * rf;
+    
+    const c0_b = c00_b * (1 - gf) + c10_b * gf;
+    const c1_b = c01_b * (1 - gf) + c11_b * gf;
+    
+    const lutB = (c0_b * (1 - bf) + c1_b * bf) * 255;
     
     // Blend with original color based on intensity
-    d[i]   = Math.round(r * (1 - intensity) + lutR * intensity);
-    d[i+1] = Math.round(g * (1 - intensity) + lutG * intensity);
-    d[i+2] = Math.round(b * (1 - intensity) + lutB * intensity);
+    d[i]   = (r * oneMinusIntensity + lutR * intensity) | 0;
+    d[i+1] = (g * oneMinusIntensity + lutG * intensity) | 0;
+    d[i+2] = (b * oneMinusIntensity + lutB * intensity) | 0;
   }
 }
 
