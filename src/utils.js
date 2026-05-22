@@ -146,7 +146,71 @@ export function loadImageFromSrc(src) {
   });
 }
 
-export async function renderFinal(imageSrc, cssFilterStr, filters, rotation, flipH, flipV, texts, targetW, targetH) {
+// Applies a 3D LUT to Canvas ImageData using trilinear interpolation & opacity blending
+export function apply3DLut(imgData, lutData, size, intensity = 1.0) {
+  if (intensity <= 0 || !lutData) return;
+  const d = imgData.data;
+  const sizeMin1 = size - 1;
+  
+  for (let i = 0; i < d.length; i += 4) {
+    const r = d[i];
+    const g = d[i+1];
+    const b = d[i+2];
+    
+    // Scale normalized coordinates to LUT space
+    const rx = (r / 255) * sizeMin1;
+    const gx = (g / 255) * sizeMin1;
+    const bx = (b / 255) * sizeMin1;
+    
+    const r0 = Math.floor(rx);
+    const r1 = Math.min(sizeMin1, r0 + 1);
+    const g0 = Math.floor(gx);
+    const g1 = Math.min(sizeMin1, g0 + 1);
+    const b0 = Math.floor(bx);
+    const b1 = Math.min(sizeMin1, b0 + 1);
+    
+    const rf = rx - r0;
+    const gf = gx - g0;
+    const bf = bx - b0;
+    
+    const getLutRGB = (ri, gi, bi) => {
+      const idx = (ri + gi * size + bi * size * size) * 3;
+      return [lutData[idx], lutData[idx+1], lutData[idx+2]];
+    };
+    
+    // Get the 8 surrounding grid points
+    const c000 = getLutRGB(r0, g0, b0);
+    const c100 = getLutRGB(r1, g0, b0);
+    const c010 = getLutRGB(r0, g1, b0);
+    const c110 = getLutRGB(r1, g1, b0);
+    const c001 = getLutRGB(r0, g0, b1);
+    const c101 = getLutRGB(r1, g0, b1);
+    const c011 = getLutRGB(r0, g1, b1);
+    const c111 = getLutRGB(r1, g1, b1);
+    
+    // Interpolate along Red
+    const c00 = [c000[0]*(1-rf)+c100[0]*rf, c000[1]*(1-rf)+c100[1]*rf, c000[2]*(1-rf)+c100[2]*rf];
+    const c10 = [c010[0]*(1-rf)+c110[0]*rf, c010[1]*(1-rf)+c110[1]*rf, c010[2]*(1-rf)+c110[2]*rf];
+    const c01 = [c001[0]*(1-rf)+c101[0]*rf, c001[1]*(1-rf)+c101[1]*rf, c001[2]*(1-rf)+c101[2]*rf];
+    const c11 = [c011[0]*(1-rf)+c111[0]*rf, c011[1]*(1-rf)+c111[1]*rf, c011[2]*(1-rf)+c111[2]*rf];
+    
+    // Interpolate along Green
+    const c0 = [c00[0]*(1-gf)+c10[0]*gf, c00[1]*(1-gf)+c10[1]*gf, c00[2]*(1-gf)+c10[2]*gf];
+    const c1 = [c01[0]*(1-gf)+c11[0]*gf, c01[1]*(1-gf)+c11[1]*gf, c01[2]*(1-gf)+c11[2]*gf];
+    
+    // Interpolate along Blue
+    const lutR = Math.round((c0[0]*(1-bf)+c1[0]*bf) * 255);
+    const lutG = Math.round((c0[1]*(1-bf)+c1[1]*bf) * 255);
+    const lutB = Math.round((c0[2]*(1-bf)+c1[2]*bf) * 255);
+    
+    // Blend with original color based on intensity
+    d[i]   = Math.round(r * (1 - intensity) + lutR * intensity);
+    d[i+1] = Math.round(g * (1 - intensity) + lutG * intensity);
+    d[i+2] = Math.round(b * (1 - intensity) + lutB * intensity);
+  }
+}
+
+export async function renderFinal(imageSrc, cssFilterStr, filters, rotation, flipH, flipV, texts, targetW, targetH, lutData = null, lutSize = 33, lutIntensity = 1.0) {
   // Always load a fresh Image to avoid canvas taint and stale DOM refs
   const imgEl = await loadImageFromSrc(imageSrc);
   const natW = imgEl.naturalWidth;
@@ -177,6 +241,13 @@ export async function renderFinal(imageSrc, cssFilterStr, filters, rotation, fli
   ctx.drawImage(imgEl, -W / 2, -H / 2, W, H);
   ctx.restore();
   ctx.filter = 'none';
+
+  // Apply 3D LUT
+  if (lutData) {
+    const imgData = ctx.getImageData(0, 0, W, H);
+    apply3DLut(imgData, lutData, lutSize, lutIntensity);
+    ctx.putImageData(imgData, 0, 0);
+  }
 
   // Warmth overlay
   if (filters.temperature !== 0) {

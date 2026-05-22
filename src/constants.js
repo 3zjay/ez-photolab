@@ -21,6 +21,7 @@ export const DEFAULT_FILTERS = Object.fromEntries(COLOR_FILTERS.map(f=>[f.key,f.
 
 export const FILTER_GROUPS = [
   { key:"basic",   label:"Basic" },
+  { key:"lut",     label:"🎬 LUT" },
   { key:"enhance", label:"Enhance" },
   { key:"hsl",     label:"Color" },
   { key:"style",   label:"Style" },

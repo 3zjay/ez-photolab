@@ -1,13 +1,39 @@
+import { useCallback } from "react";
 import { SL, Row, Spin, PBar, AB, SmoothSlider } from "../ui/common";
 import { PRESETS, FILTER_GROUPS, COLOR_FILTERS, DEFAULT_FILTERS } from "../../constants";
+import { parseCubeLut } from "../../lutParser";
+
+const LUT_PRESETS = [
+    { id: 'none',    icon: '⊘', name: 'None' },
+    { id: 'portra',  icon: '🎞️', name: 'Portra 400' },
+    { id: 'fuji',    icon: '🌿', name: 'Fuji Superia' },
+    { id: 'teal_orange', icon: '🎬', name: 'Teal & Orange' },
+    { id: 'vintage', icon: '📸', name: 'Vintage Gold' },
+    { id: 'trix',    icon: '🖤', name: 'Tri-X B&W' },
+];
 
 export function EditPanel({
     filters, setFilters, filterGroup, setFilterGroup, isEdited, resetAll, dm, cardBdr, cardBg,
     image, runBrowserUpscale, aiUpscaleStatus, aiUpscaleLog, aiUpscaleProgress, aiUpscaleResult, aiUpscaleResultSize, applyAiResult,
     runBrowserBeauty, aiBeautyStatus, aiBeautyLog, aiBeautyResult, saveFile,
     aiScale, setAiScale, aiBeautySmooth, setAiBeautySmooth, aiBeautyClarity, setAiBeautyClarity, aiBeautyGlow, setAiBeautyGlow,
-    aiBeautyUseMask, setAiBeautyUseMask, runFalFaceRestore, aiFaceRestoreStatus, aiFaceRestoreLog, aiFaceRestoreResult
+    aiBeautyUseMask, setAiBeautyUseMask, runFalFaceRestore, aiFaceRestoreStatus, aiFaceRestoreLog, aiFaceRestoreResult,
+    lutId, setLutId, lutIntensity, setLutIntensity, customLutData, setCustomLutData, customLutName, setCustomLutName
 }) {
+    const handleCubeUpload = useCallback(async (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        try {
+            const text = await file.text();
+            const parsed = parseCubeLut(text);
+            setCustomLutData(parsed);
+            setCustomLutName(file.name);
+            setLutId('custom');
+        } catch (err) {
+            alert('Failed to parse .cube file: ' + err.message);
+        }
+    }, [setCustomLutData, setCustomLutName, setLutId]);
+
     return (
         <>
             <div>
@@ -31,6 +57,70 @@ export function EditPanel({
                         </button>
                     ))}
                 </div>
+
+                {/* LUT Controls */}
+                {filterGroup === 'lut' && (
+                    <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                        <div style={{ padding: "14px", background: cardBg, border: `1.5px solid ${cardBdr}`, borderRadius: "12px", display: "flex", flexDirection: "column", gap: "12px" }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                                <SL>Color Lookup (LUT)</SL>
+                                <span style={{ fontSize: "10px", fontWeight: 700, padding: "2px 8px", background: "#f0fff4", color: "#16a34a", borderRadius: "20px", border: "1px solid #86efac", marginBottom: "8px" }}>FREE • In-Browser</span>
+                            </div>
+                            <p style={{ fontSize: "11px", color: "#aaa", lineHeight: 1.5, margin: 0 }}>Apply professional film simulations and cinematic color grades. Select a built-in look or upload your own .cube file.</p>
+
+                            {/* Preset Grid */}
+                            <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                                {LUT_PRESETS.map(p => {
+                                    const active = lutId === p.id;
+                                    return (
+                                        <button key={p.id} onClick={() => setLutId(p.id)}
+                                            style={{
+                                                flexShrink: 0, padding: "10px 12px", minWidth: "78px",
+                                                border: `1.5px solid ${active ? '#6c63ff' : cardBdr}`,
+                                                background: active ? (dm ? '#1e1a3a' : '#faf9ff') : dm ? '#252525' : '#fff',
+                                                borderRadius: "10px", textAlign: "center", cursor: "pointer",
+                                                transition: "all .18s", fontFamily: "inherit",
+                                                boxShadow: active ? "0 0 12px rgba(108,99,255,.2)" : "none"
+                                            }}>
+                                            <div style={{ fontSize: "20px", marginBottom: "3px" }}>{p.icon}</div>
+                                            <div style={{ fontSize: "10px", fontWeight: 700, color: active ? '#6c63ff' : dm ? '#aaa' : '#666' }}>{p.name}</div>
+                                        </button>
+                                    );
+                                })}
+                                {/* Custom LUT Card */}
+                                <button
+                                    onClick={() => document.getElementById('cube-upload-input')?.click()}
+                                    style={{
+                                        flexShrink: 0, padding: "10px 12px", minWidth: "78px",
+                                        border: `1.5px dashed ${lutId === 'custom' ? '#6c63ff' : cardBdr}`,
+                                        background: lutId === 'custom' ? (dm ? '#1e1a3a' : '#faf9ff') : dm ? '#252525' : '#fff',
+                                        borderRadius: "10px", textAlign: "center", cursor: "pointer",
+                                        transition: "all .18s", fontFamily: "inherit",
+                                        boxShadow: lutId === 'custom' ? "0 0 12px rgba(108,99,255,.2)" : "none"
+                                    }}>
+                                    <div style={{ fontSize: "20px", marginBottom: "3px" }}>📂</div>
+                                    <div style={{ fontSize: "10px", fontWeight: 700, color: lutId === 'custom' ? '#6c63ff' : dm ? '#aaa' : '#666' }}>
+                                        {customLutName ? customLutName.slice(0, 10) : 'Upload .cube'}
+                                    </div>
+                                </button>
+                                <input id="cube-upload-input" type="file" accept=".cube" style={{ display: "none" }} onChange={handleCubeUpload} />
+                            </div>
+
+                            {/* Intensity Slider */}
+                            {lutId !== 'none' && (
+                                <div style={{ marginTop: "4px" }}>
+                                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "5px" }}>
+                                        <span style={{ fontSize: "13px", fontWeight: 500, color: lutIntensity !== 1.0 ? "#6c63ff" : dm ? '#ccc' : '#666' }}>Intensity</span>
+                                        <span style={{ fontSize: "12px", color: "#bbb", fontVariantNumeric: "tabular-nums" }}>{Math.round(lutIntensity * 100)}%</span>
+                                    </div>
+                                    <SmoothSlider min={0} max={100} step={1} value={Math.round(lutIntensity * 100)} defaultValue={100}
+                                        onChange={v => setLutIntensity(v / 100)} />
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )}
+
                 {COLOR_FILTERS.filter(f => f.group === filterGroup).map(f => {
                     const val = filters[f.key]; const changed = val !== f.default;
                     return (

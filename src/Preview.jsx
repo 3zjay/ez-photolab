@@ -1,11 +1,55 @@
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { FONT_MAP } from "./constants";
+import { apply3DLut } from "./utils";
 
-export function Preview({ image, dragging, setDragging, loadImage, fileInputRef, imgRef, splitRef, activeTab, bgResult, bgMode, showBefore, setShowBefore, showSplit, splitPos, isDragSplit, setIsDragSplit, cssFilter, transformCSS, filters, texts, selText, setSelText, updateText, cropMode, cropBox, setCropBox, cropAspect, isEdited, setImage, setBgStatus, setBgSubUrl, setBgResult, isMobile, rotation, flipH, flipV }) {
+export function Preview({ image, dragging, setDragging, loadImage, fileInputRef, imgRef, splitRef, activeTab, bgResult, bgMode, showBefore, setShowBefore, showSplit, splitPos, isDragSplit, setIsDragSplit, cssFilter, transformCSS, filters, texts, selText, setSelText, updateText, cropMode, cropBox, setCropBox, cropAspect, isEdited, setImage, setBgStatus, setBgSubUrl, setBgResult, isMobile, rotation, flipH, flipV, activeLutData, lutIntensity, lutId }) {
   const maxH = isMobile ? "40vh" : "calc(100vh - 120px)";
   const [dragTxt, setDragTxt] = useState(null);
   const containerRef = useRef(null);
+  const lutCanvasRef = useRef(null);
+
+  // Render LUT preview onto a canvas overlay
+  useEffect(() => {
+    if (!activeLutData || !image || showBefore || activeTab !== 'edit' || lutId === 'none') {
+      // Clear the canvas if LUT is off
+      const c = lutCanvasRef.current;
+      if (c) {
+        const ctx = c.getContext('2d');
+        ctx.clearRect(0, 0, c.width, c.height);
+      }
+      return;
+    }
+    const timer = setTimeout(() => {
+      const imgEl = imgRef.current;
+      const canvas = lutCanvasRef.current;
+      if (!imgEl || !canvas) return;
+      const natW = imgEl.naturalWidth;
+      const natH = imgEl.naturalHeight;
+      if (!natW || !natH) return;
+
+      // Use a scaled-down preview for performance (max 800px wide)
+      const maxPrev = 800;
+      const scale = Math.min(1, maxPrev / Math.max(natW, natH));
+      const pW = Math.round(natW * scale);
+      const pH = Math.round(natH * scale);
+
+      canvas.width = pW;
+      canvas.height = pH;
+      const ctx = canvas.getContext('2d');
+
+      // Draw the image with CSS filters baked in
+      ctx.filter = cssFilter;
+      ctx.drawImage(imgEl, 0, 0, pW, pH);
+      ctx.filter = 'none';
+
+      // Apply the LUT
+      const imgData = ctx.getImageData(0, 0, pW, pH);
+      apply3DLut(imgData, activeLutData.data, activeLutData.size, lutIntensity);
+      ctx.putImageData(imgData, 0, 0);
+    }, 50);
+    return () => clearTimeout(timer);
+  }, [activeLutData, lutIntensity, lutId, image, cssFilter, showBefore, activeTab, showSplit]);
 
   const startDragText = (e, id) => {
     e.stopPropagation(); setSelText(id); setDragTxt({ id, startX: e.clientX, startY: e.clientY });
@@ -66,7 +110,11 @@ export function Preview({ image, dragging, setDragging, loadImage, fileInputRef,
           </>
         ) : showSplit ? (
           <>
-            <img ref={imgRef} src={image} alt="after" style={{ maxWidth: "100%", maxHeight: maxH, objectFit: "contain", display: "block", filter: cssFilter, transform: transformCSS }} />
+            <div style={{ position: "relative", lineHeight: 0 }}>
+              <img ref={imgRef} src={image} alt="after"
+                style={{ maxWidth: "100%", maxHeight: maxH, objectFit: "contain", display: "block", filter: (activeLutData && lutId !== 'none' && !showBefore && activeTab === 'edit') ? 'none' : cssFilter, transform: transformCSS, visibility: (activeLutData && lutId !== 'none' && !showBefore && activeTab === 'edit') ? 'hidden' : 'visible' }} />
+              <canvas ref={lutCanvasRef} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "contain", pointerEvents: "none", display: (activeLutData && lutId !== 'none' && !showBefore && activeTab === 'edit') ? 'block' : 'none', transform: transformCSS }} />
+            </div>
             {filters.temperature !== 0 && <div style={{ position: "absolute", inset: 0, background: tempColor, mixBlendMode: "overlay", pointerEvents: "none", clipPath: `inset(0 ${100 - splitPos}% 0 0)` }} />}
             {filters.vignette > 0 && <div style={{ position: "absolute", inset: 0, background: `radial-gradient(ellipse at center,transparent 38%,rgba(0,0,0,${filters.vignette / 100}) 100%)`, pointerEvents: "none", clipPath: `inset(0 ${100 - splitPos}% 0 0)` }} />}
             <div style={{ position: "absolute", inset: 0, clipPath: `inset(0 0 0 ${splitPos}%)` }}>
@@ -84,7 +132,9 @@ export function Preview({ image, dragging, setDragging, loadImage, fileInputRef,
           <>
             <div ref={containerRef} style={{ position: "relative", lineHeight: 0 }}>
               <img ref={imgRef} src={image} alt="photo"
-                style={{ maxWidth: "100%", maxHeight: maxH, objectFit: "contain", display: "block", filter: showBefore || activeTab === "tools" ? "none" : cssFilter, transition: "filter .08s ease", transform: showBefore ? "none" : transformCSS }} />
+                style={{ maxWidth: "100%", maxHeight: maxH, objectFit: "contain", display: "block", filter: showBefore || activeTab === "tools" ? "none" : (activeLutData && lutId !== 'none' && !showBefore && activeTab === 'edit' ? 'none' : cssFilter), transition: "filter .08s ease", transform: showBefore ? "none" : transformCSS, visibility: (activeLutData && lutId !== 'none' && !showBefore && activeTab === 'edit') ? 'hidden' : 'visible' }} />
+              {/* LUT Preview Canvas */}
+              <canvas ref={lutCanvasRef} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "contain", pointerEvents: "none", display: (activeLutData && lutId !== 'none' && !showBefore && activeTab === 'edit') ? 'block' : 'none', transform: showBefore ? "none" : transformCSS }} />
               {!showBefore && activeTab === "edit" && filters.temperature !== 0 && <div style={{ position: "absolute", inset: 0, background: tempColor, mixBlendMode: "overlay", pointerEvents: "none" }} />}
               {!showBefore && activeTab === "edit" && filters.fade > 0 && <div style={{ position: "absolute", inset: 0, background: `rgba(255,255,255,${filters.fade / 180})`, mixBlendMode: "screen", pointerEvents: "none" }} />}
               {!showBefore && activeTab === "edit" && filters.vignette > 0 && <div style={{ position: "absolute", inset: 0, background: `radial-gradient(ellipse at center,transparent 38%,rgba(0,0,0,${filters.vignette / 100}) 100%)`, pointerEvents: "none" }} />}

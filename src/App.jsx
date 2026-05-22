@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { BatchPage } from "./BatchPage";
 import CullPage from "./CullPage";
 import { ToolsPanel } from "./components/panels/ToolsPanel";
@@ -16,6 +16,7 @@ import {
 import { createSkinMask } from "./faceMasking";
 import { restoreFaceLocal } from "./faceRestore";
 import { decodeRaw } from "./rawProcessor";
+import { generateBuiltInLut, parseCubeLut } from "./lutParser";
 import { LandingPage } from "./LandingPage";
 import { StripeCheckout } from "./components/ui/StripeCheckout";
 import { AccountDashboard } from "./components/panels/AccountDashboard";
@@ -223,6 +224,10 @@ export default function App() {
   const [selText, setSelText] = useState(null);
   const [activeTab, setActiveTab] = useState("home");
   const [filterGroup, setFilterGroup] = useState("basic");
+  const [lutId, setLutId] = useState('none');
+  const [lutIntensity, setLutIntensity] = useState(1.0);
+  const [customLutData, setCustomLutData] = useState(null);
+  const [customLutName, setCustomLutName] = useState('');
   const [showBefore, setShowBefore] = useState(false);
   const [splitPos, setSplitPos] = useState(50);
   const [isDragSplit, setIsDragSplit] = useState(false);
@@ -605,14 +610,14 @@ export default function App() {
     if (!file || !file.type.startsWith("image/")) return;
     const reader = new FileReader();
     reader.onload = e => {
-      setImage(e.target.result); setFilters(DEFAULT_FILTERS); setRotation(0); setFlipH(false); setFlipV(false);
+      setImage(e.target.result); setFilters(DEFAULT_FILTERS); setRotation(0); setFlipH(false); setFlipV(false); setLutId('none'); setLutIntensity(1.0); setCustomLutData(null); setCustomLutName('');
       setTexts([]); setSelText(null); setCropMode(false); setCropBox({ x: 0, y: 0, w: 100, h: 100 });
       setBgStatus("idle"); setBgSubUrl(null); setBgResult(null); setSplitPos(50); setShowBefore(false);
     };
     reader.readAsDataURL(file);
   };
 
-  const resetAll = () => { setFilters(DEFAULT_FILTERS); setRotation(0); setFlipH(false); setFlipV(false); setTexts([]); setSelText(null); };
+  const resetAll = () => { setFilters(DEFAULT_FILTERS); setRotation(0); setFlipH(false); setFlipV(false); setTexts([]); setSelText(null); setLutId('none'); setLutIntensity(1.0); setCustomLutData(null); setCustomLutName(''); };
 
   const applyCrop = () => {
     const img = imgRef.current; if (!img) return;
@@ -660,6 +665,13 @@ export default function App() {
   const natW = imgRef.current?.naturalWidth || 0, natH = imgRef.current?.naturalHeight || 0;
   const { W: expW, H: expH } = natW ? getExportDims(natW, natH, exportScale) : { W: 0, H: 0 };
 
+  // Compute active LUT data from lutId
+  const activeLutData = useMemo(() => {
+    if (lutId === 'none') return null;
+    if (lutId === 'custom') return customLutData;
+    try { return generateBuiltInLut(lutId, 33); } catch { return null; }
+  }, [lutId, customLutData]);
+
   const handleExport = async () => {
     const src = bgResult || image;
     if (!src) { setExportInfo("No image loaded."); return; }
@@ -668,7 +680,7 @@ export default function App() {
       const tmpImg = await loadImageFromSrc(src);
       const { W, H } = getExportDims(tmpImg.naturalWidth, tmpImg.naturalHeight, exportScale);
       setExportInfo(`Rendering ${W.toLocaleString()}×${H.toLocaleString()}px…`);
-      const { canvas, W: rW, H: rH } = await renderFinal(src, cssFilter, filters, rotation, flipH, flipV, texts, W, H);
+      const { canvas, W: rW, H: rH } = await renderFinal(src, cssFilter, filters, rotation, flipH, flipV, texts, W, H, activeLutData?.data || null, activeLutData?.size || 33, lutIntensity);
       const fmts = { jpg: { mime: "image/jpeg", ext: "jpg" }, png: { mime: "image/png", ext: "png" }, webp: { mime: "image/webp", ext: "webp" } };
       const { mime, ext } = fmts[exportFmt];
       const q = exportFmt === "png" ? undefined : exportQ / 100;
@@ -693,7 +705,7 @@ export default function App() {
       const mode = FB_MODES.find(m => m.id === fbMode);
       let tW = mode.w, tH = mode.h;
       if (!tH) { const sc = Math.min(1, tW / Math.max(tmpImg.naturalWidth, tmpImg.naturalHeight)); tW = Math.round(tmpImg.naturalWidth * sc); tH = Math.round(tmpImg.naturalHeight * sc); }
-      const { canvas, W, H } = await renderFinal(src, cssFilter, filters, rotation, flipH, flipV, texts, tW, tH);
+      const { canvas, W, H } = await renderFinal(src, cssFilter, filters, rotation, flipH, flipV, texts, tW, tH, activeLutData?.data || null, activeLutData?.size || 33, lutIntensity);
       const blob = await canvasToBlob(canvas, "image/jpeg", 0.82);
       if (!blob || blob.size === 0) throw new Error("Empty blob");
       const kb = Math.round(blob.size / 1024);
@@ -704,7 +716,7 @@ export default function App() {
     setFbExporting(false);
   };
 
-  const isEdited = Object.entries(filters).some(([k, v]) => v !== DEFAULT_FILTERS[k]) || rotation !== 0 || flipH || flipV || texts.length > 0;
+  const isEdited = Object.entries(filters).some(([k, v]) => v !== DEFAULT_FILTERS[k]) || rotation !== 0 || flipH || flipV || texts.length > 0 || lutId !== 'none';
   const showSplit = isEdited && activeTab === "edit" && !cropMode;
   const transformCSS = toTransformCSS(rotation, flipH, flipV);
 
@@ -1796,7 +1808,7 @@ export default function App() {
         <OverlayPanel {...{ image, texts, selText, setSelText, addText, deleteText, updateText, dm, cardBg, cardBdr, inputSt }} />
       )}
       {activeTab === "edit" && (
-        <EditPanel {...{ filters, setFilters, filterGroup, setFilterGroup, isEdited, resetAll, dm, cardBdr, cardBg, image, runBrowserUpscale, aiUpscaleStatus, aiUpscaleLog, aiUpscaleProgress, aiUpscaleResult, aiUpscaleResultSize, applyAiResult, runBrowserBeauty, aiBeautyStatus, aiBeautyLog, aiBeautyResult, saveFile, aiScale, setAiScale, aiBeautySmooth, setAiBeautySmooth, aiBeautyClarity, setAiBeautyClarity, aiBeautyGlow, setAiBeautyGlow, aiBeautyUseMask, setAiBeautyUseMask, runFalFaceRestore, aiFaceRestoreStatus, aiFaceRestoreLog, aiFaceRestoreResult }} />
+        <EditPanel {...{ filters, setFilters, filterGroup, setFilterGroup, isEdited, resetAll, dm, cardBdr, cardBg, image, runBrowserUpscale, aiUpscaleStatus, aiUpscaleLog, aiUpscaleProgress, aiUpscaleResult, aiUpscaleResultSize, applyAiResult, runBrowserBeauty, aiBeautyStatus, aiBeautyLog, aiBeautyResult, saveFile, aiScale, setAiScale, aiBeautySmooth, setAiBeautySmooth, aiBeautyClarity, setAiBeautyClarity, aiBeautyGlow, setAiBeautyGlow, aiBeautyUseMask, setAiBeautyUseMask, runFalFaceRestore, aiFaceRestoreStatus, aiFaceRestoreLog, aiFaceRestoreResult, lutId, setLutId, lutIntensity, setLutIntensity, customLutData, setCustomLutData, customLutName, setCustomLutName }} />
       )}
       {activeTab === "batch" && (
         <div style={{ padding: "16px", color: dm ? '#aaa' : '#888', fontSize: "13px", textAlign: "center" }}>
@@ -1986,7 +1998,7 @@ export default function App() {
               {renderPanel()}
             </div>
             <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: "20px", position: "relative", overflow: "hidden" }}>
-              <Preview {...{ image, dragging, setDragging, loadImage, fileInputRef, imgRef, splitRef, previewRef, activeTab, bgResult, bgMode, showBefore, setShowBefore, showSplit, splitPos, isDragSplit, setIsDragSplit, cssFilter, transformCSS, filters, texts, selText, setSelText, updateText, cropMode, cropBox, setCropBox, cropAspect, isEdited, setImage, setBgStatus, setBgSubUrl, setBgResult, isMobile, rotation, flipH, flipV }} />
+              <Preview {...{ image, dragging, setDragging, loadImage, fileInputRef, imgRef, splitRef, previewRef, activeTab, bgResult, bgMode, showBefore, setShowBefore, showSplit, splitPos, isDragSplit, setIsDragSplit, cssFilter, transformCSS, filters, texts, selText, setSelText, updateText, cropMode, cropBox, setCropBox, cropAspect, isEdited, setImage, setBgStatus, setBgSubUrl, setBgResult, isMobile, rotation, flipH, flipV, activeLutData, lutIntensity, lutId }} />
             </div>
           </div>
         )
@@ -2012,7 +2024,7 @@ export default function App() {
         ) : (
           <div style={{ display: "flex", flexDirection: "column", height: "calc(100vh - 52px)", overflow: "hidden" }}>
             <div style={{ height: "42vh", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", position: "relative", borderBottom: `1px solid ${dm ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'}` }}>
-              <Preview {...{ image, dragging, setDragging, loadImage, fileInputRef, imgRef, splitRef, previewRef, activeTab, bgResult, bgMode, showBefore, setShowBefore, showSplit, splitPos, isDragSplit, setIsDragSplit, cssFilter, transformCSS, filters, texts, selText, setSelText, updateText, cropMode, cropBox, setCropBox, cropAspect, isEdited, setImage, setBgStatus, setBgSubUrl, setBgResult, isMobile, rotation, flipH, flipV }} />
+              <Preview {...{ image, dragging, setDragging, loadImage, fileInputRef, imgRef, splitRef, previewRef, activeTab, bgResult, bgMode, showBefore, setShowBefore, showSplit, splitPos, isDragSplit, setIsDragSplit, cssFilter, transformCSS, filters, texts, selText, setSelText, updateText, cropMode, cropBox, setCropBox, cropAspect, isEdited, setImage, setBgStatus, setBgSubUrl, setBgResult, isMobile, rotation, flipH, flipV, activeLutData, lutIntensity, lutId }} />
             </div>
             <div className="glass-panel" style={{ flex: 1, overflowY: "auto", WebkitOverflowScrolling: "touch", borderTop: `1px solid ${dm ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'}` }}>
               {image && activeTab === "edit" && (
