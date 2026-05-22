@@ -113,7 +113,8 @@ export function BatchPage({ dm, cardBg, cardBdr, inputSt, isMobile = false,
   batchAiScale, setBatchAiScale, batchAiBeautySmooth, setBatchAiBeautySmooth,
   batchAiBeautyClarity, setBatchAiBeautyClarity, batchAiBeautyGlow, setBatchAiBeautyGlow,
   batchAiFaceRestore, setBatchAiFaceRestore, batchAiBeautyUseMask, setBatchAiBeautyUseMask,
-  batchSection, setBatchSection, batchRawFiles, setBatchRawFiles, handleRawBatchProcess, batchLogs, addBatchLog
+  batchSection, setBatchSection, batchRawFiles, setBatchRawFiles, handleRawBatchProcess, batchLogs, addBatchLog,
+  batchConfirmFirst, setBatchConfirmFirst, batchConfirmData, batchCancelRequested, handleCancelBatch, continueBatchProcess, cancelBatchProcess
 }) {
 
   const bg = dm ? '#121212' : '#f0f1f5';
@@ -194,6 +195,18 @@ export function BatchPage({ dm, cardBg, cardBdr, inputSt, isMobile = false,
           </div>
         </div>
         <div style={{ display: "flex", gap: "8px", alignItems: "center", flexShrink: 0 }}>
+          {currentFiles.length > 1 && !batchProcessing && (
+            <label style={{ display: "flex", alignItems: "center", gap: "6px", cursor: "pointer", fontSize: "13px", fontWeight: 600, color: dm ? "#ccc" : "#555", marginRight: "8px" }}>
+              <input 
+                type="checkbox" 
+                id="verify-first-checkbox"
+                checked={batchConfirmFirst} 
+                onChange={e => setBatchConfirmFirst(e.target.checked)} 
+                style={{ width: "16px", height: "16px", accentColor: accent, cursor: "pointer" }} 
+              />
+              Verify first image
+            </label>
+          )}
           {((!isRaw && batchImages.length > 0) || (isRaw && batchRawFiles.length > 0)) && (
             <button
               onClick={() => {
@@ -210,6 +223,31 @@ export function BatchPage({ dm, cardBg, cardBdr, inputSt, isMobile = false,
                 color: batchPreviewOpen ? '#6c63ff' : dm ? '#aaa' : '#666',
                 transition: "all .2s", display: "flex", alignItems: "center", gap: "6px" }}>
               👁 {batchPreviewOpen ? "Hide Preview" : "Preview"}
+            </button>
+          )}
+          {batchProcessing && (
+            <button
+              id="cancel-batch-button"
+              onClick={handleCancelBatch}
+              disabled={batchCancelRequested}
+              style={{
+                padding: "10px 16px",
+                border: `1.5px solid #ef4444`,
+                borderRadius: "10px",
+                fontFamily: "inherit",
+                fontWeight: 700,
+                fontSize: "13px",
+                cursor: batchCancelRequested ? "not-allowed" : "pointer",
+                background: dm ? '#2a1a1a' : '#fff5f5',
+                color: '#ef4444',
+                boxShadow: "0 0 10px rgba(239, 68, 68, 0.15)",
+                transition: "all .2s",
+                display: "flex",
+                alignItems: "center",
+                gap: "6px"
+              }}
+            >
+              🛑 {batchCancelRequested ? "Cancelling..." : "Cancel"}
             </button>
           )}
           <button
@@ -991,6 +1029,149 @@ export function BatchPage({ dm, cardBg, cardBdr, inputSt, isMobile = false,
           </Card>
         )}
       </div>
+
+      {batchConfirmData && (
+        <div style={{
+          position: "fixed",
+          inset: 0,
+          backgroundColor: "rgba(0,0,0,0.65)",
+          backdropFilter: "blur(12px)",
+          zIndex: 1000,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "20px",
+          animation: "fadeIn 0.2s ease-out"
+        }}>
+          <div style={{
+            background: dm ? "rgba(30, 30, 45, 0.9)" : "rgba(255, 255, 255, 0.95)",
+            border: `1px solid ${dm ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)"}`,
+            borderRadius: "24px",
+            maxWidth: "640px",
+            width: "100%",
+            boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.4)",
+            display: "flex",
+            flexDirection: "column",
+            overflow: "hidden",
+            animation: "scaleIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)"
+          }}>
+            {/* Modal Header */}
+            <div style={{ padding: "20px 24px", borderBottom: `1px solid ${cardBdr}`, display: "flex", flexDirection: "column", gap: "4px" }}>
+              <h3 style={{ margin: 0, fontSize: "18px", fontWeight: 800, color: dm ? "#f3f4f6" : "#111827", display: "flex", alignItems: "center", gap: "8px" }}>
+                <span>🔍</span> Verify Processed Output
+              </h3>
+              <p style={{ margin: 0, fontSize: "13px", color: dm ? "#9ca3af" : "#4b5563" }}>
+                Please review the first processed file output before we proceed with the rest of the batch.
+              </p>
+            </div>
+
+            {/* Modal Body */}
+            <div style={{ padding: "24px", display: "flex", flexDirection: "column", gap: "16px", overflowY: "auto", maxHeight: "65vh" }}>
+              <div style={{ 
+                width: "100%", 
+                aspectRatio: "1.6", 
+                borderRadius: "14px", 
+                overflow: "hidden", 
+                border: `1px solid ${cardBdr}`,
+                backgroundColor: dm ? "#0b0f19" : "#f3f4f6",
+                position: "relative",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center"
+              }}>
+                <img 
+                  src={batchConfirmData.url} 
+                  alt="First processed file" 
+                  style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }} 
+                />
+                <div style={{
+                  position: "absolute",
+                  bottom: "12px",
+                  right: "12px",
+                  background: "rgba(15, 23, 42, 0.8)",
+                  color: "#f8fafc",
+                  padding: "6px 12px",
+                  borderRadius: "8px",
+                  fontSize: "11px",
+                  fontWeight: 700,
+                  backdropFilter: "blur(6px)",
+                  border: "1px solid rgba(255,255,255,0.1)"
+                }}>
+                  ✨ First Processed Image
+                </div>
+              </div>
+
+              {/* File Info Card */}
+              <div style={{ 
+                background: dm ? "rgba(15, 23, 42, 0.4)" : "#f8fafc", 
+                border: `1px solid ${cardBdr}`,
+                borderRadius: "12px",
+                padding: "12px 16px",
+                display: "flex",
+                flexDirection: "column",
+                gap: "8px"
+              }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "13px" }}>
+                  <span style={{ fontWeight: 600, color: dm ? "#9ca3af" : "#4b5563" }}>Written File Name:</span>
+                  <span style={{ fontFamily: "monospace", color: dm ? "#38bdf8" : "#0284c7", fontWeight: 700, wordBreak: "break-all" }}>{batchConfirmData.name}</span>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "13px" }}>
+                  <span style={{ fontWeight: 600, color: dm ? "#9ca3af" : "#4b5563" }}>Queue Status:</span>
+                  <span style={{ fontWeight: 700, color: accent }}>Paused after 1st image · {batchConfirmData.total - 1} remaining</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div style={{ 
+              padding: "16px 24px", 
+              borderTop: `1px solid ${cardBdr}`, 
+              background: dm ? "rgba(15, 23, 42, 0.6)" : "#fafafa",
+              display: "flex", 
+              justifyContent: "flex-end", 
+              gap: "12px" 
+            }}>
+              <button 
+                id="modal-cancel-batch"
+                onClick={cancelBatchProcess}
+                style={{ 
+                  padding: "10px 18px", 
+                  background: dm ? "#1e293b" : "#fff", 
+                  border: `1.5px solid ${dm ? "#334155" : "#d1d5db"}`, 
+                  borderRadius: "10px", 
+                  color: dm ? "#cbd5e1" : "#374151", 
+                  fontWeight: 700, 
+                  fontSize: "13px", 
+                  cursor: "pointer", 
+                  fontFamily: "inherit",
+                  transition: "all 0.2s"
+                }}
+              >
+                Cancel Batch
+              </button>
+              <button 
+                id="modal-confirm-batch"
+                onClick={continueBatchProcess}
+                style={{ 
+                  padding: "10px 22px", 
+                  background: "linear-gradient(135deg, #10b981, #059669)", 
+                  border: "none", 
+                  borderRadius: "10px", 
+                  color: "#fff", 
+                  fontWeight: 700, 
+                  fontSize: "13px", 
+                  cursor: "pointer", 
+                  fontFamily: "inherit",
+                  boxShadow: "0 4px 12px rgba(16, 185, 129, 0.25)",
+                  transition: "all 0.2s"
+                }}
+              >
+                Confirm & Process Rest
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
