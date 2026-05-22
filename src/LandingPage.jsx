@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { RAW_EXTENSIONS } from "./rawProcessor";
 
 export function ApertureLogo({ size = 26, className = "" }) {
   return (
@@ -563,7 +564,7 @@ export function LandingPage({ dm, loadImage, setActiveTab, handleInstallClick, d
             onClick={() => {
               const fileInput = document.createElement("input");
               fileInput.type = "file";
-              fileInput.accept = "image/*";
+              fileInput.accept = "image/*," + RAW_EXTENSIONS;
               fileInput.onchange = (e) => {
                 if (e.target.files && e.target.files[0]) {
                   loadImage(e.target.files[0]);

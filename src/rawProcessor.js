@@ -270,3 +270,6 @@ export const RAW_EXTENSIONS = [
   '.pef',                  // Pentax
   '.x3f'                   // Sigma
 ].join(',');
+
+export const RAW_REGEX = /\.(nef|nrw|cr2|cr3|crw|arw|srf|sr2|dng|orf|raf|rw2|pef|x3f)$/i;
+

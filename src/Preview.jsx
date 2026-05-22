@@ -2,12 +2,76 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { FONT_MAP } from "./constants";
 import { apply3DLut } from "./utils";
+import { RAW_EXTENSIONS } from "./rawProcessor";
 
-export function Preview({ image, dragging, setDragging, loadImage, fileInputRef, imgRef, splitRef, activeTab, bgResult, bgMode, showBefore, setShowBefore, showSplit, splitPos, isDragSplit, setIsDragSplit, cssFilter, transformCSS, filters, texts, selText, setSelText, updateText, cropMode, cropBox, setCropBox, cropAspect, isEdited, setImage, setBgStatus, setBgSubUrl, setBgResult, isMobile, rotation, flipH, flipV, activeLutData, lutIntensity, lutId }) {
+export function Preview({ image, dragging, setDragging, loadImage, fileInputRef, imgRef, splitRef, activeTab, bgResult, bgMode, showBefore, setShowBefore, showSplit, splitPos, isDragSplit, setIsDragSplit, cssFilter, transformCSS, filters, texts, selText, setSelText, updateText, cropMode, cropBox, setCropBox, cropAspect, isEdited, setImage, setBgStatus, setBgSubUrl, setBgResult, isMobile, rotation, flipH, flipV, activeLutData, lutIntensity, lutId, dm, rawLoading, rawProgressMsg }) {
   const maxH = isMobile ? "40vh" : "calc(100vh - 120px)";
   const [dragTxt, setDragTxt] = useState(null);
   const containerRef = useRef(null);
   const lutCanvasRef = useRef(null);
+
+  // Render glassmorphic loading screen during RAW decoding
+  if (rawLoading) {
+    return (
+      <div className="glass-panel" style={{
+        width: "100%",
+        maxWidth: "480px",
+        aspectRatio: "4/3",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        background: dm ? "rgba(20, 24, 33, 0.75)" : "rgba(255, 255, 255, 0.75)",
+        backdropFilter: "blur(20px)",
+        boxShadow: "0 20px 40px rgba(0,0,0,0.15)",
+        borderRadius: "24px",
+        border: `1px solid ${dm ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)"}`,
+        padding: "32px",
+        textAlign: "center"
+      }}>
+        <div style={{ position: "relative", width: "70px", height: "70px", marginBottom: "24px" }}>
+          {/* Outer glowing ring */}
+          <div style={{
+            position: "absolute",
+            inset: 0,
+            borderRadius: "50%",
+            border: "3px solid transparent",
+            borderTopColor: "#6c63ff",
+            borderBottomColor: "#06b6d4",
+            animation: "spin 1.2s cubic-bezier(0.5, 0, 0.5, 1) infinite"
+          }} />
+          {/* Inner pulsing circle */}
+          <div style={{
+            position: "absolute",
+            inset: "8px",
+            borderRadius: "50%",
+            background: "linear-gradient(135deg, #06b6d4, #6c63ff, #ec4899)",
+            opacity: 0.15,
+            animation: "pulse 2s ease-in-out infinite"
+          }} />
+          {/* Center camera iris graphic */}
+          <div style={{
+            position: "absolute",
+            inset: "18px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center"
+          }}>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={dm ? "#fff" : "#1a1a2e"} strokeWidth="2">
+              <circle cx="12" cy="12" r="10" />
+              <path d="M14.31 8l5.74 9.94M9.69 8h11.48M7.38 12l5.74-9.94M9.69 16L3.95 6.06M14.31 16H2.83M16.62 12l-5.74 9.94" strokeWidth="1.5" />
+            </svg>
+          </div>
+        </div>
+        <h3 style={{ fontSize: "18px", fontWeight: 700, color: dm ? "#ffffff" : "#1a1a2e", marginBottom: "10px", fontFamily: "'Outfit', sans-serif" }}>
+          Developing RAW Photo...
+        </h3>
+        <p style={{ fontSize: "13px", color: dm ? "#9ca3af" : "#555566", maxWidth: "340px", lineHeight: "1.6", whiteSpace: "pre-wrap", wordBreak: "break-word", margin: 0 }}>
+          {rawProgressMsg || "Developing raw sensor data completely offline..."}
+        </p>
+      </div>
+    );
+  }
 
   // Render LUT preview onto a canvas overlay
   useEffect(() => {
@@ -70,16 +134,16 @@ export function Preview({ image, dragging, setDragging, loadImage, fileInputRef,
 
   if (!image) return (
     <div className={`drop ${dragging ? "on" : ""}`}
-      style={{ width: "100%", maxWidth: "480px", aspectRatio: "4/3", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: "#fff", boxShadow: "0 2px 16px rgba(0,0,0,.06)", cursor: "pointer" }}
+      style={{ width: "100%", maxWidth: "480px", aspectRatio: "4/3", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: dm ? "#1e2230" : "#fff", boxShadow: "0 2px 16px rgba(0,0,0,.06)", cursor: "pointer", border: dm ? "2px dashed #3f445a" : "2px dashed #eee", borderRadius: "16px" }}
       onDragOver={e => { e.preventDefault(); setDragging(true); }} onDragLeave={() => setDragging(false)}
       onDrop={e => { e.preventDefault(); setDragging(false); loadImage(e.dataTransfer.files[0]); }}
       onClick={() => fileInputRef.current?.click()}>
-      <input ref={fileInputRef} type="file" accept="image/*" style={{ display: "none" }} onChange={e => loadImage(e.target.files[0])} />
+      <input ref={fileInputRef} type="file" accept={"image/*," + RAW_EXTENSIONS} style={{ display: "none" }} onChange={e => loadImage(e.target.files[0])} />
       <div style={{ fontSize: "44px", marginBottom: "14px", animation: "pulse 2.5s infinite" }}>🖼</div>
-      <div style={{ fontSize: "16px", fontWeight: 600, color: "#555", marginBottom: "6px" }}>{isMobile ? "Tap to upload photo" : "Drop photo here"}</div>
-      {!isMobile && <div style={{ fontSize: "13px", color: "#bbb", marginBottom: "20px" }}>or click to browse</div>}
-      <div style={{ display: "flex", gap: "8px" }}>
-        {["JPG", "PNG", "WEBP", "HEIC"].map(x => <span key={x} style={{ padding: "3px 10px", background: "#f2f2f8", borderRadius: "20px", fontSize: "11px", fontWeight: 500, color: "#999" }}>{x}</span>)}
+      <div style={{ fontSize: "16px", fontWeight: 600, color: dm ? "#fff" : "#555", marginBottom: "6px" }}>{isMobile ? "Tap to upload photo" : "Drop photo here"}</div>
+      {!isMobile && <div style={{ fontSize: "13px", color: dm ? "#a1a1aa" : "#bbb", marginBottom: "20px" }}>or click to browse</div>}
+      <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", justifyContent: "center", padding: "0 10px" }}>
+        {["JPG", "PNG", "WEBP", "HEIC", "RAW"].map(x => <span key={x} style={{ padding: "3px 10px", background: dm ? "#2d3247" : "#f2f2f8", borderRadius: "20px", fontSize: "11px", fontWeight: 500, color: dm ? "#cbd5e1" : "#999" }}>{x}</span>)}
       </div>
     </div>
   );

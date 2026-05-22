@@ -15,7 +15,7 @@ import {
 } from "./utils";
 import { createSkinMask } from "./faceMasking";
 import { restoreFaceLocal } from "./faceRestore";
-import { decodeRaw } from "./rawProcessor";
+import { decodeRaw, RAW_EXTENSIONS, RAW_REGEX } from "./rawProcessor";
 import { generateBuiltInLut, parseCubeLut } from "./lutParser";
 import { LandingPage } from "./LandingPage";
 import { StripeCheckout } from "./components/ui/StripeCheckout";
@@ -159,6 +159,8 @@ async function verifyWritePermission(handle) {
 export default function App() {
   const [image, setImage] = useState(null);
   const [filters, setFilters] = useState(DEFAULT_FILTERS);
+  const [rawLoading, setRawLoading] = useState(false);
+  const [rawProgressMsg, setRawProgressMsg] = useState("");
   
   // PWA INSTALL STATE & LOGIC
   const [deferredPrompt, setDeferredPrompt] = useState(null);
@@ -607,14 +609,81 @@ export default function App() {
   }, [isDragSplit, onSplitMove]);
 
   const loadImage = file => {
-    if (!file || !file.type.startsWith("image/")) return;
-    const reader = new FileReader();
-    reader.onload = e => {
-      setImage(e.target.result); setFilters(DEFAULT_FILTERS); setRotation(0); setFlipH(false); setFlipV(false); setLutId('none'); setLutIntensity(1.0); setCustomLutData(null); setCustomLutName('');
-      setTexts([]); setSelText(null); setCropMode(false); setCropBox({ x: 0, y: 0, w: 100, h: 100 });
-      setBgStatus("idle"); setBgSubUrl(null); setBgResult(null); setSplitPos(50); setShowBefore(false);
-    };
-    reader.readAsDataURL(file);
+    if (!file) return;
+    const isImage = file.type && file.type.startsWith("image/");
+    const isRaw = file.name && file.name.match(RAW_REGEX);
+    if (!isImage && !isRaw) return;
+
+    if (isRaw) {
+      setRawLoading(true);
+      setRawProgressMsg("Initializing RAW parser...");
+      const reader = new FileReader();
+      reader.onload = async e => {
+        try {
+          const buffer = e.target.result;
+          const result = await decodeRaw(buffer, (msg) => {
+            setRawProgressMsg(msg);
+          });
+          if (result && result.url) {
+            setImage(result.url);
+            setFilters(DEFAULT_FILTERS);
+            setRotation(0);
+            setFlipH(false);
+            setFlipV(false);
+            setLutId('none');
+            setLutIntensity(1.0);
+            setCustomLutData(null);
+            setCustomLutName('');
+            setTexts([]);
+            setSelText(null);
+            setCropMode(false);
+            setCropBox({ x: 0, y: 0, w: 100, h: 100 });
+            setBgStatus("idle");
+            setBgSubUrl(null);
+            setBgResult(null);
+            setSplitPos(50);
+            setShowBefore(false);
+          } else {
+            alert("Failed to decode RAW image.");
+          }
+        } catch (err) {
+          console.error("RAW development error:", err);
+          alert("Error developing RAW image: " + err.message);
+        } finally {
+          setRawLoading(false);
+          setRawProgressMsg("");
+        }
+      };
+      reader.onerror = () => {
+        alert("Failed to read RAW file.");
+        setRawLoading(false);
+        setRawProgressMsg("");
+      };
+      reader.readAsArrayBuffer(file);
+    } else {
+      const reader = new FileReader();
+      reader.onload = e => {
+        setImage(e.target.result);
+        setFilters(DEFAULT_FILTERS);
+        setRotation(0);
+        setFlipH(false);
+        setFlipV(false);
+        setLutId('none');
+        setLutIntensity(1.0);
+        setCustomLutData(null);
+        setCustomLutName('');
+        setTexts([]);
+        setSelText(null);
+        setCropMode(false);
+        setCropBox({ x: 0, y: 0, w: 100, h: 100 });
+        setBgStatus("idle");
+        setBgSubUrl(null);
+        setBgResult(null);
+        setSplitPos(50);
+        setShowBefore(false);
+      };
+      reader.readAsDataURL(file);
+    }
   };
 
   const resetAll = () => { setFilters(DEFAULT_FILTERS); setRotation(0); setFlipH(false); setFlipV(false); setTexts([]); setSelText(null); setLutId('none'); setLutIntensity(1.0); setCustomLutData(null); setCustomLutName(''); };
@@ -1998,7 +2067,7 @@ export default function App() {
               {renderPanel()}
             </div>
             <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: "20px", position: "relative", overflow: "hidden" }}>
-              <Preview {...{ image, dragging, setDragging, loadImage, fileInputRef, imgRef, splitRef, previewRef, activeTab, bgResult, bgMode, showBefore, setShowBefore, showSplit, splitPos, isDragSplit, setIsDragSplit, cssFilter, transformCSS, filters, texts, selText, setSelText, updateText, cropMode, cropBox, setCropBox, cropAspect, isEdited, setImage, setBgStatus, setBgSubUrl, setBgResult, isMobile, rotation, flipH, flipV, activeLutData, lutIntensity, lutId }} />
+              <Preview {...{ image, dragging, setDragging, loadImage, fileInputRef, imgRef, splitRef, previewRef, activeTab, bgResult, bgMode, showBefore, setShowBefore, showSplit, splitPos, isDragSplit, setIsDragSplit, cssFilter, transformCSS, filters, texts, selText, setSelText, updateText, cropMode, cropBox, setCropBox, cropAspect, isEdited, setImage, setBgStatus, setBgSubUrl, setBgResult, isMobile, rotation, flipH, flipV, activeLutData, lutIntensity, lutId, dm, rawLoading, rawProgressMsg }} />
             </div>
           </div>
         )
@@ -2024,7 +2093,7 @@ export default function App() {
         ) : (
           <div style={{ display: "flex", flexDirection: "column", height: "calc(100vh - 52px)", overflow: "hidden" }}>
             <div style={{ height: "42vh", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", position: "relative", borderBottom: `1px solid ${dm ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'}` }}>
-              <Preview {...{ image, dragging, setDragging, loadImage, fileInputRef, imgRef, splitRef, previewRef, activeTab, bgResult, bgMode, showBefore, setShowBefore, showSplit, splitPos, isDragSplit, setIsDragSplit, cssFilter, transformCSS, filters, texts, selText, setSelText, updateText, cropMode, cropBox, setCropBox, cropAspect, isEdited, setImage, setBgStatus, setBgSubUrl, setBgResult, isMobile, rotation, flipH, flipV, activeLutData, lutIntensity, lutId }} />
+              <Preview {...{ image, dragging, setDragging, loadImage, fileInputRef, imgRef, splitRef, previewRef, activeTab, bgResult, bgMode, showBefore, setShowBefore, showSplit, splitPos, isDragSplit, setIsDragSplit, cssFilter, transformCSS, filters, texts, selText, setSelText, updateText, cropMode, cropBox, setCropBox, cropAspect, isEdited, setImage, setBgStatus, setBgSubUrl, setBgResult, isMobile, rotation, flipH, flipV, activeLutData, lutIntensity, lutId, dm, rawLoading, rawProgressMsg }} />
             </div>
             <div className="glass-panel" style={{ flex: 1, overflowY: "auto", WebkitOverflowScrolling: "touch", borderTop: `1px solid ${dm ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'}` }}>
               {image && activeTab === "edit" && (
