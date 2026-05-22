@@ -950,6 +950,9 @@ export default function App() {
     batchAiUpscale, batchAiScale, batchAiFaceRestore, batchAiBeautyUseMask]);
 
   const handleBatchProcess = async (startIndex = 0) => {
+    if (typeof startIndex !== 'number') {
+      startIndex = 0;
+    }
     if (!sourceHandle || !outputHandle || batchImages.length === 0) {
       alert('Select source & output folders with at least one image.');
       return;
@@ -1140,6 +1143,9 @@ export default function App() {
   };
 
   const handleRawBatchProcess = async (startIndex = 0) => {
+    if (typeof startIndex !== 'number') {
+      startIndex = 0;
+    }
     if (!outputHandle || batchRawFiles.length === 0) {
       addBatchLog("⚠️ Processing aborted: Missing output folder or files.", "warning");
       alert('Select output folder & add RAW files first.');

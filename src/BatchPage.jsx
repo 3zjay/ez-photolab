@@ -925,8 +925,8 @@ export function BatchPage({ dm, cardBg, cardBdr, inputSt, isMobile = false,
           );
         } else {
           return (
-            <div style={{ background: "#f0fff4", borderBottom: "1px solid #86efac", padding: "10px 24px", fontSize: "13px", fontWeight: 600, color: "#16a34a", textAlign: "center" }}>
-              ✅ Done! {batchSection === 'raw' ? batchRawFiles.length : batchImages.length} images saved to output folder.
+            <div style={{ background: dm ? "#1e293b" : "#f1f5f9", borderBottom: `1px solid ${cardBdr}`, padding: "10px 24px", fontSize: "13px", fontWeight: 600, color: dm ? "#94a3b8" : "#475569", textAlign: "center" }}>
+              ℹ️ Process complete. No files were saved.
             </div>
           );
         }
