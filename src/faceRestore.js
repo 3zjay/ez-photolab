@@ -12,14 +12,31 @@ export async function getLandmarker() {
   const vision = await FilesetResolver.forVisionTasks(
     "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm"
   );
-  landmarker = await FaceLandmarker.createFromOptions(vision, {
-    baseOptions: {
-      modelAssetPath: "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task",
-      delegate: "GPU",
-    },
-    runningMode: "IMAGE",
-    numFaces: 10,
-  });
+  try {
+    landmarker = await FaceLandmarker.createFromOptions(vision, {
+      baseOptions: {
+        modelAssetPath: "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task",
+        delegate: "GPU",
+      },
+      runningMode: "IMAGE",
+      numFaces: 10,
+    });
+  } catch (e) {
+    console.warn("Failed to init FaceLandmarker with GPU, trying CPU fallback...", e);
+    try {
+      landmarker = await FaceLandmarker.createFromOptions(vision, {
+        baseOptions: {
+          modelAssetPath: "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task",
+          delegate: "CPU",
+        },
+        runningMode: "IMAGE",
+        numFaces: 10,
+      });
+    } catch (err) {
+      console.error("Failed to init FaceLandmarker on CPU:", err);
+      throw err;
+    }
+  }
   return landmarker;
 }
 

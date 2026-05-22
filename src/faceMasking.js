@@ -4,10 +4,10 @@ let faceLandmarker = null;
 
 export async function initFaceLandmarker() {
   if (faceLandmarker) return;
+  const vision = await FilesetResolver.forVisionTasks(
+    "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/wasm"
+  );
   try {
-    const vision = await FilesetResolver.forVisionTasks(
-      "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/wasm"
-    );
     faceLandmarker = await FaceLandmarker.createFromOptions(vision, {
       baseOptions: {
         modelAssetPath: "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task",
@@ -18,44 +18,38 @@ export async function initFaceLandmarker() {
       numFaces: 5
     });
   } catch (e) {
-    console.error("Failed to init FaceLandmarker:", e);
-    throw e;
+    console.warn("Failed to init FaceLandmarker with GPU, trying CPU fallback...", e);
+    try {
+      faceLandmarker = await FaceLandmarker.createFromOptions(vision, {
+        baseOptions: {
+          modelAssetPath: "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task",
+          delegate: "CPU"
+        },
+        outputFaceBlendshapes: false,
+        runningMode: "IMAGE",
+        numFaces: 5
+      });
+    } catch (err) {
+      console.error("Failed to init FaceLandmarker on CPU:", err);
+      throw err;
+    }
   }
 }
 
 function drawConnections(ctx, landmarks, connections, width, height) {
   if (!landmarks || !connections || connections.length === 0) return;
   
-  // Chain connections into an ordered path
-  const graph = new Map();
-  connections.forEach(({start, end}) => {
-    if (!graph.has(start)) graph.set(start, []);
-    if (!graph.has(end)) graph.set(end, []);
-    graph.get(start).push(end);
-    graph.get(end).push(start);
-  });
-
-  const path = [];
-  let curr = connections[0].start;
-  let prev = -1;
-  
-  // Follow the path
-  for (let i = 0; i < connections.length; i++) {
-    path.push(curr);
-    const neighbors = graph.get(curr);
-    let next = neighbors[0];
-    if (next === prev && neighbors.length > 1) {
-      next = neighbors[1];
-    }
-    prev = curr;
-    curr = next;
-  }
-
   ctx.beginPath();
-  path.forEach((idx, i) => {
-    const pt = landmarks[idx];
-    if (i === 0) ctx.moveTo(pt.x * width, pt.y * height);
-    else ctx.lineTo(pt.x * width, pt.y * height);
+  let lastEnd = -1;
+  connections.forEach(({start, end}) => {
+    const ptStart = landmarks[start];
+    const ptEnd = landmarks[end];
+    if (!ptStart || !ptEnd) return;
+    if (start !== lastEnd) {
+      ctx.moveTo(ptStart.x * width, ptStart.y * height);
+    }
+    ctx.lineTo(ptEnd.x * width, ptEnd.y * height);
+    lastEnd = end;
   });
   ctx.closePath();
   ctx.fill();

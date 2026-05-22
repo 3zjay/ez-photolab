@@ -847,8 +847,6 @@ export default function App() {
       let ctx = canvas.getContext('2d');
 
       ctx.save();
-      const cssFilterStr = toCSSFilter(filters);
-      ctx.filter = cssFilterStr;
       ctx.imageSmoothingEnabled = true;
       ctx.imageSmoothingQuality = 'high';
 
@@ -870,29 +868,6 @@ export default function App() {
         ctx.drawImage(img, 0, 0, W, H);
       }
       ctx.restore();
-
-      if (filters.temperature !== 0) {
-        const a = Math.abs(filters.temperature) / 300;
-        ctx.globalCompositeOperation = 'overlay';
-        ctx.fillStyle = filters.temperature > 0 ? `rgba(255,140,0,${a})` : `rgba(100,149,237,${a})`;
-        ctx.fillRect(0, 0, W, H);
-        ctx.globalCompositeOperation = 'source-over';
-      }
-      if (filters.fade > 0) {
-        ctx.globalCompositeOperation = 'screen';
-        ctx.fillStyle = `rgba(255,255,255,${filters.fade / 180})`;
-        ctx.fillRect(0, 0, W, H);
-        ctx.globalCompositeOperation = 'source-over';
-      }
-      if (filters.vignette > 0) {
-        const g = ctx.createRadialGradient(W / 2, H / 2, W * 0.3, W / 2, H / 2, W * 0.85);
-        g.addColorStop(0, 'rgba(0,0,0,0)');
-        g.addColorStop(1, `rgba(0,0,0,${filters.vignette / 100})`);
-        ctx.globalCompositeOperation = 'multiply';
-        ctx.fillStyle = g;
-        ctx.fillRect(0, 0, W, H);
-        ctx.globalCompositeOperation = 'source-over';
-      }
 
       if (batchAutoContrast) applyAutoContrast(ctx, W, H);
       if (batchAutoLevels) applyAutoLevels(ctx, W, H);
