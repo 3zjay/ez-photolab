@@ -14,6 +14,13 @@ class LibRawProxy {
         else resolve(data?.out);
       }
     };
+    this.worker.onerror = (err) => {
+      if (this.waitForWorker) {
+        const { reject } = this.waitForWorker;
+        this.waitForWorker = null;
+        reject(err || new Error("Worker error"));
+      }
+    };
   }
 
   async runFn(fn, ...args) {
@@ -83,21 +90,40 @@ export async function decodeRaw(fileBuffer, onLog) {
     const candidates = [];
     
     // 1. Deep Scan for embedded JPEG previews (Nikon/Canon/Sony standard)
-    for (let i = 0; i < bytes.length - 2; i++) {
-      if (bytes[i] === 0xFF && bytes[i+1] === 0xD8 && bytes[i+2] === 0xFF) {
-        let start = i;
+    let i = 0;
+    while (i < bytes.length - 2) {
+      const nextFF = bytes.indexOf(0xFF, i);
+      if (nextFF === -1 || nextFF > bytes.length - 3) {
+        break;
+      }
+      
+      if (bytes[nextFF + 1] === 0xD8 && bytes[nextFF + 2] === 0xFF) {
+        let start = nextFF;
         let end = -1;
-        // Search for EOI (FF D9)
-        for (let j = i + 10; j < Math.min(i + 15000000, bytes.length - 1); j++) {
-          if (bytes[j] === 0xFF && bytes[j+1] === 0xD9) {
-            end = j + 2;
+        // Search for EOI (FF D9) within max 8MB limit
+        const limit = Math.min(start + 8000000, bytes.length - 1);
+        let pos = start + 10;
+        while (pos < limit - 1) {
+          const nextEOIFF = bytes.indexOf(0xFF, pos);
+          if (nextEOIFF === -1 || nextEOIFF >= limit - 1) {
             break;
           }
+          if (bytes[nextEOIFF + 1] === 0xD9) {
+            end = nextEOIFF + 2;
+            break;
+          }
+          pos = nextEOIFF + 1;
         }
+        
         if (end !== -1) {
           candidates.push({ start, end, size: end - start });
-          i = end - 1; 
+          i = end; 
+        } else {
+          // If no EOI is found within 8MB, skip the scanned region to avoid quadratic execution
+          i = limit;
         }
+      } else {
+        i = nextFF + 1;
       }
     }
 
