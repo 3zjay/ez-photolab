@@ -171,6 +171,39 @@ export function BatchPage({ dm, cardBg, cardBdr, inputSt, isMobile = false,
       </button>
     ));
   }, [isRaw, currentFiles, batchPreviewIdx, dm, cardBdr]);
+
+  const memoizedVerticalPreviewBar = useMemo(() => {
+    return currentFiles.slice(0, 200).map((img, i) => {
+      const isActive = batchPreviewIdx === i;
+      return (
+        <button key={i} onClick={() => previewCallbackRef.current(i, isRaw)}
+          style={{
+            width: "100%",
+            textAlign: "left",
+            padding: "8px 12px",
+            border: `1.5px solid ${isActive ? '#6c63ff' : cardBdr}`,
+            background: isActive ? (dm ? '#1e1a3a' : '#faf9ff') : dm ? '#252525' : '#fff',
+            borderRadius: "8px",
+            fontSize: "12px",
+            fontWeight: 600,
+            cursor: "pointer",
+            fontFamily: "inherit",
+            color: isActive ? '#6c63ff' : dm ? '#ccc' : '#555',
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+            transition: "all .15s",
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
+            marginBottom: "6px"
+          }}>
+          <span style={{ fontSize: "14px", opacity: isActive ? 1 : 0.6 }}>{isRaw ? "📸" : "📄"}</span>
+          <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{img.name}</span>
+        </button>
+      );
+    });
+  }, [isRaw, currentFiles, batchPreviewIdx, dm, cardBdr]);
   const canProcess = !batchProcessing && sourceHandle && outputHandle && currentFiles.length > 0;
 
   const activeEnhancements = [
@@ -772,12 +805,33 @@ export function BatchPage({ dm, cardBg, cardBdr, inputSt, isMobile = false,
   return (
     <div style={{ height: "calc(100vh - 52px)", overflowY: desktopSplitView ? "hidden" : "auto", display: "flex", flexDirection: "column", background: bg }}>
       <div style={{ background: panelBg, borderBottom: `1px solid ${cardBdr}`, padding: "14px 24px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "16px", flexWrap: "wrap", position: "sticky", top: 0, zIndex: 20 }}>
-        <div>
-          <div style={{ fontSize: "16px", fontWeight: 700, color: dm ? '#f0f0f0' : '#1a1a2e', marginBottom: "2px" }}>📦 {isRaw ? "RAW Batch Processor" : "Standard Batch Processor"}</div>
-          <div style={{ fontSize: "12px", color: "#999" }}>
-            {currentFiles.length > 0 ? `${currentFiles.length} images queued` : "No source folder selected"}
-            {Object.entries(filters).filter(([k, v]) => v !== DEFAULT_FILTERS[k]).length > 0 && ` · ✏️ ${Object.entries(filters).filter(([k, v]) => v !== DEFAULT_FILTERS[k]).length} adjustments`}
-            {activeEnhancements.length > 0 && ` · ${activeEnhancements.join(" · ")}`}
+        <div style={{ display: "flex", alignItems: "center", gap: "20px" }}>
+          <div>
+            <div style={{ fontSize: "16px", fontWeight: 700, color: dm ? '#f0f0f0' : '#1a1a2e', marginBottom: "2px" }}>📦 {isRaw ? "RAW Batch Processor" : "Standard Batch Processor"}</div>
+            <div style={{ fontSize: "12px", color: "#999" }}>
+              {currentFiles.length > 0 ? `${currentFiles.length} images queued` : "No source folder selected"}
+              {Object.entries(filters).filter(([k, v]) => v !== DEFAULT_FILTERS[k]).length > 0 && ` · ✏️ ${Object.entries(filters).filter(([k, v]) => v !== DEFAULT_FILTERS[k]).length} adjustments`}
+              {activeEnhancements.length > 0 && ` · ${activeEnhancements.join(" · ")}`}
+            </div>
+          </div>
+
+          <div style={{ display: "flex", gap: "2px", background: dm ? '#252525' : '#f2f2f8', padding: "3px", borderRadius: "9px", border: `1px solid ${cardBdr}` }}>
+            <button onClick={() => setBatchSection("folders")}
+              style={{ padding: "5px 12px", fontSize: "12px", fontWeight: 700, border: "none", cursor: "pointer",
+                fontFamily: "inherit", background: !isRaw ? (dm ? '#444' : '#fff') : 'transparent',
+                color: !isRaw ? accent : (dm ? '#999' : '#666'), borderRadius: "7px",
+                boxShadow: !isRaw ? "0 1px 3px rgba(0,0,0,.15)" : "none", transition: "all .15s",
+                whiteSpace: "nowrap" }}>
+              🖼️ Standard
+            </button>
+            <button onClick={() => setBatchSection("raw")}
+              style={{ padding: "5px 12px", fontSize: "12px", fontWeight: 700, border: "none", cursor: "pointer",
+                fontFamily: "inherit", background: isRaw ? (dm ? '#444' : '#fff') : 'transparent',
+                color: isRaw ? accent : (dm ? '#999' : '#666'), borderRadius: "7px",
+                boxShadow: isRaw ? "0 1px 3px rgba(0,0,0,.15)" : "none", transition: "all .15s",
+                whiteSpace: "nowrap" }}>
+              📸 RAW
+            </button>
           </div>
         </div>
         <div style={{ display: "flex", gap: "8px", alignItems: "center", flexShrink: 0 }}>
@@ -880,146 +934,160 @@ export function BatchPage({ dm, cardBg, cardBdr, inputSt, isMobile = false,
 
       {desktopSplitView ? (
         <div style={{ display: "flex", flex: 1, minHeight: 0, overflow: "hidden" }}>
-          {/* Left Workspace: Preview slider workspace */}
-          <div style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0, height: "100%", background: dm ? "#0b0f19" : "#f8f8fd" }}>
+          {/* Left Workspace: Preview slider workspace containing Vertical Preview List and Comparison View */}
+          <div style={{ display: "flex", flexDirection: "row", flex: 1, minWidth: 0, height: "100%", background: dm ? "#0b0f19" : "#f8f8fd" }}>
             
-            {/* File Strip */}
-            <div style={{ padding: "10px 24px 8px", borderBottom: `1px solid ${cardBdr}`, background: dm ? "#121212" : "#fdfdff", display: "flex", alignItems: "center", gap: "10px", flexWrap: "nowrap" }}>
-              <span style={{ fontSize: "11px", fontWeight: 700, color: dm ? '#aaa' : '#888', textTransform: "uppercase", letterSpacing: ".06em", whiteSpace: "nowrap" }}>
-                👁 Preview:
+            {/* Vertical Sidebar Preview List */}
+            <div style={{
+              width: "240px",
+              height: "100%",
+              overflowY: "auto",
+              borderRight: `1px solid ${cardBdr}`,
+              background: dm ? "#121212" : "#fdfdff",
+              padding: "16px 12px",
+              boxSizing: "border-box",
+              display: "flex",
+              flexDirection: "column",
+              flexShrink: 0
+            }}>
+              <span style={{ fontSize: "11px", fontWeight: 700, color: dm ? '#aaa' : '#888', textTransform: "uppercase", letterSpacing: ".06em", marginBottom: "12px", paddingLeft: "4px" }}>
+                👁 Queue Files
               </span>
-              <div style={{ display: "flex", gap: "6px", overflowX: "auto", paddingBottom: "2px", flex: 1, scrollbarWidth: "thin" }}>
-                {memoizedPreviewBar}
+              <div style={{ flex: 1, overflowY: "auto", scrollbarWidth: "thin", display: "flex", flexDirection: "column" }}>
+                {memoizedVerticalPreviewBar}
               </div>
             </div>
 
-            {/* Slider view area */}
-            <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", position: "relative", overflow: "hidden", padding: "16px 24px" }}>
-              {batchPreviewLoading && (
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "10px", color: "#6c63ff", fontWeight: 600, fontSize: "13px" }}>
-                  <span style={{ display: "inline-block", width: "18px", height: "18px", border: "2px solid #6c63ff44", borderTopColor: "#6c63ff", borderRadius: "50%", animation: "spin .8s linear infinite" }} />
-                  Generating preview…
-                </div>
-              )}
+            {/* Slider and Presets Workspace */}
+            <div style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0, height: "100%" }}>
+              {/* Slider view area */}
+              <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", position: "relative", overflow: "hidden", padding: "16px 24px" }}>
+                {batchPreviewLoading && (
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "10px", color: "#6c63ff", fontWeight: 600, fontSize: "13px" }}>
+                    <span style={{ display: "inline-block", width: "18px", height: "18px", border: "2px solid #6c63ff44", borderTopColor: "#6c63ff", borderRadius: "50%", animation: "spin .8s linear infinite" }} />
+                    Generating preview…
+                  </div>
+                )}
 
-              {!batchPreviewLoading && batchPreviewOrigUrl && batchPreviewAfterUrl && (
-                <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", justifyContent: "center" }}>
-                  <div
-                    style={{ position: "relative", userSelect: "none", cursor: batchPreviewDragging ? "grabbing" : "ew-resize", borderRadius: "10px", overflow: "hidden",
-                      boxShadow: "0 4px 24px rgba(0,0,0,.18)", height: "100%", width: "100%", display: "flex", alignItems: "center", justifyContent: "center",
-                      background: dm ? '#111' : '#000' }}
-                    onMouseDown={() => setBatchPreviewDragging(true)}
-                    onMouseMove={e => {
-                      if (!batchPreviewDragging) return;
-                      const r = e.currentTarget.getBoundingClientRect();
-                      setBatchPreviewSplit(Math.min(95, Math.max(5, ((e.clientX - r.left) / r.width) * 100)));
-                    }}
-                    onMouseUp={() => setBatchPreviewDragging(false)}
-                    onMouseLeave={() => setBatchPreviewDragging(false)}
-                    onTouchMove={e => {
-                      e.preventDefault();
-                      const r = e.currentTarget.getBoundingClientRect();
-                      setBatchPreviewSplit(Math.min(95, Math.max(5, ((e.touches[0].clientX - r.left) / r.width) * 100)));
-                    }}>
-
-                    {/* After Image with overlays */}
-                    <div style={{ position: "relative", width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                      <img src={batchPreviewAfterUrl} alt="after"
-                        style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain", display: "block",
-                          filter: batchCssFilter, transition: "filter .08s ease" }} />
-                      {filters.temperature !== 0 && (
-                        <div style={{ position: "absolute", inset: 0, background: batchTempColor,
-                          mixBlendMode: "overlay", pointerEvents: "none",
-                          clipPath: `inset(0 ${100 - batchPreviewSplit}% 0 0)` }} />
-                      )}
-                      {filters.fade > 0 && (
-                        <div style={{ position: "absolute", inset: 0,
-                          background: `rgba(255,255,255,${filters.fade / 180})`,
-                          mixBlendMode: "screen", pointerEvents: "none",
-                          clipPath: `inset(0 ${100 - batchPreviewSplit}% 0 0)` }} />
-                      )}
-                      {filters.vignette > 0 && (
-                        <div style={{ position: "absolute", inset: 0,
-                          background: `radial-gradient(ellipse at center,transparent 38%,rgba(0,0,0,${filters.vignette / 100}) 100%)`,
-                          pointerEvents: "none",
-                          clipPath: `inset(0 ${100 - batchPreviewSplit}% 0 0)` }} />
-                      )}
-                    </div>
-
-                    {/* Before Image */}
-                    <div style={{ position: "absolute", inset: 0, clipPath: `inset(0 0 0 ${batchPreviewSplit}%)`, pointerEvents: "none", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                      <img src={batchPreviewOrigUrl} alt="before"
-                        style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain", display: "block" }} />
-                    </div>
-
-                    {/* Drag Bar */}
+                {!batchPreviewLoading && batchPreviewOrigUrl && batchPreviewAfterUrl && (
+                  <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", justifyContent: "center" }}>
                     <div
-                      onMouseDown={e => { e.preventDefault(); setBatchPreviewDragging(true); }}
-                      onTouchStart={() => setBatchPreviewDragging(true)}
-                      style={{ position: "absolute", top: 0, bottom: 0, left: `${batchPreviewSplit}%`, transform: "translateX(-50%)",
-                        width: "44px", zIndex: 10, display: "flex", alignItems: "center", justifyContent: "center", cursor: "ew-resize" }}>
-                      <div style={{ width: "2px", height: "100%", background: "rgba(255,255,255,.9)", boxShadow: "0 0 8px rgba(0,0,0,.5)" }} />
-                      <div style={{ position: "absolute", width: "38px", height: "38px", borderRadius: "50%",
-                        background: "#fff", boxShadow: "0 2px 14px rgba(0,0,0,.3)",
-                        display: "flex", alignItems: "center", justifyContent: "center", fontSize: "14px", color: "#6c63ff", fontWeight: 700 }}>
-                        ⇄
+                      style={{ position: "relative", userSelect: "none", cursor: batchPreviewDragging ? "grabbing" : "ew-resize", borderRadius: "10px", overflow: "hidden",
+                        boxShadow: "0 4px 24px rgba(0,0,0,.18)", height: "100%", width: "100%", display: "flex", alignItems: "center", justifyContent: "center",
+                        background: dm ? '#111' : '#000' }}
+                      onMouseDown={() => setBatchPreviewDragging(true)}
+                      onMouseMove={e => {
+                        if (!batchPreviewDragging) return;
+                        const r = e.currentTarget.getBoundingClientRect();
+                        setBatchPreviewSplit(Math.min(95, Math.max(5, ((e.clientX - r.left) / r.width) * 100)));
+                      }}
+                      onMouseUp={() => setBatchPreviewDragging(false)}
+                      onMouseLeave={() => setBatchPreviewDragging(false)}
+                      onTouchMove={e => {
+                        e.preventDefault();
+                        const r = e.currentTarget.getBoundingClientRect();
+                        setBatchPreviewSplit(Math.min(95, Math.max(5, ((e.touches[0].clientX - r.left) / r.width) * 100)));
+                      }}>
+
+                      {/* After Image with overlays */}
+                      <div style={{ position: "relative", width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                        <img src={batchPreviewAfterUrl} alt="after"
+                          style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain", display: "block",
+                            filter: batchCssFilter, transition: "filter .08s ease" }} />
+                        {filters.temperature !== 0 && (
+                          <div style={{ position: "absolute", inset: 0, background: batchTempColor,
+                            mixBlendMode: "overlay", pointerEvents: "none",
+                            clipPath: `inset(0 ${100 - batchPreviewSplit}% 0 0)` }} />
+                        )}
+                        {filters.fade > 0 && (
+                          <div style={{ position: "absolute", inset: 0,
+                            background: `rgba(255,255,255,${filters.fade / 180})`,
+                            mixBlendMode: "screen", pointerEvents: "none",
+                            clipPath: `inset(0 ${100 - batchPreviewSplit}% 0 0)` }} />
+                        )}
+                        {filters.vignette > 0 && (
+                          <div style={{ position: "absolute", inset: 0,
+                            background: `radial-gradient(ellipse at center,transparent 38%,rgba(0,0,0,${filters.vignette / 100}) 100%)`,
+                            pointerEvents: "none",
+                            clipPath: `inset(0 ${100 - batchPreviewSplit}% 0 0)` }} />
+                        )}
+                      </div>
+
+                      {/* Before Image */}
+                      <div style={{ position: "absolute", inset: 0, clipPath: `inset(0 0 0 ${batchPreviewSplit}%)`, pointerEvents: "none", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                        <img src={batchPreviewOrigUrl} alt="before"
+                          style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain", display: "block" }} />
+                      </div>
+
+                      {/* Drag Bar */}
+                      <div
+                        onMouseDown={e => { e.preventDefault(); setBatchPreviewDragging(true); }}
+                        onTouchStart={() => setBatchPreviewDragging(true)}
+                        style={{ position: "absolute", top: 0, bottom: 0, left: `${batchPreviewSplit}%`, transform: "translateX(-50%)",
+                          width: "44px", zIndex: 10, display: "flex", alignItems: "center", justifyContent: "center", cursor: "ew-resize" }}>
+                        <div style={{ width: "2px", height: "100%", background: "rgba(255,255,255,.9)", boxShadow: "0 0 8px rgba(0,0,0,.5)" }} />
+                        <div style={{ position: "absolute", width: "38px", height: "38px", borderRadius: "50%",
+                          background: "#fff", boxShadow: "0 2px 14px rgba(0,0,0,.3)",
+                          display: "flex", alignItems: "center", justifyContent: "center", fontSize: "14px", color: "#6c63ff", fontWeight: 700 }}>
+                          ⇄
+                        </div>
+                      </div>
+
+                      <div style={{ position: "absolute", bottom: "10px", left: "10px", padding: "3px 10px",
+                        background: "rgba(108,99,255,.85)", borderRadius: "20px", fontSize: "11px", fontWeight: 700, color: "#fff",
+                        clipPath: `inset(0 ${100 - batchPreviewSplit}% 0 0)` }}>AFTER</div>
+                      <div style={{ position: "absolute", bottom: "10px", right: "10px", padding: "3px 10px",
+                        background: "rgba(0,0,0,.55)", borderRadius: "20px", fontSize: "11px", fontWeight: 700, color: "#fff",
+                        clipPath: `inset(0 0 0 ${batchPreviewSplit}%)` }}>BEFORE</div>
+                    </div>
+
+                    <div style={{ display: "flex", gap: "16px", marginTop: "8px", alignItems: "center" }}>
+                      <span style={{ fontSize: "11px", color: "#bbb" }}>
+                        ← Drag to compare · {batchSection === 'raw' ? batchRawFiles[batchPreviewIdx]?.name : batchImages[batchPreviewIdx]?.name}
+                      </span>
+                      <div style={{ display: "flex", gap: "6px", marginLeft: "auto", flexWrap: "wrap" }}>
+                        {activeEnhancements.map(t => (
+                          <span key={t} style={{ padding: "2px 8px", background: dm ? '#2a2a3a' : '#f0eeff', borderRadius: "12px", fontSize: "10px", fontWeight: 600, color: "#7c3aed" }}>{t}</span>
+                        ))}
                       </div>
                     </div>
-
-                    <div style={{ position: "absolute", bottom: "10px", left: "10px", padding: "3px 10px",
-                      background: "rgba(108,99,255,.85)", borderRadius: "20px", fontSize: "11px", fontWeight: 700, color: "#fff",
-                      clipPath: `inset(0 ${100 - batchPreviewSplit}% 0 0)` }}>AFTER</div>
-                    <div style={{ position: "absolute", bottom: "10px", right: "10px", padding: "3px 10px",
-                      background: "rgba(0,0,0,.55)", borderRadius: "20px", fontSize: "11px", fontWeight: 700, color: "#fff",
-                      clipPath: `inset(0 0 0 ${batchPreviewSplit}%)` }}>BEFORE</div>
                   </div>
+                )}
 
-                  <div style={{ display: "flex", gap: "16px", marginTop: "8px", alignItems: "center" }}>
-                    <span style={{ fontSize: "11px", color: "#bbb" }}>
-                      ← Drag to compare · {batchSection === 'raw' ? batchRawFiles[batchPreviewIdx]?.name : batchImages[batchPreviewIdx]?.name}
-                    </span>
-                    <div style={{ display: "flex", gap: "6px", marginLeft: "auto", flexWrap: "wrap" }}>
-                      {activeEnhancements.map(t => (
-                        <span key={t} style={{ padding: "2px 8px", background: dm ? '#2a2a3a' : '#f0eeff', borderRadius: "12px", fontSize: "10px", fontWeight: 600, color: "#7c3aed" }}>{t}</span>
-                      ))}
-                    </div>
+                {!batchPreviewLoading && !batchPreviewOrigUrl && (
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "center", color: "#bbb", fontSize: "13px" }}>
+                    Select an image from the left sidebar to preview
                   </div>
-                </div>
-              )}
-
-              {!batchPreviewLoading && !batchPreviewOrigUrl && (
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "center", color: "#bbb", fontSize: "13px" }}>
-                  Select an image above to preview ↑
-                </div>
-              )}
-            </div>
-
-            {/* Presets at bottom of preview */}
-            <div style={{ padding: "12px 24px 16px", borderTop: `1px solid ${cardBdr}`, background: dm ? "#121212" : "#fdfdff" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "8px" }}>
-                <span style={{ fontSize: "11px", fontWeight: 700, color: dm ? '#aaa' : '#888', textTransform: "uppercase", letterSpacing: ".06em", whiteSpace: "nowrap" }}>
-                  🎨 Presets
-                </span>
-                {Object.entries(filters).some(([k, v]) => v !== DEFAULT_FILTERS[k]) && (
-                  <button onClick={resetAll}
-                    style={{ fontSize: "11px", color: '#6c63ff', background: "none", border: "none", cursor: "pointer", fontWeight: 700, padding: "2px 6px", fontFamily: "inherit" }}>
-                    Reset ↺
-                  </button>
                 )}
               </div>
-              <div style={{ display: "flex", gap: "8px", overflowX: "auto", paddingBottom: "2px" }}>
-                {PRESETS.map(p => (
-                  <button key={p.name}
-                    onClick={() => { setFilters({ ...DEFAULT_FILTERS, ...p.values }); }}
-                    style={{ flexShrink: 0, padding: "8px 12px",
-                      border: `1.5px solid ${JSON.stringify(filters) === JSON.stringify({ ...DEFAULT_FILTERS, ...p.values }) ? '#6c63ff' : cardBdr}`,
-                      background: JSON.stringify(filters) === JSON.stringify({ ...DEFAULT_FILTERS, ...p.values }) ? (dm ? '#1e1a3a' : '#faf9ff') : dm ? '#252525' : '#fff',
-                      borderRadius: "10px", textAlign: "center", cursor: "pointer", fontFamily: "inherit", minWidth: "68px",
-                      transition: "all .15s" }}>
-                    <div style={{ fontSize: "18px", marginBottom: "3px" }}>{p.icon}</div>
-                    <div style={{ fontSize: "10px", fontWeight: 700, color: dm ? '#ccc' : '#555' }}>{p.name}</div>
-                  </button>
-                ))}
+
+              {/* Presets at bottom of preview */}
+              <div style={{ padding: "12px 24px 16px", borderTop: `1px solid ${cardBdr}`, background: dm ? "#121212" : "#fdfdff" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "8px" }}>
+                  <span style={{ fontSize: "11px", fontWeight: 700, color: dm ? '#aaa' : '#888', textTransform: "uppercase", letterSpacing: ".06em", whiteSpace: "nowrap" }}>
+                    🎨 Presets
+                  </span>
+                  {Object.entries(filters).some(([k, v]) => v !== DEFAULT_FILTERS[k]) && (
+                    <button onClick={resetAll}
+                      style={{ fontSize: "11px", color: '#6c63ff', background: "none", border: "none", cursor: "pointer", fontWeight: 700, padding: "2px 6px", fontFamily: "inherit" }}>
+                      Reset ↺
+                    </button>
+                  )}
+                </div>
+                <div style={{ display: "flex", gap: "8px", overflowX: "auto", paddingBottom: "2px" }}>
+                  {PRESETS.map(p => (
+                    <button key={p.name}
+                      onClick={() => { setFilters({ ...DEFAULT_FILTERS, ...p.values }); }}
+                      style={{ flexShrink: 0, padding: "8px 12px",
+                        border: `1.5px solid ${JSON.stringify(filters) === JSON.stringify({ ...DEFAULT_FILTERS, ...p.values }) ? '#6c63ff' : cardBdr}`,
+                        background: JSON.stringify(filters) === JSON.stringify({ ...DEFAULT_FILTERS, ...p.values }) ? (dm ? '#1e1a3a' : '#faf9ff') : dm ? '#252525' : '#fff',
+                        borderRadius: "10px", textAlign: "center", cursor: "pointer", fontFamily: "inherit", minWidth: "68px",
+                        transition: "all .15s" }}>
+                      <div style={{ fontSize: "18px", marginBottom: "3px" }}>{p.icon}</div>
+                      <div style={{ fontSize: "10px", fontWeight: 700, color: dm ? '#ccc' : '#555' }}>{p.name}</div>
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
 
