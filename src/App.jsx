@@ -793,8 +793,6 @@ export default function App() {
         });
       }
 
-      setBatchPreviewOrigUrl(origUrl);
-
       const img = await new Promise((resolve, reject) => {
         const el = new Image();
         el.onload = () => resolve(el);
@@ -813,6 +811,36 @@ export default function App() {
       const scale = Math.min(1, PREVIEW_MAX / Math.max(sW, sH));
       let W = Math.round(sW * scale);
       let H = Math.round(sH * scale);
+
+      // Create a canvas for the "before" image with correct orientation baked in
+      let beforeCanvas = document.createElement('canvas');
+      beforeCanvas.width = W;
+      beforeCanvas.height = H;
+      let beforeCtx = beforeCanvas.getContext('2d');
+      beforeCtx.save();
+      beforeCtx.imageSmoothingEnabled = true;
+      beforeCtx.imageSmoothingQuality = 'high';
+
+      if (isRaw && orientation !== 1) {
+        switch (orientation) {
+          case 2: beforeCtx.transform(-1, 0, 0, 1, W, 0); break;
+          case 3: beforeCtx.transform(-1, 0, 0, -1, W, H); break;
+          case 4: beforeCtx.transform(1, 0, 0, -1, 0, H); break;
+          case 5: beforeCtx.transform(0, 1, 1, 0, 0, 0); break;
+          case 6: beforeCtx.transform(0, 1, -1, 0, W, 0); break;
+          case 7: beforeCtx.transform(0, -1, -1, 0, W, H); break;
+          case 8: beforeCtx.transform(0, -1, 1, 0, 0, H); break;
+        }
+      }
+
+      if (isRaw && orientation >= 5 && orientation <= 8) {
+        beforeCtx.drawImage(img, 0, 0, H, W);
+      } else {
+        beforeCtx.drawImage(img, 0, 0, W, H);
+      }
+      beforeCtx.restore();
+
+      setBatchPreviewOrigUrl(beforeCanvas.toDataURL('image/jpeg', 0.92));
 
       let canvas = document.createElement('canvas');
       canvas.width = W; canvas.height = H;
