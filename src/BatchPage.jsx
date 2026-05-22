@@ -885,7 +885,7 @@ export function BatchPage({ dm, cardBg, cardBdr, inputSt, isMobile = false,
             </button>
           )}
           <button
-            onClick={isRaw ? handleRawBatchProcess : handleBatchProcess}
+            onClick={() => isRaw ? handleRawBatchProcess(0) : handleBatchProcess(0)}
             disabled={!canProcess}
             style={{ padding: "10px 24px", border: "none", borderRadius: "10px", fontFamily: "inherit", fontWeight: 700, fontSize: "14px", cursor: canProcess ? "pointer" : "not-allowed",
               background: canProcess ? "linear-gradient(135deg,#6c63ff,#a78bfa)" : (dm ? '#333' : '#ddd'),

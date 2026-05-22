@@ -950,7 +950,7 @@ export default function App() {
     batchAiUpscale, batchAiScale, batchAiFaceRestore, batchAiBeautyUseMask]);
 
   const handleBatchProcess = async (startIndex = 0) => {
-    if (typeof startIndex !== 'number') {
+    if (typeof startIndex !== 'number' || isNaN(startIndex)) {
       startIndex = 0;
     }
     if (!sourceHandle || !outputHandle || batchImages.length === 0) {
@@ -1143,7 +1143,7 @@ export default function App() {
   };
 
   const handleRawBatchProcess = async (startIndex = 0) => {
-    if (typeof startIndex !== 'number') {
+    if (typeof startIndex !== 'number' || isNaN(startIndex)) {
       startIndex = 0;
     }
     if (!outputHandle || batchRawFiles.length === 0) {
