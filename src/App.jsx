@@ -918,8 +918,8 @@ export default function App() {
       }
     }
     setBatchPreviewLoading(false);
-  }, [batchImages, filters, batchAutoContrast, batchAutoLevels, batchDenoise, batchDenoiseAmt,
-    batchSharpen, batchSharpenAmt, batchSharpenRad, batchLogo, batchLogoScale,
+  }, [batchImages, batchRawFiles, batchSection, filters, batchAutoContrast, batchAutoLevels, batchDenoise, batchDenoiseAmt,
+    batchSharpen, batchSharpenAmt, batchSharpenRad, batchLogo, batchLogoScale, batchLogoScalePortrait,
     batchLogoOpacity, batchLogoPos, batchLogoMargin, batchResizeMode,
     batchAiBeauty, batchAiBeautySmooth, batchAiBeautyClarity, batchAiBeautyGlow,
     batchAiUpscale, batchAiScale, batchAiFaceRestore, batchAiBeautyUseMask]);
@@ -1372,7 +1372,7 @@ export default function App() {
     batchAutoContrast, batchAutoLevels,
     batchDenoise, batchDenoiseAmt,
     batchSharpen, batchSharpenAmt, batchSharpenRad,
-    batchLogo, batchLogoScale, batchLogoOpacity, batchLogoPos, batchLogoMargin,
+    batchLogo, batchLogoScale, batchLogoScalePortrait, batchLogoOpacity, batchLogoPos, batchLogoMargin,
     batchPreviewOpen, batchPreviewIdx,
     generateBatchPreview,
   ]);
