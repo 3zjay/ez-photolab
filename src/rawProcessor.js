@@ -48,6 +48,203 @@ class LibRawProxy {
   terminate() { this.worker.terminate(); }
 }
 
+function stripExif(jpegBytes) {
+  if (jpegBytes[0] !== 0xFF || jpegBytes[1] !== 0xD8) {
+    return jpegBytes; // Not a valid JPEG
+  }
+  let i = 2;
+  while (i < jpegBytes.length - 4) {
+    if (jpegBytes[i] === 0xFF) {
+      const marker = jpegBytes[i + 1];
+      if (marker === 0xD9) break; // EOI
+      const length = (jpegBytes[i + 2] << 8) | jpegBytes[i + 3];
+      if (marker === 0xE1) { // APP1
+        const before = jpegBytes.slice(0, i);
+        const after = jpegBytes.slice(i + 2 + length);
+        const newBytes = new Uint8Array(before.length + after.length);
+        newBytes.set(before);
+        newBytes.set(after, before.length);
+        jpegBytes = newBytes;
+        continue;
+      }
+      i += 2 + length;
+    } else {
+      i++;
+    }
+  }
+  return jpegBytes;
+}
+
+function rotateImageBlob(blob, orientation) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    const url = URL.createObjectURL(blob);
+    img.onload = () => {
+      const w = img.naturalWidth || img.width;
+      const h = img.naturalHeight || img.height;
+      
+      if (orientation <= 1) {
+        resolve({ url, width: w, height: h });
+        return;
+      }
+      
+      URL.revokeObjectURL(url);
+      const canvas = document.createElement("canvas");
+      const ctx = canvas.getContext("2d");
+      
+      let finalW, finalH;
+      if (orientation >= 5 && orientation <= 8) {
+        finalW = h;
+        finalH = w;
+      } else {
+        finalW = w;
+        finalH = h;
+      }
+      canvas.width = finalW;
+      canvas.height = finalH;
+      
+      switch (orientation) {
+        case 2: // Flip H
+          ctx.translate(finalW, 0);
+          ctx.scale(-1, 1);
+          break;
+        case 3: // Rotate 180
+          ctx.translate(finalW, finalH);
+          ctx.rotate(Math.PI);
+          break;
+        case 4: // Flip V
+          ctx.translate(0, finalH);
+          ctx.scale(1, -1);
+          break;
+        case 5: // Rotate 90 CCW + Flip H
+          ctx.rotate(90 * Math.PI / 180);
+          ctx.scale(1, -1);
+          break;
+        case 6: // Rotate 90 CW
+          ctx.translate(finalW, 0);
+          ctx.rotate(90 * Math.PI / 180);
+          break;
+        case 7: // Rotate 90 CW + Flip H
+          ctx.rotate(90 * Math.PI / 180);
+          ctx.translate(0, -finalH);
+          ctx.scale(-1, 1);
+          break;
+        case 8: // Rotate 90 CCW
+          ctx.translate(0, finalH);
+          ctx.rotate(-90 * Math.PI / 180);
+          break;
+      }
+      
+      ctx.drawImage(img, 0, 0);
+      canvas.toBlob((rotatedBlob) => {
+        if (rotatedBlob) {
+          resolve({ url: URL.createObjectURL(rotatedBlob), width: finalW, height: finalH });
+        } else {
+          // Fallback to unrotated URL
+          resolve({ url: URL.createObjectURL(blob), width: w, height: h });
+        }
+      }, "image/jpeg", 0.95);
+    };
+    img.onerror = () => {
+      resolve({ url, width: 0, height: 0 }); // Fallback
+    };
+    img.src = url;
+  });
+}
+
+function getOrientationFromTiff(buffer) {
+  try {
+    const view = new DataView(buffer);
+    const byteOrder = view.getUint16(0, false);
+    if (byteOrder !== 0x4949 && byteOrder !== 0x4D4D) return 1;
+    const little = (byteOrder === 0x4949);
+    const magic = view.getUint16(2, little);
+    if (magic !== 42 && magic !== 85) return 1;
+    
+    let orientation = 1;
+    const ifdQueue = [view.getUint32(4, little)];
+    const visited = new Set();
+    
+    while (ifdQueue.length > 0) {
+      const ifdOffset = ifdQueue.shift();
+      if (ifdOffset === 0 || ifdOffset > buffer.byteLength - 8 || visited.has(ifdOffset)) continue;
+      visited.add(ifdOffset);
+      
+      const numTags = view.getUint16(ifdOffset, little);
+      const tagOffset = ifdOffset + 2;
+      
+      for (let i = 0; i < numTags; i++) {
+        const offset = tagOffset + (i * 12);
+        if (offset + 12 > buffer.byteLength) break;
+        
+        const tagId = view.getUint16(offset, little);
+        if (tagId === 0x0112) { // Orientation
+          orientation = view.getUint16(offset + 8, little);
+        } else if (tagId === 0x8769) { // Exif IFD Pointer
+          const exifOffset = view.getUint32(offset + 8, little);
+          ifdQueue.push(exifOffset);
+        } else if (tagId === 0x014a) { // SubIFDs pointer
+          const count = view.getUint32(offset + 4, little);
+          const type = view.getUint16(offset + 2, little);
+          let valOffset = view.getUint32(offset + 8, little);
+          if (type === 4) { // LONG
+            if (count === 1) {
+              ifdQueue.push(valOffset);
+            } else {
+              for (let j = 0; j < count; j++) {
+                if (valOffset + j * 4 + 4 <= buffer.byteLength) {
+                  ifdQueue.push(view.getUint32(valOffset + j * 4, little));
+                }
+              }
+            }
+          }
+        }
+      }
+      
+      const nextIfdPointerOffset = tagOffset + numTags * 12;
+      if (nextIfdPointerOffset + 4 <= buffer.byteLength) {
+        const nextIfdOffset = view.getUint32(nextIfdPointerOffset, little);
+        if (nextIfdOffset > 0) {
+          ifdQueue.push(nextIfdOffset);
+        }
+      }
+    }
+    return orientation;
+  } catch (e) {
+    console.warn("Error parsing TIFF orientation:", e);
+  }
+  return 1;
+}
+
+function getOrientationFromJpeg(jpegBytes) {
+  try {
+    const view = new DataView(jpegBytes.buffer, jpegBytes.byteOffset, jpegBytes.byteLength);
+    if (view.getUint16(0, false) !== 0xFFD8) return 1;
+    
+    let i = 2;
+    while (i < jpegBytes.byteLength - 4) {
+      if (jpegBytes[i] === 0xFF) {
+        const marker = jpegBytes[i + 1];
+        if (marker === 0xD9 || marker === 0xDA) break;
+        const length = (jpegBytes[i + 2] << 8) | jpegBytes[i + 3];
+        if (marker === 0xE1) { // APP1
+          if (jpegBytes[i + 4] === 0x45 && jpegBytes[i + 5] === 0x78 && jpegBytes[i + 6] === 0x69 && jpegBytes[i + 7] === 0x66 &&
+              jpegBytes[i + 8] === 0x00 && jpegBytes[i + 9] === 0x00) {
+            const tiffBuffer = jpegBytes.buffer.slice(jpegBytes.byteOffset + i + 10, jpegBytes.byteOffset + i + 2 + length);
+            return getOrientationFromTiff(tiffBuffer);
+          }
+        }
+        i += 2 + length;
+      } else {
+        i++;
+      }
+    }
+  } catch (e) {
+    console.warn("Error parsing JPEG orientation:", e);
+  }
+  return 1;
+}
+
 /**
  * Utility to decode RAW camera files in the browser.
  */
@@ -60,31 +257,7 @@ export async function decodeRaw(fileBuffer, onLog) {
     const bytes = new Uint8Array(fileBuffer);
     
     // 0. Parse Master RAW (TIFF) Header for Orientation
-    let masterOrientation = 1;
-    try {
-      const view = new DataView(fileBuffer);
-      // TIFF magic: 'II' (0x4949) or 'MM' (0x4D4D)
-      const byteOrder = view.getUint16(0, false);
-      if (byteOrder === 0x4949 || byteOrder === 0x4D4D) {
-        const little = (byteOrder === 0x4949);
-        const magic = view.getUint16(2, little);
-        if (magic === 42 || magic === 85) { // 42 = Standard TIFF, 85 = Panasonic RAW
-          const ifdOffset = view.getUint32(4, little);
-          const tags = view.getUint16(ifdOffset, little);
-          const tagOffset = ifdOffset + 2;
-          for (let i = 0; i < tags; i++) {
-            const tagId = view.getUint16(tagOffset + (i * 12), little);
-            if (tagId === 0x0112) { // Orientation
-              masterOrientation = view.getUint16(tagOffset + (i * 12) + 8, little);
-              break;
-            }
-          }
-        }
-      }
-    } catch (e) {
-      log("⚠️ Master RAW Orientation read error: " + e.message);
-    }
-    
+    const masterOrientation = getOrientationFromTiff(fileBuffer);
     log(`🧭 Master RAW Orientation detected: ${masterOrientation}`);
 
     const candidates = [];
@@ -135,17 +308,26 @@ export async function decodeRaw(fileBuffer, onLog) {
       if (best.size > 500000) {
         const jpegData = bytes.slice(best.start, best.end);
         
-        log(`📸 High-quality preview found (${(best.size / 1024).toFixed(0)} KB). Extracting with Orientation: ${masterOrientation}...`);
-        const blob = new Blob([jpegData], { type: 'image/jpeg' });
-        const url = URL.createObjectURL(blob);
+        // Check if JPEG has its own orientation, fallback to masterOrientation
+        const jpegOrientation = getOrientationFromJpeg(jpegData) || masterOrientation;
+        log(`🧭 JPEG Preview Orientation detected: ${jpegOrientation}`);
         
-        // Quick meta-peek for camera model if possible
+        log(`📸 High-quality preview found (${(best.size / 1024).toFixed(0)} KB). Extracting with Orientation: ${jpegOrientation}...`);
+        
+        // Strip EXIF to prevent browser double rotation
+        const cleanJpegData = stripExif(jpegData);
+        const blob = new Blob([cleanJpegData], { type: 'image/jpeg' });
+        
+        // Physically rotate the image to be upright
+        const rotResult = await rotateImageBlob(blob, jpegOrientation);
+        
         return { 
-          url, 
-          width: 0, height: 0, // Will be read by browser
+          url: rotResult.url, 
+          width: rotResult.width, 
+          height: rotResult.height, 
           model: "Nikon/Embedded", 
           iso: 0,
-          orientation: masterOrientation 
+          orientation: 1 // Already rotated upright
         };
       }
       log(`⚠️ Only small thumbnails found (${candidates.length}). Proceeding to RAW engine...`);
@@ -238,18 +420,70 @@ export async function decodeRaw(fileBuffer, onLog) {
     const ctx = canvas.getContext('2d');
     ctx.putImageData(new ImageData(rgba, width, height), 0, 0);
 
+    let finalCanvas = canvas;
+    let finalW = width;
+    let finalH = height;
+    
+    if (masterOrientation > 1) {
+      log(`🔄 Physically rotating developed RAW canvas by orientation ${masterOrientation}...`);
+      finalCanvas = document.createElement('canvas');
+      if (masterOrientation >= 5 && masterOrientation <= 8) {
+        finalW = height;
+        finalH = width;
+      } else {
+        finalW = width;
+        finalH = height;
+      }
+      finalCanvas.width = finalW;
+      finalCanvas.height = finalH;
+      const fCtx = finalCanvas.getContext('2d');
+      
+      switch (masterOrientation) {
+        case 2: // Flip H
+          fCtx.translate(finalW, 0);
+          fCtx.scale(-1, 1);
+          break;
+        case 3: // Rotate 180
+          fCtx.translate(finalW, finalH);
+          fCtx.rotate(Math.PI);
+          break;
+        case 4: // Flip V
+          fCtx.translate(0, finalH);
+          fCtx.scale(1, -1);
+          break;
+        case 5: // Rotate 90 CCW + Flip H
+          fCtx.rotate(90 * Math.PI / 180);
+          fCtx.scale(1, -1);
+          break;
+        case 6: // Rotate 90 CW
+          fCtx.translate(finalW, 0);
+          fCtx.rotate(90 * Math.PI / 180);
+          break;
+        case 7: // Rotate 90 CW + Flip H
+          fCtx.rotate(90 * Math.PI / 180);
+          fCtx.translate(0, -finalH);
+          fCtx.scale(-1, 1);
+          break;
+        case 8: // Rotate 90 CCW
+          fCtx.translate(0, finalH);
+          fCtx.rotate(-90 * Math.PI / 180);
+          break;
+      }
+      fCtx.drawImage(canvas, 0, 0);
+    }
+
     log("Decoding complete.");
 
     // Return the developed result
     const result = {
-      url: canvas.toDataURL('image/jpeg', 0.9),
-      width,
-      height,
+      url: finalCanvas.toDataURL('image/jpeg', 0.9),
+      width: finalW,
+      height: finalH,
       model: modelName,
-      iso: isoVal
+      iso: isoVal,
+      orientation: 1 // Already rotated upright
     };
     
-    log("Decoding complete.");
     return result;
   } finally {
     raw.terminate();

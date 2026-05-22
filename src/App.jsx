@@ -627,9 +627,24 @@ export default function App() {
           if (result && result.url) {
             setImage(result.url);
             setFilters(DEFAULT_FILTERS);
-            setRotation(0);
-            setFlipH(false);
-            setFlipV(false);
+            
+            // Map EXIF orientation to rotation and flips
+            const orientation = result.orientation || 1;
+            let rot = 0;
+            let fH = false;
+            let fV = false;
+            switch (orientation) {
+              case 2: fH = true; break;
+              case 3: rot = 180; break;
+              case 4: fV = true; break;
+              case 5: rot = 90; fH = true; break;
+              case 6: rot = 90; break;
+              case 7: rot = 270; fH = true; break;
+              case 8: rot = 270; break;
+            }
+            setRotation(rot);
+            setFlipH(fH);
+            setFlipV(fV);
             setLutId('none');
             setLutIntensity(1.0);
             setCustomLutData(null);

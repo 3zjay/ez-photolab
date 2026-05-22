@@ -182,7 +182,7 @@ export function Preview({ image, dragging, setDragging, loadImage, fileInputRef,
             {filters.temperature !== 0 && <div style={{ position: "absolute", inset: 0, background: tempColor, mixBlendMode: "overlay", pointerEvents: "none", clipPath: `inset(0 ${100 - splitPos}% 0 0)` }} />}
             {filters.vignette > 0 && <div style={{ position: "absolute", inset: 0, background: `radial-gradient(ellipse at center,transparent 38%,rgba(0,0,0,${filters.vignette / 100}) 100%)`, pointerEvents: "none", clipPath: `inset(0 ${100 - splitPos}% 0 0)` }} />}
             <div style={{ position: "absolute", inset: 0, clipPath: `inset(0 0 0 ${splitPos}%)` }}>
-              <img src={image} alt="before" style={{ maxWidth: "100%", maxHeight: maxH, objectFit: "contain", display: "block", filter: "none" }} />
+              <img src={image} alt="before" style={{ maxWidth: "100%", maxHeight: maxH, objectFit: "contain", display: "block", filter: "none", transform: transformCSS }} />
             </div>
             <div onMouseDown={e => { e.preventDefault(); setIsDragSplit(true); }} onTouchStart={e => { e.preventDefault(); setIsDragSplit(true); }}
               style={{ position: "absolute", top: 0, bottom: 0, left: `${splitPos}%`, transform: "translateX(-50%)", width: "44px", zIndex: 20, display: "flex", alignItems: "center", justifyContent: "center", cursor: isDragSplit ? "grabbing" : "ew-resize" }}>
