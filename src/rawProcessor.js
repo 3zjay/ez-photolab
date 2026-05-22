@@ -235,6 +235,10 @@ function getOrientationFromTiff(buffer) {
       }
     }
     
+    if (ifd0Orientation > 1) return ifd0Orientation;
+    if (exifOrientation > 1) return exifOrientation;
+    if (otherOrientation > 1) return otherOrientation;
+    
     if (ifd0Orientation !== null) return ifd0Orientation;
     if (exifOrientation !== null) return exifOrientation;
     if (otherOrientation !== null) return otherOrientation;
@@ -338,7 +342,13 @@ export async function decodeRaw(fileBuffer, onLog) {
         const jpegData = bytes.slice(best.start, best.end);
         
         // Check if JPEG has its own orientation, fallback to masterOrientation
-        const jpegOrientation = getOrientationFromJpeg(jpegData) || masterOrientation;
+        let jpegOrientation = getOrientationFromJpeg(jpegData);
+        if (jpegOrientation <= 1 && masterOrientation > 1) {
+          jpegOrientation = masterOrientation;
+        }
+        if (jpegOrientation <= 0 || jpegOrientation > 8) {
+          jpegOrientation = 1;
+        }
         log(`🧭 JPEG Preview Orientation detected: ${jpegOrientation}`);
         
         log(`📸 High-quality preview found (${(best.size / 1024).toFixed(0)} KB). Extracting with Orientation: ${jpegOrientation}...`);

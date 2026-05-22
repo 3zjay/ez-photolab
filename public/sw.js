@@ -1,4 +1,4 @@
-const CACHE_NAME = 'photolab-cache-v2.6.1';
+const CACHE_NAME = 'photolab-cache-v2.6.2';
 const STATIC_ASSETS = [
   '/',
   '/index.html',

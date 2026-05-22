@@ -10,6 +10,15 @@ Built with React + Vite — runs entirely in your browser with zero server costs
 
 ---
 
+## 🚀 What's New in v2.6.2 (RAW Orientation Priority Fix)
+
+- **Fixed TIFF Directory Orientation Priority**: Resolved the bug where portrait Nikon `.NEF` (and other RAW) files loaded sideways (landscape) in both the workspace editor and RAW batch processor.
+  - **Prioritize Rotated Orientation Tags**: Refactored `getOrientationFromTiff` to check and prioritize orientation tags with values `> 1` (e.g. `6` or `8` for rotation) from any directory (Exif, IFD0, SubIFDs) first before falling back to default/unrotated `1` values often stored in thumbnail IFD directories.
+  - **JPEG Fallback Range Check**: Corrected the JPEG preview orientation decoder to correctly evaluate the master raw orientation if the preview orientation is `<=` 1.
+- **Service Worker & Build Release**: Bumped release manifest to `v2.6.2` to force client cache invalidation and ensure the fixed orientation parser loads immediately.
+
+---
+
 ## 🚀 What's New in v2.6.1 (RAW Orientation Hotfix)
 
 - **Fixed RAW Orientation Ingestion**: Solved the layout bug where portrait-oriented camera RAW files (such as `.NEF` files) still loaded rotated sideways.
