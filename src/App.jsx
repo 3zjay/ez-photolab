@@ -325,7 +325,7 @@ export default function App() {
               loggedIn: true,
               uid: firebaseUser.uid,
               email: firebaseUser.email,
-              tier: data.tier || "free",
+              tier: firebaseUser.email === "isidro.pascua@gmail.com" ? "admin" : (data.tier || "free"),
               billingPeriod: data.billingPeriod || "monthly",
               offlineLeaseExpires: data.offlineLeaseExpires || null
             };
@@ -345,7 +345,7 @@ export default function App() {
               loggedIn: true,
               uid: firebaseUser.uid,
               email: firebaseUser.email,
-              tier: "free",
+              tier: firebaseUser.email === "isidro.pascua@gmail.com" ? "admin" : "free",
               billingPeriod: "monthly",
               offlineLeaseExpires: null
             };
