@@ -10,6 +10,15 @@ Built with React + Vite — runs entirely in your browser with zero server costs
 
 ---
 
+## 🚀 What's New in v2.6.1 (RAW Orientation Hotfix)
+
+- **Fixed RAW Orientation Ingestion**: Solved the layout bug where portrait-oriented camera RAW files (such as `.NEF` files) still loaded rotated sideways.
+  - **Dynamic SHORT/LONG Tag Resolution**: Re-engineered the TIFF directory parser `getOrientationFromTiff` in `rawProcessor.js` to inspect EXIF tag data types, correctly reading values for both `SHORT` (16-bit) and `LONG` (32-bit) orientations, preventing big-endian decoding errors.
+  - **IFD Priority Isolation**: Added directory context tracking (`IFD0`, `Exif`, `SubIFD`, `IFD1`) to ensure that default unrotated orientations (usually `1`) from thumbnail and preview directories do not overwrite the master image orientation.
+- **WASM and Worker Build Updates**: Bumped the release manifest to `v2.6.1` and invalidates caches automatically.
+
+---
+
 ## 🚀 What's New in v2.6.0 (3D LUT & RAW Ingestion Release)
 
 - **Local 3D LUT (.CUBE) Shading Engine**: Fully client-side 3D Color Lookup Tables (LUTs) processed on the GPU via custom WebGL lookup shaders. Built-in presets include Fortra 400, Fuji Superia, Vintage Gold, Teal & Orange, and Tri-X B&W, with full support for custom `.cube` file uploads.

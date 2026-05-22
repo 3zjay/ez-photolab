@@ -154,6 +154,7 @@ function rotateImageBlob(blob, orientation) {
 
 function getOrientationFromTiff(buffer) {
   try {
+    if (buffer.byteLength < 8) return 1;
     const view = new DataView(buffer);
     const byteOrder = view.getUint16(0, false);
     if (byteOrder !== 0x4949 && byteOrder !== 0x4D4D) return 1;
@@ -161,12 +162,15 @@ function getOrientationFromTiff(buffer) {
     const magic = view.getUint16(2, little);
     if (magic !== 42 && magic !== 85) return 1;
     
-    let orientation = 1;
-    const ifdQueue = [view.getUint32(4, little)];
+    let ifd0Orientation = null;
+    let exifOrientation = null;
+    let otherOrientation = null;
+    
+    const ifdQueue = [{ offset: view.getUint32(4, little), source: 'IFD0' }];
     const visited = new Set();
     
     while (ifdQueue.length > 0) {
-      const ifdOffset = ifdQueue.shift();
+      const { offset: ifdOffset, source } = ifdQueue.shift();
       if (ifdOffset === 0 || ifdOffset > buffer.byteLength - 8 || visited.has(ifdOffset)) continue;
       visited.add(ifdOffset);
       
@@ -179,21 +183,41 @@ function getOrientationFromTiff(buffer) {
         
         const tagId = view.getUint16(offset, little);
         if (tagId === 0x0112) { // Orientation
-          orientation = view.getUint16(offset + 8, little);
+          const type = view.getUint16(offset + 2, little);
+          let val = 1;
+          if (type === 3) { // SHORT
+            val = view.getUint16(offset + 8, little);
+          } else if (type === 4) { // LONG
+            val = view.getUint32(offset + 8, little);
+          } else if (type === 1) { // BYTE
+            val = view.getUint8(offset + 8);
+          } else {
+            val = view.getUint16(offset + 8, little);
+          }
+          
+          if (val >= 1 && val <= 8) {
+            if (source === 'IFD0') {
+              ifd0Orientation = val;
+            } else if (source === 'Exif') {
+              exifOrientation = val;
+            } else {
+              otherOrientation = val;
+            }
+          }
         } else if (tagId === 0x8769) { // Exif IFD Pointer
           const exifOffset = view.getUint32(offset + 8, little);
-          ifdQueue.push(exifOffset);
+          ifdQueue.push({ offset: exifOffset, source: 'Exif' });
         } else if (tagId === 0x014a) { // SubIFDs pointer
           const count = view.getUint32(offset + 4, little);
           const type = view.getUint16(offset + 2, little);
           let valOffset = view.getUint32(offset + 8, little);
           if (type === 4) { // LONG
             if (count === 1) {
-              ifdQueue.push(valOffset);
+              ifdQueue.push({ offset: valOffset, source: 'SubIFD' });
             } else {
               for (let j = 0; j < count; j++) {
-                if (valOffset + j * 4 + 4 <= buffer.byteLength) {
-                  ifdQueue.push(view.getUint32(valOffset + j * 4, little));
+                if (valOffset >= 0 && valOffset + j * 4 + 4 <= buffer.byteLength) {
+                  ifdQueue.push({ offset: view.getUint32(valOffset + j * 4, little), source: 'SubIFD' });
                 }
               }
             }
@@ -205,11 +229,16 @@ function getOrientationFromTiff(buffer) {
       if (nextIfdPointerOffset + 4 <= buffer.byteLength) {
         const nextIfdOffset = view.getUint32(nextIfdPointerOffset, little);
         if (nextIfdOffset > 0) {
-          ifdQueue.push(nextIfdOffset);
+          const nextSource = (source === 'IFD0') ? 'IFD1' : 'other';
+          ifdQueue.push({ offset: nextIfdOffset, source: nextSource });
         }
       }
     }
-    return orientation;
+    
+    if (ifd0Orientation !== null) return ifd0Orientation;
+    if (exifOrientation !== null) return exifOrientation;
+    if (otherOrientation !== null) return otherOrientation;
+    return 1;
   } catch (e) {
     console.warn("Error parsing TIFF orientation:", e);
   }
