@@ -114,7 +114,8 @@ export function BatchPage({ dm, cardBg, cardBdr, inputSt, isMobile = false,
   batchAiBeautyClarity, setBatchAiBeautyClarity, batchAiBeautyGlow, setBatchAiBeautyGlow,
   batchAiFaceRestore, setBatchAiFaceRestore, batchAiBeautyUseMask, setBatchAiBeautyUseMask,
   batchSection, setBatchSection, batchRawFiles, setBatchRawFiles, handleRawBatchProcess, batchLogs, addBatchLog,
-  batchConfirmFirst, setBatchConfirmFirst, batchConfirmData, batchCancelRequested, handleCancelBatch, continueBatchProcess, cancelBatchProcess
+  batchConfirmFirst, setBatchConfirmFirst, batchConfirmData, batchCancelRequested, handleCancelBatch, continueBatchProcess, cancelBatchProcess,
+  batchStats = { saved: 0, failed: 0 }
 }) {
 
   const bg = dm ? '#121212' : '#f0f1f5';
@@ -301,11 +302,34 @@ export function BatchPage({ dm, cardBg, cardBdr, inputSt, isMobile = false,
           <div style={{ height: "100%", width: `${(batchProgress.current / batchProgress.total) * 100}%`, background: "linear-gradient(90deg,#6c63ff,#a78bfa)", transition: "width .3s" }} />
         </div>
       )}
-      {batchDone && !batchProcessing && (
-        <div style={{ background: "#f0fff4", borderBottom: "1px solid #86efac", padding: "10px 24px", fontSize: "13px", fontWeight: 600, color: "#16a34a", textAlign: "center" }}>
-          ✅ Done! {batchSection === 'raw' ? batchRawFiles.length : batchImages.length} images saved to output folder.
-        </div>
-      )}
+      {batchDone && !batchProcessing && (() => {
+        const { saved = 0, failed = 0 } = batchStats || {};
+        if (saved > 0 && failed === 0) {
+          return (
+            <div style={{ background: "#f0fff4", borderBottom: "1px solid #86efac", padding: "10px 24px", fontSize: "13px", fontWeight: 600, color: "#16a34a", textAlign: "center" }}>
+              ✅ Done! All {saved} images processed and saved successfully.
+            </div>
+          );
+        } else if (saved > 0 && failed > 0) {
+          return (
+            <div style={{ background: "#fffbeb", borderBottom: "1px solid #fcd34d", padding: "10px 24px", fontSize: "13px", fontWeight: 600, color: "#b45309", textAlign: "center" }}>
+              ⚠️ Done with warnings. Processed {saved + failed} files: saved {saved} successfully, {failed} failed.
+            </div>
+          );
+        } else if (saved === 0 && failed > 0) {
+          return (
+            <div style={{ background: "#fef2f2", borderBottom: "1px solid #fca5a5", padding: "10px 24px", fontSize: "13px", fontWeight: 600, color: "#dc2626", textAlign: "center" }}>
+              ❌ Process failed. No files could be written (saved 0, failed {failed}).
+            </div>
+          );
+        } else {
+          return (
+            <div style={{ background: "#f0fff4", borderBottom: "1px solid #86efac", padding: "10px 24px", fontSize: "13px", fontWeight: 600, color: "#16a34a", textAlign: "center" }}>
+              ✅ Done! {batchSection === 'raw' ? batchRawFiles.length : batchImages.length} images saved to output folder.
+            </div>
+          );
+        }
+      })()}
 
       {batchPreviewOpen && ((!isRaw && batchImages.length > 0) || (isRaw && batchRawFiles.length > 0)) && (
         <div style={{ borderBottom: `1px solid ${cardBdr}`, background: dm ? '#161616' : '#f8f8fd' }}>

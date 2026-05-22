@@ -136,6 +136,25 @@ export function getTabIcon(id, isActive, dm) {
   }
 }
 
+async function verifyWritePermission(handle) {
+  if (!handle) return false;
+  if (typeof handle.queryPermission !== 'function' || typeof handle.requestPermission !== 'function') {
+    return true;
+  }
+  try {
+    const opts = { mode: 'readwrite' };
+    if ((await handle.queryPermission(opts)) === 'granted') {
+      return true;
+    }
+    if ((await handle.requestPermission(opts)) === 'granted') {
+      return true;
+    }
+  } catch (e) {
+    console.error("Error checking write permission:", e);
+  }
+  return false;
+}
+
 export default function App() {
   const [image, setImage] = useState(null);
   const [filters, setFilters] = useState(DEFAULT_FILTERS);
@@ -275,6 +294,7 @@ export default function App() {
   const [batchConfirmData, setBatchConfirmData] = useState(null);
   const [batchCancelRequested, setBatchCancelRequested] = useState(false);
   const batchCancelRef = useRef(false);
+  const [batchStats, setBatchStats] = useState({ saved: 0, failed: 0 });
 
   // ─── SaaS Subscription State ───────────────────────────────────────
   const [user, setUser] = useState(() => {
@@ -745,7 +765,12 @@ export default function App() {
 
   const selectOutputFolder = async () => {
     try {
-      const handle = await window.showDirectoryPicker();
+      let handle;
+      try {
+        handle = await window.showDirectoryPicker({ mode: 'readwrite' });
+      } catch (e) {
+        handle = await window.showDirectoryPicker();
+      }
       setOutputHandle(handle);
     } catch (err) { if (err.name !== 'AbortError') console.error(err); }
   };
@@ -929,12 +954,19 @@ export default function App() {
       alert('Select source & output folders with at least one image.');
       return;
     }
+    const hasPermission = await verifyWritePermission(outputHandle);
+    if (!hasPermission) {
+      addBatchLog("❌ Write permission denied for the output folder.", "error");
+      alert("Write permission is required for the output folder to save processed files.");
+      return;
+    }
     if (startIndex === 0) {
       addBatchLog(`🚀 Starting batch process for ${batchImages.length} images...`, "info");
       setBatchProcessing(true);
       setBatchDone(false);
       setBatchCancelRequested(false);
       batchCancelRef.current = false;
+      setBatchStats({ saved: 0, failed: 0 });
     }
     setBatchProgress({ current: startIndex, total: batchImages.length, currentFile: startIndex > 0 ? batchProgress.currentFile : "" });
 
@@ -1062,12 +1094,17 @@ export default function App() {
         const outName = `${batchPrefix}${base}${batchSuffix}.${ext}`;
 
         const blob = await canvasToBlob(canvas, mime, quality);
-        if (!blob) continue;
+        if (!blob) {
+          addBatchLog(`❌ Error processing ${name}: Failed to generate image blob`, "error");
+          setBatchStats(prev => ({ ...prev, failed: prev.failed + 1 }));
+          continue;
+        }
         const newFile = await outputHandle.getFileHandle(outName, { create: true });
         const writable = await newFile.createWritable();
         await writable.write(blob);
         await writable.close();
         addBatchLog(`✅ Successfully saved: ${outName}`, "success");
+        setBatchStats(prev => ({ ...prev, saved: prev.saved + 1 }));
 
         if (i === 0 && batchConfirmFirst && batchImages.length > 1) {
           const previewUrl = canvas.toDataURL('image/jpeg', 0.92);
@@ -1084,6 +1121,16 @@ export default function App() {
       } catch (err) {
         addBatchLog(`❌ Error processing ${name}: ${err.message}`, "error");
         console.error(`Failed processing ${name}`, err);
+        if (err.name === 'NotAllowedError' || err.name === 'SecurityError') {
+          addBatchLog(`🛑 Batch process aborted: Directory write permission lost or revoked.`, "error");
+          const remaining = batchImages.length - i;
+          setBatchStats(prev => ({ ...prev, failed: prev.failed + remaining }));
+          setBatchProcessing(false);
+          setBatchDone(true);
+          return;
+        } else {
+          setBatchStats(prev => ({ ...prev, failed: prev.failed + 1 }));
+        }
       }
     }
 
@@ -1098,6 +1145,12 @@ export default function App() {
       alert('Select output folder & add RAW files first.');
       return;
     }
+    const hasPermission = await verifyWritePermission(outputHandle);
+    if (!hasPermission) {
+      addBatchLog("❌ Write permission denied for the output folder.", "error");
+      alert("Write permission is required for the output folder to save processed files.");
+      return;
+    }
     
     if (startIndex === 0) {
       addBatchLog(`🚀 Starting RAW batch process for ${batchRawFiles.length} files...`, "info");
@@ -1105,6 +1158,7 @@ export default function App() {
       setBatchDone(false);
       setBatchCancelRequested(false);
       batchCancelRef.current = false;
+      setBatchStats({ saved: 0, failed: 0 });
     }
     setBatchProgress({ current: startIndex, total: batchRawFiles.length, currentFile: startIndex > 0 ? batchProgress.currentFile : "" });
 
@@ -1311,6 +1365,7 @@ export default function App() {
           await writable.write(blob);
           await writable.close();
           addBatchLog(`✅ Successfully saved: ${outName}`, "success");
+          setBatchStats(prev => ({ ...prev, saved: prev.saved + 1 }));
 
           if (i === 0 && batchConfirmFirst && batchRawFiles.length > 1) {
             const previewUrl = canvas.toDataURL('image/jpeg', 0.92);
@@ -1324,10 +1379,23 @@ export default function App() {
             addBatchLog(`🔍 First RAW image processed. Awaiting user confirmation to continue...`, "info");
             return;
           }
+        } else {
+          addBatchLog(`❌ Error processing ${name}: Failed to generate image blob`, "error");
+          setBatchStats(prev => ({ ...prev, failed: prev.failed + 1 }));
         }
       } catch (err) { 
         addBatchLog(`❌ Error processing ${name}: ${err.message}`, "error");
         console.error(`Failed processing ${name}`, err); 
+        if (err.name === 'NotAllowedError' || err.name === 'SecurityError') {
+          addBatchLog(`🛑 RAW Batch process aborted: Directory write permission lost or revoked.`, "error");
+          const remaining = batchRawFiles.length - i;
+          setBatchStats(prev => ({ ...prev, failed: prev.failed + remaining }));
+          setBatchProcessing(false);
+          setBatchDone(true);
+          return;
+        } else {
+          setBatchStats(prev => ({ ...prev, failed: prev.failed + 1 }));
+        }
       }
     }
     addBatchLog("🏁 RAW Batch process complete.", "success");
@@ -1899,7 +1967,7 @@ export default function App() {
         activeTab === "home" ? (
           <LandingPage {...{ dm, loadImage, setActiveTab, handleInstallClick, deferredPrompt, isIOS, isInstalled }} onSelectPlan={(plan) => setCheckoutPlan(plan)} />
         ) : activeTab === "batch" ? (
-          <BatchPage {...{ dm, cardBg, cardBdr, inputSt, user, setActiveTab, sourceHandle, outputHandle, batchImages, selectSourceFolder, selectRawSourceFolder, selectOutputFolder, batchResizeMode, setBatchResizeMode, batchResizePreset, setBatchResizePreset, batchCustomW, setBatchCustomW, batchCustomH, setBatchCustomH, batchKeepAspect, setBatchKeepAspect, batchLongEdgePx, setBatchLongEdgePx, batchAutoLevels, setBatchAutoLevels, batchAutoContrast, setBatchAutoContrast, batchSharpen, setBatchSharpen, batchSharpenAmt, setBatchSharpenAmt, batchSharpenRad, setBatchSharpenRad, batchDenoise, setBatchDenoise, batchDenoiseAmt, setBatchDenoiseAmt, batchLogo, setBatchLogo, batchLogoFile, setBatchLogoFile, handleBatchLogoUpload, batchLogoScale, setBatchLogoScale, batchLogoScalePortrait, setBatchLogoScalePortrait, batchLogoOpacity, setBatchLogoOpacity, batchLogoPos, setBatchLogoPos, batchLogoMargin, setBatchLogoMargin, batchOutputFmt, setBatchOutputFmt, batchOutputQ, setBatchOutputQ, batchPrefix, setBatchPrefix, batchSuffix, setBatchSuffix, batchProcessing, batchProgress, batchDone, handleBatchProcess, batchPreviewIdx, batchPreviewOrigUrl, batchPreviewAfterUrl, batchPreviewLoading, batchPreviewSplit, setBatchPreviewSplit, batchPreviewDragging, setBatchPreviewDragging, batchPreviewOpen, setBatchPreviewOpen, generateBatchPreview, filters, setFilters, resetAll, batchFilterGroup, setBatchFilterGroup, calcBatchDims, batchAiUpscale, setBatchAiUpscale, batchAiBeauty, setBatchAiBeauty, batchAiScale, setBatchAiScale, batchAiBeautySmooth, setBatchAiBeautySmooth, batchAiBeautyClarity, setBatchAiBeautyClarity, batchAiBeautyGlow, setBatchAiBeautyGlow, batchAiFaceRestore, setBatchAiFaceRestore, batchAiBeautyUseMask, setBatchAiBeautyUseMask, batchSection, setBatchSection, batchRawFiles, setBatchRawFiles, handleRawBatchProcess, batchLogs, addBatchLog, batchConfirmFirst, setBatchConfirmFirst, batchConfirmData, batchCancelRequested, handleCancelBatch, continueBatchProcess, cancelBatchProcess }} />
+          <BatchPage {...{ dm, cardBg, cardBdr, inputSt, user, setActiveTab, sourceHandle, outputHandle, batchImages, selectSourceFolder, selectRawSourceFolder, selectOutputFolder, batchResizeMode, setBatchResizeMode, batchResizePreset, setBatchResizePreset, batchCustomW, setBatchCustomW, batchCustomH, setBatchCustomH, batchKeepAspect, setBatchKeepAspect, batchLongEdgePx, setBatchLongEdgePx, batchAutoLevels, setBatchAutoLevels, batchAutoContrast, setBatchAutoContrast, batchSharpen, setBatchSharpen, batchSharpenAmt, setBatchSharpenAmt, batchSharpenRad, setBatchSharpenRad, batchDenoise, setBatchDenoise, batchDenoiseAmt, setBatchDenoiseAmt, batchLogo, setBatchLogo, batchLogoFile, setBatchLogoFile, handleBatchLogoUpload, batchLogoScale, setBatchLogoScale, batchLogoScalePortrait, setBatchLogoScalePortrait, batchLogoOpacity, setBatchLogoOpacity, batchLogoPos, setBatchLogoPos, batchLogoMargin, setBatchLogoMargin, batchOutputFmt, setBatchOutputFmt, batchOutputQ, setBatchOutputQ, batchPrefix, setBatchPrefix, batchSuffix, setBatchSuffix, batchProcessing, batchProgress, batchDone, handleBatchProcess, batchPreviewIdx, batchPreviewOrigUrl, batchPreviewAfterUrl, batchPreviewLoading, batchPreviewSplit, setBatchPreviewSplit, batchPreviewDragging, setBatchPreviewDragging, batchPreviewOpen, setBatchPreviewOpen, generateBatchPreview, filters, setFilters, resetAll, batchFilterGroup, setBatchFilterGroup, calcBatchDims, batchAiUpscale, setBatchAiUpscale, batchAiBeauty, setBatchAiBeauty, batchAiScale, setBatchAiScale, batchAiBeautySmooth, setBatchAiBeautySmooth, batchAiBeautyClarity, setBatchAiBeautyClarity, batchAiBeautyGlow, setBatchAiBeautyGlow, batchAiFaceRestore, setBatchAiFaceRestore, batchAiBeautyUseMask, setBatchAiBeautyUseMask, batchSection, setBatchSection, batchRawFiles, setBatchRawFiles, handleRawBatchProcess, batchLogs, addBatchLog, batchConfirmFirst, setBatchConfirmFirst, batchConfirmData, batchCancelRequested, handleCancelBatch, continueBatchProcess, cancelBatchProcess, batchStats }} />
         ) : activeTab === "cull" ? (
           <CullPage {...{ dm, cardBg, cardBdr, inputSt, sourceHandle, outputHandle, batchImages, selectSourceFolder, selectRawSourceFolder, selectOutputFolder, batchLogs, addBatchLog, batchSection, setBatchSection, isMobile, user, setActiveTab }} />
         ) : activeTab === "account" ? (
@@ -1925,7 +1993,7 @@ export default function App() {
           </div>
         ) : activeTab === "batch" ? (
           <div style={{ height: "calc(100vh - 52px)", overflowY: "auto" }}>
-            <BatchPage {...{ dm, cardBg, cardBdr, inputSt, isMobile: true, user, setActiveTab, sourceHandle, outputHandle, batchImages, selectSourceFolder, selectRawSourceFolder, selectOutputFolder, batchResizeMode, setBatchResizeMode, batchResizePreset, setBatchResizePreset, batchCustomW, setBatchCustomW, batchCustomH, setBatchCustomH, batchKeepAspect, setBatchKeepAspect, batchLongEdgePx, setBatchLongEdgePx, batchAutoLevels, setBatchAutoLevels, batchAutoContrast, setBatchAutoContrast, batchSharpen, setBatchSharpen, batchSharpenAmt, setBatchSharpenAmt, batchSharpenRad, setBatchSharpenRad, batchDenoise, setBatchDenoise, batchDenoiseAmt, setBatchDenoiseAmt, batchLogo, setBatchLogo, batchLogoFile, setBatchLogoFile, handleBatchLogoUpload, batchLogoScale, setBatchLogoScale, batchLogoScalePortrait, setBatchLogoScalePortrait, batchLogoOpacity, setBatchLogoOpacity, batchLogoPos, setBatchLogoPos, batchLogoMargin, setBatchLogoMargin, batchOutputFmt, setBatchOutputFmt, batchOutputQ, setBatchOutputQ, batchPrefix, setBatchPrefix, batchSuffix, setBatchSuffix, batchProcessing, batchProgress, batchDone, handleBatchProcess, batchPreviewIdx, batchPreviewOrigUrl, batchPreviewAfterUrl, batchPreviewLoading, batchPreviewSplit, setBatchPreviewSplit, batchPreviewDragging, setBatchPreviewDragging, batchPreviewOpen, setBatchPreviewOpen, generateBatchPreview, filters, setFilters, resetAll, batchFilterGroup, setBatchFilterGroup, calcBatchDims, batchAiUpscale, setBatchAiUpscale, batchAiBeauty, setBatchAiBeauty, batchAiScale, setBatchAiScale, batchAiBeautySmooth, setBatchAiBeautySmooth, batchAiBeautyClarity, setBatchAiBeautyClarity, batchAiBeautyGlow, setBatchAiBeautyGlow, batchAiFaceRestore, setBatchAiFaceRestore, batchAiBeautyUseMask, setBatchAiBeautyUseMask, batchSection, setBatchSection, batchRawFiles, setBatchRawFiles, handleRawBatchProcess, batchLogs, addBatchLog, batchConfirmFirst, setBatchConfirmFirst, batchConfirmData, batchCancelRequested, handleCancelBatch, continueBatchProcess, cancelBatchProcess }} />
+            <BatchPage {...{ dm, cardBg, cardBdr, inputSt, isMobile: true, user, setActiveTab, sourceHandle, outputHandle, batchImages, selectSourceFolder, selectRawSourceFolder, selectOutputFolder, batchResizeMode, setBatchResizeMode, batchResizePreset, setBatchResizePreset, batchCustomW, setBatchCustomW, batchCustomH, setBatchCustomH, batchKeepAspect, setBatchKeepAspect, batchLongEdgePx, setBatchLongEdgePx, batchAutoLevels, setBatchAutoLevels, batchAutoContrast, setBatchAutoContrast, batchSharpen, setBatchSharpen, batchSharpenAmt, setBatchSharpenAmt, batchSharpenRad, setBatchSharpenRad, batchDenoise, setBatchDenoise, batchDenoiseAmt, setBatchDenoiseAmt, batchLogo, setBatchLogo, batchLogoFile, setBatchLogoFile, handleBatchLogoUpload, batchLogoScale, setBatchLogoScale, batchLogoScalePortrait, setBatchLogoScalePortrait, batchLogoOpacity, setBatchLogoOpacity, batchLogoPos, setBatchLogoPos, batchLogoMargin, setBatchLogoMargin, batchOutputFmt, setBatchOutputFmt, batchOutputQ, setBatchOutputQ, batchPrefix, setBatchPrefix, batchSuffix, setBatchSuffix, batchProcessing, batchProgress, batchDone, handleBatchProcess, batchPreviewIdx, batchPreviewOrigUrl, batchPreviewAfterUrl, batchPreviewLoading, batchPreviewSplit, setBatchPreviewSplit, batchPreviewDragging, setBatchPreviewDragging, batchPreviewOpen, setBatchPreviewOpen, generateBatchPreview, filters, setFilters, resetAll, batchFilterGroup, setBatchFilterGroup, calcBatchDims, batchAiUpscale, setBatchAiUpscale, batchAiBeauty, setBatchAiBeauty, batchAiScale, setBatchAiScale, batchAiBeautySmooth, setBatchAiBeautySmooth, batchAiBeautyClarity, setBatchAiBeautyClarity, batchAiBeautyGlow, setBatchAiBeautyGlow, batchAiFaceRestore, setBatchAiFaceRestore, batchAiBeautyUseMask, setBatchAiBeautyUseMask, batchSection, setBatchSection, batchRawFiles, setBatchRawFiles, handleRawBatchProcess, batchLogs, addBatchLog, batchConfirmFirst, setBatchConfirmFirst, batchConfirmData, batchCancelRequested, handleCancelBatch, continueBatchProcess, cancelBatchProcess, batchStats }} />
           </div>
         ) : activeTab === "cull" ? (
           <div style={{ height: "calc(100vh - 52px)", overflowY: "auto", padding: "16px" }}>
