@@ -5,10 +5,19 @@ import { parseCubeLut } from "../../lutParser";
 
 const LUT_PRESETS = [
     { id: 'none',    icon: '⊘', name: 'None' },
-    { id: 'portra',  icon: '🎞️', name: 'Portra 400' },
-    { id: 'fuji',    icon: '🌿', name: 'Fuji Superia' },
+    { id: 'arena_lights', icon: '💡', name: 'Arena Lights' },
+    { id: 'ymca',    icon: '🏢', name: 'YMCA Rec Gym' },
+    { id: 'msg',     icon: '🏟️', name: 'MSG High Drama' },
+    { id: 'team_pride', icon: '🎽', name: 'Team Pride' },
+    { id: 'hardwood_tones', icon: '🪵', name: 'Hardwood Tones' },
+    { id: 'mvp_sport', icon: '🏆', name: 'MVP Sport Clean' },
+    { id: 'kodachrome', icon: '🎞️', name: 'Kodachrome Retro' },
     { id: 'teal_orange', icon: '🎬', name: 'Teal & Orange' },
-    { id: 'vintage', icon: '📸', name: 'Vintage Gold' },
+    { id: 'doc_30_30', icon: '🎥', name: '30 for 30 Gritty' },
+    { id: 'carbon_clean', icon: '💎', name: 'Carbon Clean' },
+    { id: 'portra',  icon: '📷', name: 'Portra 400' },
+    { id: 'fuji',    icon: '🌿', name: 'Fuji Superia' },
+    { id: 'vintage', icon: '🏺', name: 'Vintage Gold' },
     { id: 'trix',    icon: '🖤', name: 'Tri-X B&W' },
 ];
 

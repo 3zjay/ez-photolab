@@ -114,6 +114,111 @@ export function generateBuiltInLut(type, size = 33) {
             outB += hAmt * 0.035;
           }
           
+        } else if (type === 'arena_lights') {
+          // Arena Lights: neutralize harsh overhead yellow/green glare and exposure shifts
+          // Slight contrast boost
+          outR = Math.pow(rv, 1.05);
+          outG = Math.pow(gv, 1.02);
+          outB = Math.pow(bv, 0.96); // cools shadows
+
+          // Flatten glare in highlights (compress highlights)
+          const compressGlare = (x) => x > 0.8 ? 0.8 + (x - 0.8) * 0.65 : x;
+          outR = compressGlare(outR);
+          outG = compressGlare(outG);
+          outB = compressGlare(outB);
+
+        } else if (type === 'ymca') {
+          // YMCA Rec Gym: neutralize muddy green-yellow tint casts, brightens flat midtones
+          // Shift tint green -> magenta/pink
+          outR = rv * 1.05;
+          outG = gv * 0.93;
+          outB = bv * 1.07;
+
+          // Brighten and contrast boost midtones
+          const recCurve = (x) => 0.03 + 0.97 * (3 * x * x - 2 * x * x * x);
+          outR = recCurve(outR) * 1.05; // Brighten overall
+          outG = recCurve(outG) * 1.03;
+          outB = recCurve(outB) * 1.06;
+
+        } else if (type === 'msg') {
+          // MSG High Drama: isolate court wood floor, crush crowd backgrounds
+          // High contrast S-curve
+          const msgCurve = (x) => Math.pow(x, 1.45) * (2 - x);
+          outR = msgCurve(rv);
+          outG = msgCurve(gv);
+          outB = msgCurve(bv);
+
+          // Deep black crush on backgrounds
+          if (outR < 0.25) outR *= 0.65;
+          if (outG < 0.25) outG *= 0.65;
+          if (outB < 0.25) outB *= 0.55;
+
+          // Warm court wood frequencies boost (yellow-orange region)
+          if (outR > 0.4 && outG > 0.3) {
+            outR = Math.min(1.0, outR * 1.06);
+            outG = Math.min(1.0, outG * 1.03);
+          }
+
+        } else if (type === 'team_pride') {
+          // Team Pride: high saturation jersey color pop, protecting skin tones
+          const luma = 0.299 * rv + 0.587 * gv + 0.114 * bv;
+          
+          // Detect typical orange/yellow skin tones (Red > Green > Blue)
+          const isSkin = (rv > gv && gv > bv && (rv - bv) > 0.16);
+          const satFactor = isSkin ? 1.04 : 1.28;
+
+          outR = luma + (rv - luma) * satFactor;
+          outG = luma + (gv - luma) * (isSkin ? 1.04 : 1.16);
+          outB = luma + (bv - luma) * satFactor;
+
+        } else if (type === 'hardwood_tones') {
+          // Hardwood Tones: pushes warm golden-orange wood frequencies and reflections
+          outR = Math.pow(rv, 0.94) * 1.05;
+          outG = gv * 1.02;
+          outB = Math.pow(bv, 1.12) * 0.94; // warm shadow shift
+
+          // Golden highlight tint for reflection pop
+          const luma = 0.299 * outR + 0.587 * outG + 0.114 * outB;
+          if (luma > 0.5) {
+            const hAmt = (luma - 0.5) * 0.13;
+            outR += hAmt * 0.45;
+            outG += hAmt * 0.20;
+            outB -= hAmt * 0.35;
+          }
+
+        } else if (type === 'mvp_sport') {
+          // MVP Sport Clean: clean daily-driver journalism contrast, pure neutral whites
+          const sCurve = (x) => 0.01 + 0.98 * (3 * x * x - 2 * x * x * x);
+          outR = sCurve(rv);
+          outG = sCurve(gv);
+          outB = sCurve(bv);
+
+          // Normalize/neutralize whites
+          const luma = 0.299 * outR + 0.587 * outG + 0.114 * outB;
+          if (luma > 0.86) {
+            const whAmt = (luma - 0.86) * 7.1;
+            const factor = 1 - Math.min(1.0, whAmt) * 0.35;
+            outR = luma + (outR - luma) * factor;
+            outG = luma + (outG - luma) * factor;
+            outB = luma + (outB - luma) * factor;
+          }
+
+        } else if (type === 'kodachrome') {
+          // Kodachrome Retro: deep rich reds, warm wash, matte blacks
+          outR = Math.pow(rv, 1.07) * 1.06;
+          outG = Math.pow(gv, 1.02);
+          outB = Math.pow(bv, 1.1) * 0.95;
+
+          // Matte shadow fade
+          outR = 0.035 + 0.965 * outR;
+          outG = 0.035 + 0.965 * outG;
+          outB = 0.045 + 0.955 * outB;
+
+          // Deep red saturation boost
+          if (outR > outG && outR > outB) {
+            outR = Math.min(1.0, outR * 1.08);
+          }
+
         } else if (type === 'teal_orange') {
           // Teal & Orange cinematic look
           const luma = 0.299 * rv + 0.587 * gv + 0.114 * bv;
@@ -130,6 +235,33 @@ export function generateBuiltInLut(type, size = 33) {
           outG += highlightAmt * 0.15;
           outB -= highlightAmt * 0.3;
           
+        } else if (type === 'doc_30_30') {
+          // 30 for 30 Gritty: desaturated high-contrast documentary look
+          const luma = 0.299 * rv + 0.587 * gv + 0.114 * bv;
+          
+          // Heavy grit S-curve
+          const gritCurve = (x) => Math.pow(x, 1.35) * (2 - x);
+          const rC = gritCurve(rv);
+          const gC = gritCurve(gv);
+          const bC = gritCurve(bv);
+
+          // Desaturate to 40% saturation
+          const targetLuma = 0.299 * rC + 0.587 * gC + 0.114 * bC;
+          outR = targetLuma + (rC - targetLuma) * 0.40;
+          outG = targetLuma + (gC - targetLuma) * 0.40;
+          outB = targetLuma + (bC - targetLuma) * 0.40;
+          
+          // Metallic slate tint
+          outR *= 0.95;
+          outG *= 0.98;
+          outB *= 1.05;
+
+        } else if (type === 'carbon_clean') {
+          // Carbon Clean: subtle black crush, accurate jersey colors
+          outR = rv < 0.16 ? Math.pow(rv / 0.16, 1.35) * 0.16 : rv;
+          outG = gv < 0.16 ? Math.pow(gv / 0.16, 1.35) * 0.16 : gv;
+          outB = bv < 0.16 ? Math.pow(bv / 0.16, 1.35) * 0.16 : bv;
+
         } else if (type === 'vintage') {
           // Vintage Gold: golden warm wash, faded matte blacks
           outR = 0.08 + 0.92 * Math.pow(rv, 0.95);
