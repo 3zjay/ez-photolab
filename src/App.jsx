@@ -2152,17 +2152,6 @@ export default function App() {
               <Preview {...{ image, dragging, setDragging, loadImage, fileInputRef, imgRef, splitRef, previewRef, activeTab, bgResult, bgMode, showBefore, setShowBefore, showSplit, splitPos, isDragSplit, setIsDragSplit, cssFilter, transformCSS, filters, texts, selText, setSelText, updateText, cropMode, cropBox, setCropBox, cropAspect, isEdited, setImage, setBgStatus, setBgSubUrl, setBgResult, isMobile, rotation, flipH, flipV, activeLutData, lutIntensity, lutId, dm, rawLoading, rawProgressMsg }} />
             </div>
             <div className="glass-panel" style={{ flex: 1, overflowY: "auto", WebkitOverflowScrolling: "touch", borderTop: `1px solid ${dm ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'}` }}>
-              {image && activeTab === "edit" && (
-                <div className="glass-panel" style={{ display: "flex", gap: "6px", padding: "10px 12px", flexWrap: "wrap", borderBottom: `1px solid ${dm ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'}`, position: "sticky", top: 0, zIndex: 10 }}>
-                  {PRESETS.map(p => (
-                    <button key={p.name} onClick={() => setFilters({ ...DEFAULT_FILTERS, ...p.values })}
-                      style={{ flexShrink: 0, padding: "7px 10px", border: `1.5px solid ${dm ? '#333' : '#e8e8f0'}`, background: dm ? '#2a2a2a' : '#fff', borderRadius: "9px", fontSize: "11px", fontWeight: 600, cursor: "pointer", color: dm ? '#ccc' : '#555', fontFamily: "inherit" }}>
-                      {p.icon} {p.name}
-                    </button>
-                  ))}
-                  <button onClick={resetAll} style={{ flexShrink: 0, padding: "7px 10px", background: dm ? '#333' : '#f2f2f8', border: "none", borderRadius: "9px", fontSize: "11px", fontWeight: 600, color: "#888", cursor: "pointer" }}>↺</button>
-                </div>
-              )}
               {renderPanel(true)}
             </div>
           </div>

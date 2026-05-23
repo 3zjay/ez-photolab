@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useState, useEffect } from "react";
 import { SL, Row, Spin, PBar, AB, SmoothSlider } from "../ui/common";
 import { PRESETS, FILTER_GROUPS, COLOR_FILTERS, DEFAULT_FILTERS, LUT_PRESETS } from "../../constants";
 import { parseCubeLut } from "../../lutParser";
@@ -11,6 +11,14 @@ export function EditPanel({
     aiBeautyUseMask, setAiBeautyUseMask, runFalFaceRestore, aiFaceRestoreStatus, aiFaceRestoreLog, aiFaceRestoreResult,
     lutId, setLutId, lutIntensity, setLutIntensity, customLutData, setCustomLutData, customLutName, setCustomLutName
 }) {
+    const [styleType, setStyleType] = useState(lutId !== 'none' ? 'lut' : 'preset');
+
+    useEffect(() => {
+        if (lutId !== 'none') {
+            setStyleType('lut');
+        }
+    }, [lutId]);
+
     const handleCubeUpload = useCallback(async (e) => {
         const file = e.target.files?.[0];
         if (!file) return;
@@ -20,38 +28,47 @@ export function EditPanel({
             setCustomLutData(parsed);
             setCustomLutName(file.name);
             setLutId('custom');
+            setFilters(DEFAULT_FILTERS);
         } catch (err) {
             alert('Failed to parse .cube file: ' + err.message);
         }
-    }, [setCustomLutData, setCustomLutName, setLutId]);
+    }, [setCustomLutData, setCustomLutName, setLutId, setFilters]);
 
     return (
         <>
             <div>
-                <SL>Presets</SL>
-                <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", paddingBottom: "4px" }}>
-                    {PRESETS.map(p => (
-                        <button key={p.name} onClick={() => setFilters({ ...DEFAULT_FILTERS, ...p.values })}
-                            style={{ flexShrink: 0, padding: "8px 12px", border: `1.5px solid ${cardBdr}`, background: dm ? '#2a2a2a' : '#fff', borderRadius: "10px", textAlign: "center", cursor: "pointer", transition: "all .18s", fontFamily: "inherit", minWidth: "70px" }}>
-                            <div style={{ fontSize: "18px", marginBottom: "2px" }}>{p.icon}</div>
-                            <div style={{ fontSize: "10px", fontWeight: 600, color: dm ? '#aaa' : '#666' }}>{p.name}</div>
-                        </button>
-                    ))}
-                </div>
-            </div>
-            <div>
-                <div style={{ display: "flex", gap: "2px", marginBottom: "14px", background: dm ? '#2a2a2a' : '#f2f2f8', padding: "3px", borderRadius: "10px", overflowX: "auto" }}>
-                    {FILTER_GROUPS.map(g => (
-                        <button key={g.key} onClick={() => setFilterGroup(g.key)}
-                            style={{ flex: "1 0 auto", padding: "6px 8px", fontSize: "11px", fontWeight: 500, border: "none", cursor: "pointer", fontFamily: "inherit", background: filterGroup === g.key ? (dm ? '#444' : '#fff') : 'transparent', color: filterGroup === g.key ? "#6c63ff" : "#999", borderRadius: "8px", boxShadow: filterGroup === g.key ? "0 1px 4px rgba(0,0,0,.08)" : "none", transition: "all .18s", whiteSpace: "nowrap" }}>
-                            {g.label}
-                        </button>
-                    ))}
+                {/* Style Selector Toggle */}
+                <div style={{ display: "flex", gap: "2px", marginBottom: "12px", background: dm ? '#2a2a2a' : '#f2f2f8', padding: "3px", borderRadius: "10px" }}>
+                    <button onClick={() => setStyleType('preset')}
+                        style={{ flex: 1, padding: "8px", fontSize: "12px", fontWeight: 600, border: "none", cursor: "pointer", fontFamily: "inherit", background: styleType === 'preset' ? (dm ? '#444' : '#fff') : 'transparent', color: styleType === 'preset' ? "#6c63ff" : "#999", borderRadius: "8px", boxShadow: styleType === 'preset' ? "0 1px 4px rgba(0,0,0,.08)" : "none", transition: "all .18s", display: "flex", alignItems: "center", justifyContent: "center", gap: "4px" }}>
+                        🎨 Filter Presets
+                    </button>
+                    <button onClick={() => setStyleType('lut')}
+                        style={{ flex: 1, padding: "8px", fontSize: "12px", fontWeight: 600, border: "none", cursor: "pointer", fontFamily: "inherit", background: styleType === 'lut' ? (dm ? '#444' : '#fff') : 'transparent', color: styleType === 'lut' ? "#6c63ff" : "#999", borderRadius: "8px", boxShadow: styleType === 'lut' ? "0 1px 4px rgba(0,0,0,.08)" : "none", transition: "all .18s", display: "flex", alignItems: "center", justifyContent: "center", gap: "4px" }}>
+                        <span>🎬 3D LUTs</span>
+                        <span style={{ fontSize: "9px", fontWeight: 800, padding: "1px 5px", background: "linear-gradient(135deg, #06b6d4 0%, #6c63ff 100%)", color: "#fff", borderRadius: "5px", textTransform: "uppercase", letterSpacing: "0.03em" }}>PRO</span>
+                    </button>
                 </div>
 
-                {/* LUT Controls */}
-                {filterGroup === 'lut' && (
-                    <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                {/* Filter Presets Grid */}
+                {styleType === 'preset' && (
+                    <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", paddingBottom: "12px" }}>
+                        {PRESETS.map(p => (
+                            <button key={p.name} onClick={() => {
+                                setFilters({ ...DEFAULT_FILTERS, ...p.values });
+                                setLutId('none');
+                            }}
+                                style={{ flexShrink: 0, padding: "8px 12px", border: `1.5px solid ${cardBdr}`, background: dm ? '#2a2a2a' : '#fff', borderRadius: "10px", textAlign: "center", cursor: "pointer", transition: "all .18s", fontFamily: "inherit", minWidth: "70px" }}>
+                                <div style={{ fontSize: "18px", marginBottom: "2px" }}>{p.icon}</div>
+                                <div style={{ fontSize: "10px", fontWeight: 600, color: dm ? '#aaa' : '#666' }}>{p.name}</div>
+                            </button>
+                        ))}
+                    </div>
+                )}
+
+                {/* 3D LUTs Grid & Controls */}
+                {styleType === 'lut' && (
+                    <div style={{ display: "flex", flexDirection: "column", gap: "12px", paddingBottom: "12px" }}>
                         <div style={{ padding: "14px", background: cardBg, border: `1.5px solid ${cardBdr}`, borderRadius: "12px", display: "flex", flexDirection: "column", gap: "12px" }}>
                             <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                                 <SL>Color Lookup (LUT)</SL>
@@ -59,12 +76,14 @@ export function EditPanel({
                             </div>
                             <p style={{ fontSize: "11px", color: "#aaa", lineHeight: 1.5, margin: 0 }}>Apply professional film simulations and cinematic color grades. Select a built-in look or upload your own .cube file.</p>
 
-                            {/* Preset Grid */}
                             <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
                                 {LUT_PRESETS.map(p => {
                                     const active = lutId === p.id;
                                     return (
-                                        <button key={p.id} onClick={() => setLutId(p.id)}
+                                        <button key={p.id} onClick={() => {
+                                            setLutId(p.id);
+                                            setFilters(DEFAULT_FILTERS);
+                                        }}
                                             style={{
                                                 flexShrink: 0, padding: "10px 12px", minWidth: "78px",
                                                 border: `1.5px solid ${active ? '#6c63ff' : cardBdr}`,
@@ -78,7 +97,6 @@ export function EditPanel({
                                         </button>
                                     );
                                 })}
-                                {/* Custom LUT Card */}
                                 <button
                                     onClick={() => document.getElementById('cube-upload-input')?.click()}
                                     style={{
@@ -97,7 +115,6 @@ export function EditPanel({
                                 <input id="cube-upload-input" type="file" accept=".cube" style={{ display: "none" }} onChange={handleCubeUpload} />
                             </div>
 
-                            {/* Intensity Slider */}
                             {lutId !== 'none' && (
                                 <div style={{ marginTop: "4px" }}>
                                     <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "5px" }}>
@@ -109,7 +126,6 @@ export function EditPanel({
                                 </div>
                             )}
 
-                            {/* Premium LUT Info Card */}
                             {lutId !== 'none' && (() => {
                                 const activePreset = lutId === 'custom'
                                     ? { name: customLutName || 'Custom LUT', description: 'User-uploaded custom 3D LUT curve configuration.', bestFor: 'Custom grading workflows', tier: 'premium', icon: '📂' }
@@ -160,6 +176,16 @@ export function EditPanel({
                         </div>
                     </div>
                 )}
+            </div>
+            <div>
+                <div style={{ display: "flex", gap: "2px", marginBottom: "14px", background: dm ? '#2a2a2a' : '#f2f2f8', padding: "3px", borderRadius: "10px", overflowX: "auto" }}>
+                    {FILTER_GROUPS.filter(g => g.key !== 'lut').map(g => (
+                        <button key={g.key} onClick={() => setFilterGroup(g.key)}
+                            style={{ flex: "1 0 auto", padding: "6px 8px", fontSize: "11px", fontWeight: 500, border: "none", cursor: "pointer", fontFamily: "inherit", background: filterGroup === g.key ? (dm ? '#444' : '#fff') : 'transparent', color: filterGroup === g.key ? "#6c63ff" : "#999", borderRadius: "8px", boxShadow: filterGroup === g.key ? "0 1px 4px rgba(0,0,0,.08)" : "none", transition: "all .18s", whiteSpace: "nowrap" }}>
+                            {g.label}
+                        </button>
+                    ))}
+                </div>
 
                 {COLOR_FILTERS.filter(f => f.group === filterGroup).map(f => {
                     const val = filters[f.key]; const changed = val !== f.default;
