@@ -58,6 +58,7 @@ export default function CullPage({
   const [activeAlternateIndex, setActiveAlternateIndex] = useState(0);
   const [showFaceBoxes, setShowFaceBoxes] = useState(true);
   const [showShortcutsHelp, setShowShortcutsHelp] = useState(true);
+  const [activePhotoUrl, setActivePhotoUrl] = useState(null);
 
   // Grouped references
   const [groups, setGroups] = useState([]);
@@ -392,6 +393,28 @@ export default function CullPage({
   const activeGroup = groups[activeGroupIndex] || [];
   const activePhoto = activeGroup[activeAlternateIndex] || null;
   const keyPhoto = activeGroup[0] || null;
+
+  // On-demand Object URL generation for active preview to prevent OOM
+  useEffect(() => {
+    if (!activePhoto) {
+      setActivePhotoUrl(null);
+      return;
+    }
+
+    let url = null;
+    if (activePhoto.previewUrl) {
+      setActivePhotoUrl(activePhoto.previewUrl);
+    } else if (activePhoto.file) {
+      url = URL.createObjectURL(activePhoto.file);
+      setActivePhotoUrl(url);
+    }
+
+    return () => {
+      if (url) {
+        URL.revokeObjectURL(url);
+      }
+    };
+  }, [activePhoto]);
 
   return (
     <div
@@ -989,7 +1012,7 @@ export default function CullPage({
             >
               <div style={{ position: "relative", display: "inline-block", maxWidth: "100%", maxHeight: "100%" }}>
                 <img
-                  src={activePhoto.previewUrl}
+                  src={activePhotoUrl}
                   alt={activePhoto.name}
                   style={{
                     maxWidth: "100%",

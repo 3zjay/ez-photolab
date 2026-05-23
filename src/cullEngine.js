@@ -18,11 +18,7 @@ async function getCullLandmarker() {
  * Calculates a 64-bit dHash (Difference Hash) value for perceptual similarity.
  * Downsamples to 9x8, converts to grayscale, and compares horizontal gradient values.
  */
-export function computeDHash(imageElementOrCanvas) {
-  const canvas = document.createElement("canvas");
-  canvas.width = 9;
-  canvas.height = 8;
-  const ctx = canvas.getContext("2d");
+export function computeDHash(imageElementOrCanvas, canvas, ctx) {
   ctx.drawImage(imageElementOrCanvas, 0, 0, 9, 8);
 
   const imgData = ctx.getImageData(0, 0, 9, 8);
@@ -64,14 +60,10 @@ export function getHammingDistance(hash1, hash2) {
  * Applies a 3x3 Laplacian edge-detection kernel on a downsampled bounding region,
  * and calculates the variance of the edge-intensity.
  */
-export function computeSharpness(imageElementOrCanvas, faceRect = null) {
-  const canvas = document.createElement("canvas");
+export function computeSharpness(imageElementOrCanvas, canvas, ctx, faceRect = null) {
   // If analyzing a face, crop and analyze face box. Otherwise, check center 400x300.
   const w = 300;
   const h = 200;
-  canvas.width = w;
-  canvas.height = h;
-  const ctx = canvas.getContext("2d");
 
   if (faceRect) {
     // Crop face with 20% padding
@@ -237,43 +229,43 @@ export async function cullBatch(images, options = {}, onProgress) {
   const results = [];
   const total = images.length;
 
-  // Single reusable canvas to prevent context/memory leaks
+  // Reusable canvas elements to prevent context/memory leaks
   const tempCanvas = document.createElement("canvas");
   const tempCtx = tempCanvas.getContext("2d");
 
+  const dHashCanvas = document.createElement("canvas");
+  dHashCanvas.width = 9;
+  dHashCanvas.height = 8;
+  const dHashCtx = dHashCanvas.getContext("2d");
+
+  const sharpnessCanvas = document.createElement("canvas");
+  sharpnessCanvas.width = 300;
+  sharpnessCanvas.height = 200;
+  const sharpnessCtx = sharpnessCanvas.getContext("2d");
+
   for (let i = 0; i < total; i++) {
     const imgObj = images[i];
-    let tempUrl = null;
-    let loadedImg = null;
+    let imageBitmap = null;
 
     onProgress?.({ current: i + 1, total, name: imgObj.name });
 
     try {
-      if (imgObj.previewUrl) {
-        loadedImg = await new Promise((resolve, reject) => {
-          const image = new Image();
-          image.onload = () => resolve(image);
-          image.onerror = (e) => reject(e);
-          image.src = imgObj.previewUrl;
-        });
-      } else if (imgObj.file) {
-        tempUrl = URL.createObjectURL(imgObj.file);
-        loadedImg = await new Promise((resolve, reject) => {
-          const image = new Image();
-          image.onload = () => resolve(image);
-          image.onerror = (e) => reject(e);
-          image.src = tempUrl;
-        });
+      if (imgObj.file) {
+        imageBitmap = await createImageBitmap(imgObj.file);
+      } else if (imgObj.previewUrl) {
+        const response = await fetch(imgObj.previewUrl);
+        const blob = await response.blob();
+        imageBitmap = await createImageBitmap(blob);
       }
 
-      if (!loadedImg) {
+      if (!imageBitmap) {
         throw new Error("No image source found");
       }
 
-      const sW = loadedImg.naturalWidth || loadedImg.width;
-      const sH = loadedImg.naturalHeight || loadedImg.height;
+      const sW = imageBitmap.width;
+      const sH = imageBitmap.height;
 
-      // 1. Generate lightweight 1200px Preview
+      // 1. Scale down to 1200px tempCanvas for culling diagnostics (sharpness, dHash, face landmarker)
       const maxDim = 1200;
       const scale = Math.min(1, maxDim / Math.max(sW, sH));
       const pW = Math.round(sW * scale);
@@ -283,14 +275,15 @@ export async function cullBatch(images, options = {}, onProgress) {
       tempCanvas.height = pH;
       tempCtx.imageSmoothingEnabled = true;
       tempCtx.imageSmoothingQuality = "high";
-      tempCtx.drawImage(loadedImg, 0, 0, pW, pH);
+      tempCtx.drawImage(imageBitmap, 0, 0, pW, pH);
 
-      const previewUrl = tempCanvas.toDataURL("image/jpeg", 0.85);
+      // Keep existing developed RAW previewUrl, otherwise null (generated on-demand in UI for JPEGs)
+      const previewUrl = imgObj.previewUrl || null;
 
-      // 2. Compute dHash using preview canvas
-      const dHash = computeDHash(tempCanvas);
+      // 2. Compute dHash using the pre-allocated dHashCanvas
+      const dHash = computeDHash(tempCanvas, dHashCanvas, dHashCtx);
 
-      // 3. Facial Analysis using preview canvas
+      // 3. Facial Analysis using 1200px tempCanvas
       let faces = [];
       let blinkDetected = false;
       let highestSmile = 0;
@@ -320,11 +313,11 @@ export async function cullBatch(images, options = {}, onProgress) {
         }
       }
 
-      // 4. Compute Sharpness Score using preview canvas
+      // 4. Compute Sharpness Score using pre-allocated sharpnessCanvas
       const primaryFace = faces[0]?.rect || null;
-      const sharpness = computeSharpness(tempCanvas, primaryFace);
+      const sharpness = computeSharpness(tempCanvas, sharpnessCanvas, sharpnessCtx, primaryFace);
 
-      // 5. Generate 160px Thumbnail using the same canvas
+      // 5. Generate 160px Thumbnail using reusable tempCanvas
       const tMaxDim = 160;
       const tScale = Math.min(1, tMaxDim / Math.max(sW, sH));
       const tW = Math.round(sW * tScale);
@@ -334,7 +327,7 @@ export async function cullBatch(images, options = {}, onProgress) {
       tempCanvas.height = tH;
       tempCtx.imageSmoothingEnabled = true;
       tempCtx.imageSmoothingQuality = "high";
-      tempCtx.drawImage(loadedImg, 0, 0, tW, tH);
+      tempCtx.drawImage(imageBitmap, 0, 0, tW, tH);
 
       const thumbnailUrl = tempCanvas.toDataURL("image/jpeg", 0.80);
 
@@ -384,14 +377,9 @@ export async function cullBatch(images, options = {}, onProgress) {
         faces: []
       });
     } finally {
-      if (tempUrl) {
-        URL.revokeObjectURL(tempUrl);
-      }
-      if (loadedImg) {
-        loadedImg.onload = null;
-        loadedImg.onerror = null;
-        loadedImg.src = "";
-        loadedImg = null;
+      if (imageBitmap) {
+        imageBitmap.close();
+        imageBitmap = null;
       }
     }
 
