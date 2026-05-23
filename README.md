@@ -10,6 +10,18 @@ Built with React + Vite — runs entirely in your browser with zero server costs
 
 ---
 
+## 🚀 What's New in v2.7.0 (Detail Zoom & Non-Destructive Workflow Release)
+
+- **🔍 1:1 Detail Zoom Inspector**: Zoom in at actual pixel resolution to inspect fine details and sharpness. The preview panel dynamically switches to a scrollable canvas.
+- **📐 Dynamic Resolution & Scale HUD**: Real-time resolution badge that details active photo width and height, plus a gradient label highlighting the exact AI upscale multiplier (e.g. `4x AI Upscaled`).
+- **🔄 Non-Destructive AI Pipeline**: Smart Upscale, Face Restore, and Beauty filters now upscale the raw base photo directly and update the workspace image state without wiping out or resetting active sliders, custom LUTs, texts, rotations, or flips.
+- **🎨 Combined Presets & LUTs Mobile Layout**: Streamlined editor view with custom lookups categorized for visual tiering. Added descriptive tooltips and best-use metadata for all color presets.
+- **📦 LUTs in Batch Processor**: Enabled custom 3D LUT lookup tables and intensity sliders inside the Batch Processing engine.
+- **💾 Unified "Save As" Download Flow**: Refactored the export options for standard downloads and AI upscaling to provide a unified, consistent native file download across all platforms.
+- **⚡ Performance & Limits**: Boosted high-resolution export limit coordinates in the renderer up to 268 Megapixels for massive upscaled canvases.
+
+---
+
 ## 🚀 What's New in v2.6.2 (RAW Orientation Priority Fix)
 
 - **Fixed TIFF Directory Orientation Priority**: Resolved the bug where portrait Nikon `.NEF` (and other RAW) files loaded sideways (landscape) in both the workspace editor and RAW batch processor.
