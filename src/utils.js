@@ -121,14 +121,43 @@ export function toTransformCSS(rotation, flipH, flipV) {
 }
 
 export async function saveFile(blob, name) {
-  if (navigator.canShare?.({ files:[new File([blob],name,{type:blob.type})] })) {
-    try { await navigator.share({ files:[new File([blob],name,{type:blob.type})], title:"PHOTOlab" }); return; }
-    catch(e) { if(e.name==="AbortError") return; }
+  // Try File System Access API for "Save As" dialog on desktop (Chrome, Edge, Opera, etc.)
+  if (typeof window !== 'undefined' && typeof window.showSaveFilePicker === 'function') {
+    try {
+      const ext = name.split('.').pop() || 'jpg';
+      const mime = blob.type || 'image/jpeg';
+      const opts = {
+        suggestedName: name,
+        types: [{
+          description: 'Image Files',
+          accept: {
+            [mime]: [`.${ext}`]
+          }
+        }]
+      };
+      const handle = await window.showSaveFilePicker(opts);
+      const writable = await handle.createWritable();
+      await writable.write(blob);
+      await writable.close();
+      return;
+    } catch (e) {
+      if (e.name === 'AbortError') {
+        console.log("Save cancelled by user.");
+        return; // User cancelled the save dialog, stop here
+      }
+      console.warn("showSaveFilePicker failed or was rejected, falling back to download anchor:", e);
+    }
   }
-  const url=URL.createObjectURL(blob);
-  const a=document.createElement("a"); a.href=url; a.download=name;
-  document.body.appendChild(a); a.click(); document.body.removeChild(a);
-  setTimeout(()=>URL.revokeObjectURL(url),5000);
+
+  // Fallback to direct anchor download for other browsers (Firefox, Safari, mobile, etc.)
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
 }
 export function canvasToBlob(c,mime,q){ return new Promise(r=>{ if(c.toBlob){c.toBlob(r,mime,q);return;} const d=c.toDataURL(mime,q),a=d.split(","),b=atob(a[1]);let n=b.length;const u=new Uint8Array(n);while(n--)u[n]=b.charCodeAt(n);r(new Blob([u],{type:mime}));});}
 
