@@ -1,8 +1,9 @@
 import { useMemo, useRef, useEffect, useCallback, memo } from "react";
 import { Spin, SmoothSlider } from "./components/ui/common";
-import { BATCH_RESIZE_PRESETS, DEFAULT_FILTERS, COLOR_FILTERS, FILTER_GROUPS, PRESETS } from "./constants";
+import { BATCH_RESIZE_PRESETS, DEFAULT_FILTERS, COLOR_FILTERS, FILTER_GROUPS, PRESETS, LUT_PRESETS } from "./constants";
 import { toCSSFilter } from "./utils";
 import { RawBatchPanel } from "./components/panels/RawBatchPanel";
+import { parseCubeLut } from "./lutParser";
 
 // Isolated slider — zero React re-renders during drag, commits on pointerUp
 const BatchFilterSlider = memo(function BatchFilterSlider({ f, value, setFilters, dm, accent }) {
