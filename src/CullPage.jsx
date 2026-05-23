@@ -113,16 +113,8 @@ export default function CullPage({
     setProgress({ current: 0, total: activeInputFiles.length, currentFile: "" });
 
     try {
-      // Setup temporary URL previews for the culling engine
-      const prepImages = activeInputFiles.map(img => {
-        return {
-          ...img,
-          previewUrl: img.previewUrl || (img.file ? URL.createObjectURL(img.file) : null)
-        };
-      });
-
       const results = await cullBatch(
-        prepImages,
+        activeInputFiles,
         {
           groupingSensitivity: sensitivity,
           blurStrictness: blurCutoff,

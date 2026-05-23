@@ -239,34 +239,54 @@ export async function cullBatch(images, options = {}, onProgress) {
 
   for (let i = 0; i < total; i++) {
     const imgObj = images[i];
-    const url = imgObj.previewUrl || (imgObj.file ? URL.createObjectURL(imgObj.file) : null);
-    
-    if (!url) {
-      results.push({
-        ...imgObj,
-        cullScore: 0,
-        cullGroup: -1,
-        isKeyPhoto: false,
-        warnings: ["Missing preview URL"],
-        sharpness: 0,
-        faces: []
-      });
-      continue;
-    }
+    let tempUrl = null;
+    let loadedImg = null;
 
     onProgress?.({ current: i + 1, total, name: imgObj.name });
 
     try {
-      // 1. Render image in canvas to extract bitmap features
-      const img = await new Promise((resolve, reject) => {
-        const image = new Image();
-        image.onload = () => resolve(image);
-        image.onerror = (e) => reject(e);
-        image.src = url;
-      });
+      if (imgObj.previewUrl) {
+        loadedImg = await new Promise((resolve, reject) => {
+          const image = new Image();
+          image.onload = () => resolve(image);
+          image.onerror = (e) => reject(e);
+          image.src = imgObj.previewUrl;
+        });
+      } else if (imgObj.file) {
+        tempUrl = URL.createObjectURL(imgObj.file);
+        loadedImg = await new Promise((resolve, reject) => {
+          const image = new Image();
+          image.onload = () => resolve(image);
+          image.onerror = (e) => reject(e);
+          image.src = tempUrl;
+        });
+      }
+
+      if (!loadedImg) {
+        throw new Error("No image source found");
+      }
+
+      // Create a downscaled preview canvas (max dimension 1200px)
+      const maxDim = 1200;
+      const sW = loadedImg.naturalWidth || loadedImg.width;
+      const sH = loadedImg.naturalHeight || loadedImg.height;
+      const scale = Math.min(1, maxDim / Math.max(sW, sH));
+      const pW = Math.round(sW * scale);
+      const pH = Math.round(sH * scale);
+
+      const previewCanvas = document.createElement("canvas");
+      previewCanvas.width = pW;
+      previewCanvas.height = pH;
+      const previewCtx = previewCanvas.getContext("2d");
+      previewCtx.imageSmoothingEnabled = true;
+      previewCtx.imageSmoothingQuality = "high";
+      previewCtx.drawImage(loadedImg, 0, 0, pW, pH);
+
+      // Generate a lightweight JPEG data URL
+      const previewUrl = previewCanvas.toDataURL("image/jpeg", 0.85);
 
       // 2. Compute dHash for similarity grouping
-      const dHash = computeDHash(img);
+      const dHash = computeDHash(previewCanvas);
 
       // 3. Facial Analysis (optional)
       let faces = [];
@@ -274,7 +294,7 @@ export async function cullBatch(images, options = {}, onProgress) {
       let highestSmile = 0;
 
       if (fl) {
-        const detection = fl.detect(img);
+        const detection = fl.detect(previewCanvas);
         if (detection?.faceLandmarks && detection.faceLandmarks.length > 0) {
           faces = detection.faceLandmarks.map((landmarks) => {
             // Find face bounding rectangle
@@ -300,13 +320,9 @@ export async function cullBatch(images, options = {}, onProgress) {
 
       // 4. Compute Sharpness Score (prefer crop on first face, fallback to center crop)
       const primaryFace = faces[0]?.rect || null;
-      const sharpness = computeSharpness(img, primaryFace);
+      const sharpness = computeSharpness(previewCanvas, primaryFace);
 
       // 5. Aggregate Quality Score (0 to 100)
-      // Score factors:
-      // - Base Focus/Sharpness: 60%
-      // - Blink penalty: -50 points
-      // - Smile/expression bonus: +10 points (capped at 100)
       let score = sharpness;
       const warnings = [];
 
@@ -325,6 +341,7 @@ export async function cullBatch(images, options = {}, onProgress) {
 
       results.push({
         ...imgObj,
+        previewUrl, // Store downscaled JPEG data URL
         dHash,
         sharpness,
         faces,
@@ -340,6 +357,7 @@ export async function cullBatch(images, options = {}, onProgress) {
       console.error(`Failed to analyze ${imgObj.name}:`, e);
       results.push({
         ...imgObj,
+        previewUrl: imgObj.previewUrl || null,
         cullScore: 10,
         cullGroup: -1,
         isKeyPhoto: false,
@@ -348,9 +366,8 @@ export async function cullBatch(images, options = {}, onProgress) {
         faces: []
       });
     } finally {
-      // If we created a temporary blob url, clean it up ONLY if it wasn't the pre-existing previewUrl
-      if (!imgObj.previewUrl && url) {
-        URL.revokeObjectURL(url);
+      if (tempUrl) {
+        URL.revokeObjectURL(tempUrl);
       }
     }
   }
