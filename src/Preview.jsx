@@ -214,7 +214,8 @@ export function Preview({ image, originalImage, dragging, setDragging, loadImage
 
 
   const isPortrait = dimensions.h > dimensions.w;
-  const mPct = dimensions.w ? (logoMargin / dimensions.w) * 100 : 2;
+  const mPctX = dimensions.w ? (logoMargin / dimensions.w) * 100 : 2;
+  const mPctY = dimensions.h ? (logoMargin / dimensions.h) * 100 : 2;
   const logoWidthPct = (isPortrait ? logoScalePortrait : logoScale) * 100;
 
   const logoStyles = {
@@ -231,18 +232,18 @@ export function Preview({ image, originalImage, dragging, setDragging, loadImage
     logoStyles.top = `${logoY}%`;
     logoStyles.transform = "translate(-50%, -50%)";
   } else if (logoPos === "top-left") {
-    logoStyles.top = `${mPct}%`;
-    logoStyles.left = `${mPct}%`;
+    logoStyles.top = `${mPctY}%`;
+    logoStyles.left = `${mPctX}%`;
   } else if (logoPos === "top-center") {
-    logoStyles.top = `${mPct}%`;
+    logoStyles.top = `${mPctY}%`;
     logoStyles.left = "50%";
     logoStyles.transform = "translateX(-50%)";
   } else if (logoPos === "top-right") {
-    logoStyles.top = `${mPct}%`;
-    logoStyles.right = `${mPct}%`;
+    logoStyles.top = `${mPctY}%`;
+    logoStyles.right = `${mPctX}%`;
   } else if (logoPos === "center-left") {
     logoStyles.top = "50%";
-    logoStyles.left = `${mPct}%`;
+    logoStyles.left = `${mPctX}%`;
     logoStyles.transform = "translateY(-50%)";
   } else if (logoPos === "center") {
     logoStyles.top = "50%";
@@ -250,18 +251,18 @@ export function Preview({ image, originalImage, dragging, setDragging, loadImage
     logoStyles.transform = "translate(-50%, -50%)";
   } else if (logoPos === "center-right") {
     logoStyles.top = "50%";
-    logoStyles.right = `${mPct}%`;
+    logoStyles.right = `${mPctX}%`;
     logoStyles.transform = "translateY(-50%)";
   } else if (logoPos === "bottom-left") {
-    logoStyles.bottom = `${mPct}%`;
-    logoStyles.left = `${mPct}%`;
+    logoStyles.bottom = `${mPctY}%`;
+    logoStyles.left = `${mPctX}%`;
   } else if (logoPos === "bottom-center") {
-    logoStyles.bottom = `${mPct}%`;
+    logoStyles.bottom = `${mPctY}%`;
     logoStyles.left = "50%";
     logoStyles.transform = "translateX(-50%)";
   } else { // bottom-right
-    logoStyles.bottom = `${mPct}%`;
-    logoStyles.right = `${mPct}%`;
+    logoStyles.bottom = `${mPctY}%`;
+    logoStyles.right = `${mPctX}%`;
   }
 
   return (
@@ -398,19 +399,19 @@ export function Preview({ image, originalImage, dragging, setDragging, loadImage
         {activeTab === "tools" && bgResult ? (
           <>
             {bgMode === "transparent" && <div className="checker" style={{ position: "absolute", inset: 0 }} />}
-            <img src={bgResult} alt="result" style={{ maxWidth: "100%", maxHeight: maxH, objectFit: "contain", display: "block", position: "relative" }} />
+            <img src={bgResult} alt="result" style={{ maxWidth: "100%", maxHeight: maxH, width: "auto", height: "auto", display: "block", position: "relative" }} />
           </>
         ) : showSplit ? (
           <>
             <div style={{ position: "relative", lineHeight: 0 }}>
               <img ref={imgRef} src={image} alt="after"
-                style={{ maxWidth: "100%", maxHeight: maxH, objectFit: "contain", display: "block", filter: (activeLutData && lutId !== 'none' && !showBefore && activeTab === 'edit') ? 'none' : cssFilter, transform: transformCSS, visibility: (activeLutData && lutId !== 'none' && !showBefore && activeTab === 'edit') ? 'hidden' : 'visible' }} />
-              <canvas ref={lutCanvasRef} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "contain", pointerEvents: "none", display: (activeLutData && lutId !== 'none' && !showBefore && activeTab === 'edit') ? 'block' : 'none', transform: transformCSS }} />
+                style={{ maxWidth: "100%", maxHeight: maxH, width: "auto", height: "auto", display: "block", filter: (activeLutData && lutId !== 'none' && !showBefore && activeTab === 'edit') ? 'none' : cssFilter, transform: transformCSS, visibility: (activeLutData && lutId !== 'none' && !showBefore && activeTab === 'edit') ? 'hidden' : 'visible' }} />
+              <canvas ref={lutCanvasRef} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none", display: (activeLutData && lutId !== 'none' && !showBefore && activeTab === 'edit') ? 'block' : 'none', transform: transformCSS }} />
             </div>
             {filters.temperature !== 0 && <div style={{ position: "absolute", inset: 0, background: tempColor, mixBlendMode: "overlay", pointerEvents: "none", clipPath: `inset(0 ${100 - splitPos}% 0 0)` }} />}
             {filters.vignette > 0 && <div style={{ position: "absolute", inset: 0, background: `radial-gradient(ellipse at center,transparent 38%,rgba(0,0,0,${filters.vignette / 100}) 100%)`, pointerEvents: "none", clipPath: `inset(0 ${100 - splitPos}% 0 0)` }} />}
             <div style={{ position: "absolute", inset: 0, clipPath: `inset(0 0 0 ${splitPos}%)` }}>
-              <img src={originalImage || image} alt="before" style={{ maxWidth: "100%", maxHeight: maxH, objectFit: "contain", display: "block", filter: "none", transform: transformCSS }} />
+              <img src={originalImage || image} alt="before" style={{ maxWidth: "100%", maxHeight: maxH, width: "auto", height: "auto", display: "block", filter: "none", transform: transformCSS }} />
             </div>
             <div onMouseDown={e => { e.preventDefault(); setIsDragSplit(true); }} onTouchStart={e => { e.preventDefault(); setIsDragSplit(true); }}
               style={{ position: "absolute", top: 0, bottom: 0, left: `${splitPos}%`, transform: "translateX(-50%)", width: "44px", zIndex: 20, display: "flex", alignItems: "center", justifyContent: "center", cursor: isDragSplit ? "grabbing" : "ew-resize" }}>
@@ -428,9 +429,9 @@ export function Preview({ image, originalImage, dragging, setDragging, loadImage
           <>
             <div ref={containerRef} style={{ position: "relative", lineHeight: 0 }}>
               <img ref={imgRef} src={showBefore ? (originalImage || image) : image} alt="photo"
-                style={{ maxWidth: "100%", maxHeight: maxH, objectFit: "contain", display: "block", filter: showBefore || activeTab === "tools" ? "none" : (activeLutData && lutId !== 'none' && !showBefore && activeTab === 'edit' ? 'none' : cssFilter), transition: "filter .08s ease", transform: showBefore ? "none" : transformCSS, visibility: (activeLutData && lutId !== 'none' && !showBefore && activeTab === 'edit') ? 'hidden' : 'visible' }} />
+                style={{ maxWidth: "100%", maxHeight: maxH, width: "auto", height: "auto", display: "block", filter: showBefore || activeTab === "tools" ? "none" : (activeLutData && lutId !== 'none' && !showBefore && activeTab === 'edit' ? 'none' : cssFilter), transition: "filter .08s ease", transform: showBefore ? "none" : transformCSS, visibility: (activeLutData && lutId !== 'none' && !showBefore && activeTab === 'edit') ? 'hidden' : 'visible' }} />
               {/* LUT Preview Canvas */}
-              <canvas ref={lutCanvasRef} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "contain", pointerEvents: "none", display: (activeLutData && lutId !== 'none' && !showBefore && activeTab === 'edit') ? 'block' : 'none', transform: showBefore ? "none" : transformCSS }} />
+              <canvas ref={lutCanvasRef} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none", display: (activeLutData && lutId !== 'none' && !showBefore && activeTab === 'edit') ? 'block' : 'none', transform: showBefore ? "none" : transformCSS }} />
               {!showBefore && activeTab === "edit" && filters.temperature !== 0 && <div style={{ position: "absolute", inset: 0, background: tempColor, mixBlendMode: "overlay", pointerEvents: "none" }} />}
               {!showBefore && activeTab === "edit" && filters.fade > 0 && <div style={{ position: "absolute", inset: 0, background: `rgba(255,255,255,${filters.fade / 180})`, mixBlendMode: "screen", pointerEvents: "none" }} />}
               {!showBefore && activeTab === "edit" && filters.vignette > 0 && <div style={{ position: "absolute", inset: 0, background: `radial-gradient(ellipse at center,transparent 38%,rgba(0,0,0,${filters.vignette / 100}) 100%)`, pointerEvents: "none" }} />}
