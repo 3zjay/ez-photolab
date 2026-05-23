@@ -268,7 +268,9 @@ export async function renderFinal(imageSrc, cssFilterStr, filters, rotation, fli
   const natH = imgEl.naturalHeight;
   if (!natW || !natH) throw new Error('Image has zero dimensions — cannot export');
 
-  const MAX = 16_000_000;
+  const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
+  const isSafari = /Safari/i.test(navigator.userAgent) && !/Chrome|CriOS|FxiOS|Firefox/i.test(navigator.userAgent);
+  const MAX = (isMobile || isSafari) ? 16_000_000 : 268_435_456;
   let W = targetW || natW;
   let H = targetH || natH;
   if (W * H > MAX) { const s = Math.sqrt(MAX / (W * H)); W = Math.floor(W * s); H = Math.floor(H * s); }
