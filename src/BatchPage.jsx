@@ -115,7 +115,8 @@ export function BatchPage({ dm, cardBg, cardBdr, inputSt, isMobile = false,
   batchAiFaceRestore, setBatchAiFaceRestore, batchAiBeautyUseMask, setBatchAiBeautyUseMask,
   batchSection, setBatchSection, batchRawFiles, setBatchRawFiles, handleRawBatchProcess, batchLogs, addBatchLog,
   batchConfirmFirst, setBatchConfirmFirst, batchConfirmData, batchCancelRequested, handleCancelBatch, continueBatchProcess, cancelBatchProcess,
-  batchStats = { saved: 0, failed: 0 }
+  batchStats = { saved: 0, failed: 0 },
+  batchLutId, setBatchLutId, batchLutIntensity, setBatchLutIntensity, batchCustomLutData, setBatchCustomLutData, batchCustomLutName, setBatchCustomLutName
 }) {
 
   const bg = dm ? '#121212' : '#f0f1f5';
@@ -373,6 +374,124 @@ export function BatchPage({ dm, cardBg, cardBdr, inputSt, isMobile = false,
                 <strong>Note:</strong> AI operations run locally or via cloud APIs and will significantly increase processing time per image.
               </div>
             </>
+          ) : batchFilterGroup === 'lut' ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <span style={{ fontSize: "12px", color: dm ? '#ccc' : '#666', fontWeight: 600 }}>Color Lookup (LUT)</span>
+                <span style={{ fontSize: "9px", fontWeight: 700, padding: "1px 6px", background: "#f0fff4", color: "#16a34a", borderRadius: "20px", border: "1px solid #86efac" }}>In-Browser</span>
+              </div>
+              
+              {/* Presets Grid */}
+              <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", maxHeight: "190px", overflowY: "auto", paddingRight: "4px", scrollbarWidth: "thin" }}>
+                {LUT_PRESETS.map(p => {
+                  const active = batchLutId === p.id;
+                  return (
+                    <button key={p.id} onClick={() => setBatchLutId(p.id)}
+                      style={{
+                        flex: "1 0 calc(33% - 6px)", padding: "8px 4px", minWidth: "70px",
+                        border: `1.5px solid ${active ? accent : cardBdr}`,
+                        background: active ? (dm ? '#1e1a3a' : '#faf9ff') : dm ? '#252525' : '#fff',
+                        borderRadius: "8px", textAlign: "center", cursor: "pointer",
+                        transition: "all .15s", fontFamily: "inherit",
+                        boxShadow: active ? `0 0 8px rgba(108,99,255,.2)` : "none"
+                      }}>
+                      <div style={{ fontSize: "16px", marginBottom: "2px" }}>{p.icon}</div>
+                      <div style={{ fontSize: "9px", fontWeight: 700, color: active ? accent : dm ? '#aaa' : '#666', whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.name}</div>
+                    </button>
+                  );
+                })}
+                {/* Custom LUT upload button */}
+                <button
+                  onClick={() => document.getElementById('batch-cube-upload-input')?.click()}
+                  style={{
+                    flex: "1 0 calc(33% - 6px)", padding: "8px 4px", minWidth: "70px",
+                    border: `1.5px dashed ${batchLutId === 'custom' ? accent : cardBdr}`,
+                    background: batchLutId === 'custom' ? (dm ? '#1e1a3a' : '#faf9ff') : dm ? '#252525' : '#fff',
+                    borderRadius: "8px", textAlign: "center", cursor: "pointer",
+                    transition: "all .15s", fontFamily: "inherit",
+                    boxShadow: batchLutId === 'custom' ? `0 0 8px rgba(108,99,255,.2)` : "none"
+                  }}>
+                  <div style={{ fontSize: "16px", marginBottom: "2px" }}>📂</div>
+                  <div style={{ fontSize: "9px", fontWeight: 700, color: batchLutId === 'custom' ? accent : dm ? '#aaa' : '#666', whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                    {batchCustomLutName ? batchCustomLutName.slice(0, 8) : 'Upload'}
+                  </div>
+                </button>
+                <input id="batch-cube-upload-input" type="file" accept=".cube" style={{ display: "none" }}
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    try {
+                      const text = await file.text();
+                      const parsed = parseCubeLut(text);
+                      setBatchCustomLutData(parsed);
+                      setBatchCustomLutName(file.name);
+                      setBatchLutId('custom');
+                    } catch (err) {
+                      alert('Failed to parse .cube file: ' + err.message);
+                    }
+                  }} />
+              </div>
+
+              {/* Intensity Slider */}
+              {batchLutId !== 'none' && (
+                <div style={{ marginTop: "4px" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
+                    <span style={{ fontSize: "12px", color: dm ? '#ccc' : '#555' }}>Intensity</span>
+                    <span style={{ fontSize: "11px", color: accent, fontWeight: 700 }}>{Math.round(batchLutIntensity * 100)}%</span>
+                  </div>
+                  <SmoothSlider min={0} max={100} step={1} value={Math.round(batchLutIntensity * 100)} defaultValue={100}
+                    onChange={v => setBatchLutIntensity(v / 100)} />
+                </div>
+              )}
+
+              {/* Premium LUT Info Card */}
+              {batchLutId !== 'none' && (() => {
+                const activePreset = batchLutId === 'custom'
+                  ? { name: batchCustomLutName || 'Custom LUT', description: 'User-uploaded custom 3D LUT curve configuration.', bestFor: 'Custom grading workflows', tier: 'premium', icon: '📂' }
+                  : LUT_PRESETS.find(p => p.id === batchLutId);
+                if (!activePreset) return null;
+                return (
+                  <div style={{
+                    padding: "10px",
+                    background: dm ? "rgba(108, 99, 255, 0.06)" : "rgba(108, 99, 255, 0.03)",
+                    border: `1px solid ${dm ? "rgba(108, 99, 255, 0.25)" : "rgba(108, 99, 255, 0.15)"}`,
+                    borderRadius: "8px",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "4px"
+                  }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <span style={{ fontSize: "11px", fontWeight: 800, color: dm ? "#f3f4f6" : "#1f2937", display: "flex", alignItems: "center", gap: "4px" }}>
+                        <span>{activePreset.icon}</span>
+                        <span>{activePreset.name}</span>
+                      </span>
+                      {activePreset.tier === 'premium' && (
+                        <span style={{
+                          fontSize: "8px",
+                          fontWeight: 800,
+                          padding: "1px 4px",
+                          background: "linear-gradient(135deg, #06b6d4 0%, #6c63ff 100%)",
+                          color: "#fff",
+                          borderRadius: "4px",
+                          textTransform: "uppercase",
+                          letterSpacing: "0.05em",
+                          boxShadow: "0 1px 3px rgba(108,99,255,0.2)"
+                        }}>
+                          💎 Premium Look
+                        </span>
+                      )}
+                    </div>
+                    <p style={{ fontSize: "10.5px", color: dm ? "#bbb" : "#4b5563", margin: 0, lineHeight: 1.35 }}>
+                      {activePreset.description}
+                    </p>
+                    <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                      <span style={{ fontSize: "9.5px", fontWeight: 700, color: "#6c63ff" }}>Best for:</span>
+                      <span style={{ fontSize: "9.5px", color: dm ? "#999" : "#666", fontWeight: 600 }}>{activePreset.bestFor}</span>
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
           ) : (
             COLOR_FILTERS.filter(f => f.group === batchFilterGroup).map(f => (
               <BatchFilterSlider key={f.key} f={f} value={filters[f.key]} setFilters={setFilters} dm={dm} accent={accent} />

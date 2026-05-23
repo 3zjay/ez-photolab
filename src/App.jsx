@@ -303,7 +303,14 @@ export default function App() {
   const batchCancelRef = useRef(false);
   const [batchStats, setBatchStats] = useState({ saved: 0, failed: 0 });
 
+  // BATCH LUT STATE
+  const [batchLutId, setBatchLutId] = useState('none');
+  const [batchLutIntensity, setBatchLutIntensity] = useState(1.0);
+  const [batchCustomLutData, setBatchCustomLutData] = useState(null);
+  const [batchCustomLutName, setBatchCustomLutName] = useState('');
+
   // ─── SaaS Subscription State ───────────────────────────────────────
+
   const [user, setUser] = useState(() => {
     try {
       const params = new URLSearchParams(window.location.search);
@@ -756,6 +763,14 @@ export default function App() {
     try { return generateBuiltInLut(lutId, 33); } catch { return null; }
   }, [lutId, customLutData]);
 
+  // Compute batch LUT data from batchLutId
+  const batchLutData = useMemo(() => {
+    if (batchLutId === 'none') return null;
+    if (batchLutId === 'custom') return batchCustomLutData;
+    try { return generateBuiltInLut(batchLutId, 33); } catch { return null; }
+  }, [batchLutId, batchCustomLutData]);
+
+
   const handleExport = async () => {
     const src = bgResult || image;
     if (!src) { setExportInfo("No image loaded."); return; }
@@ -994,6 +1009,13 @@ export default function App() {
       }
       ctx.restore();
 
+      // Apply batch LUT if active
+      if (batchLutData) {
+        const imgData = ctx.getImageData(0, 0, W, H);
+        apply3DLut(imgData, batchLutData.data, batchLutData.size, batchLutIntensity);
+        ctx.putImageData(imgData, 0, 0);
+      }
+
       if (batchAutoContrast) applyAutoContrast(ctx, W, H);
       if (batchAutoLevels) applyAutoLevels(ctx, W, H);
       if (batchDenoise) applyNoiseReduction(canvas, ctx, W, H, batchDenoiseAmt);
@@ -1043,7 +1065,8 @@ export default function App() {
     batchSharpen, batchSharpenAmt, batchSharpenRad, batchLogo, batchLogoScale, batchLogoScalePortrait,
     batchLogoOpacity, batchLogoPos, batchLogoMargin, batchResizeMode,
     batchAiBeauty, batchAiBeautySmooth, batchAiBeautyClarity, batchAiBeautyGlow,
-    batchAiUpscale, batchAiScale, batchAiFaceRestore, batchAiBeautyUseMask]);
+    batchAiUpscale, batchAiScale, batchAiFaceRestore, batchAiBeautyUseMask, batchLutData, batchLutIntensity]);
+
 
   const handleBatchProcess = async (startIndex = 0) => {
     if (typeof startIndex !== 'number' || isNaN(startIndex)) {
@@ -1115,6 +1138,14 @@ export default function App() {
         ctx.imageSmoothingQuality = 'high';
         ctx.drawImage(img, 0, 0, W, H);
         ctx.filter = 'none';
+
+        // Apply batch LUT if active
+        if (batchLutData) {
+          const imgData = ctx.getImageData(0, 0, W, H);
+          apply3DLut(imgData, batchLutData.data, batchLutData.size, batchLutIntensity);
+          ctx.putImageData(imgData, 0, 0);
+        }
+
 
         if (filters.temperature !== 0) {
           const a = Math.abs(filters.temperature) / 300;
@@ -1367,6 +1398,15 @@ export default function App() {
         
         ctx.restore();
 
+        // Apply batch LUT if active
+        if (batchLutData) {
+          addBatchLog(`  -> Applying Batch LUT (${batchLutId})...`, "info");
+          const imgData = ctx.getImageData(0, 0, W, H);
+          apply3DLut(imgData, batchLutData.data, batchLutData.size, batchLutIntensity);
+          ctx.putImageData(imgData, 0, 0);
+        }
+
+
         // Apply Temperature/Tint/Fade/Vignette/etc.
         if (filters.temperature !== 0) {
           const a = Math.abs(filters.temperature) / 300;
@@ -1544,7 +1584,7 @@ export default function App() {
     batchSharpen, batchSharpenAmt, batchSharpenRad,
     batchLogo, batchLogoScale, batchLogoScalePortrait, batchLogoOpacity, batchLogoPos, batchLogoMargin,
     batchPreviewOpen, batchPreviewIdx,
-    generateBatchPreview,
+    generateBatchPreview, batchLutId, batchLutIntensity
   ]);
 
 
@@ -2069,7 +2109,8 @@ export default function App() {
         activeTab === "home" ? (
           <LandingPage {...{ dm, loadImage, setActiveTab, handleInstallClick, deferredPrompt, isIOS, isInstalled }} onSelectPlan={(plan) => setCheckoutPlan(plan)} />
         ) : activeTab === "batch" ? (
-          <BatchPage {...{ dm, cardBg, cardBdr, inputSt, user, setActiveTab, sourceHandle, outputHandle, batchImages, selectSourceFolder, selectRawSourceFolder, selectOutputFolder, batchResizeMode, setBatchResizeMode, batchResizePreset, setBatchResizePreset, batchCustomW, setBatchCustomW, batchCustomH, setBatchCustomH, batchKeepAspect, setBatchKeepAspect, batchLongEdgePx, setBatchLongEdgePx, batchAutoLevels, setBatchAutoLevels, batchAutoContrast, setBatchAutoContrast, batchSharpen, setBatchSharpen, batchSharpenAmt, setBatchSharpenAmt, batchSharpenRad, setBatchSharpenRad, batchDenoise, setBatchDenoise, batchDenoiseAmt, setBatchDenoiseAmt, batchLogo, setBatchLogo, batchLogoFile, setBatchLogoFile, handleBatchLogoUpload, batchLogoScale, setBatchLogoScale, batchLogoScalePortrait, setBatchLogoScalePortrait, batchLogoOpacity, setBatchLogoOpacity, batchLogoPos, setBatchLogoPos, batchLogoMargin, setBatchLogoMargin, batchOutputFmt, setBatchOutputFmt, batchOutputQ, setBatchOutputQ, batchPrefix, setBatchPrefix, batchSuffix, setBatchSuffix, batchProcessing, batchProgress, batchDone, handleBatchProcess, batchPreviewIdx, batchPreviewOrigUrl, batchPreviewAfterUrl, batchPreviewLoading, batchPreviewSplit, setBatchPreviewSplit, batchPreviewDragging, setBatchPreviewDragging, batchPreviewOpen, setBatchPreviewOpen, generateBatchPreview, filters, setFilters, resetAll, batchFilterGroup, setBatchFilterGroup, calcBatchDims, batchAiUpscale, setBatchAiUpscale, batchAiBeauty, setBatchAiBeauty, batchAiScale, setBatchAiScale, batchAiBeautySmooth, setBatchAiBeautySmooth, batchAiBeautyClarity, setBatchAiBeautyClarity, batchAiBeautyGlow, setBatchAiBeautyGlow, batchAiFaceRestore, setBatchAiFaceRestore, batchAiBeautyUseMask, setBatchAiBeautyUseMask, batchSection, setBatchSection, batchRawFiles, setBatchRawFiles, handleRawBatchProcess, batchLogs, addBatchLog, batchConfirmFirst, setBatchConfirmFirst, batchConfirmData, batchCancelRequested, handleCancelBatch, continueBatchProcess, cancelBatchProcess, batchStats }} />
+          <BatchPage {...{ dm, cardBg, cardBdr, inputSt, user, setActiveTab, sourceHandle, outputHandle, batchImages, selectSourceFolder, selectRawSourceFolder, selectOutputFolder, batchResizeMode, setBatchResizeMode, batchResizePreset, setBatchResizePreset, batchCustomW, setBatchCustomW, batchCustomH, setBatchCustomH, batchKeepAspect, setBatchKeepAspect, batchLongEdgePx, setBatchLongEdgePx, batchAutoLevels, setBatchAutoLevels, batchAutoContrast, setBatchAutoContrast, batchSharpen, setBatchSharpen, batchSharpenAmt, setBatchSharpenAmt, batchSharpenRad, setBatchSharpenRad, batchDenoise, setBatchDenoise, batchDenoiseAmt, setBatchDenoiseAmt, batchLogo, setBatchLogo, batchLogoFile, setBatchLogoFile, handleBatchLogoUpload, batchLogoScale, setBatchLogoScale, batchLogoScalePortrait, setBatchLogoScalePortrait, batchLogoOpacity, setBatchLogoOpacity, batchLogoPos, setBatchLogoPos, batchLogoMargin, setBatchLogoMargin, batchOutputFmt, setBatchOutputFmt, batchOutputQ, setBatchOutputQ, batchPrefix, setBatchPrefix, batchSuffix, setBatchSuffix, batchProcessing, batchProgress, batchDone, handleBatchProcess, batchPreviewIdx, batchPreviewOrigUrl, batchPreviewAfterUrl, batchPreviewLoading, batchPreviewSplit, setBatchPreviewSplit, batchPreviewDragging, setBatchPreviewDragging, batchPreviewOpen, setBatchPreviewOpen, generateBatchPreview, filters, setFilters, resetAll, batchFilterGroup, setBatchFilterGroup, calcBatchDims, batchAiUpscale, setBatchAiUpscale, batchAiBeauty, setBatchAiBeauty, batchAiScale, setBatchAiScale, batchAiBeautySmooth, setBatchAiBeautySmooth, batchAiBeautyClarity, setBatchAiBeautyClarity, batchAiBeautyGlow, setBatchAiBeautyGlow, batchAiFaceRestore, setBatchAiFaceRestore, batchAiBeautyUseMask, setBatchAiBeautyUseMask, batchSection, setBatchSection, batchRawFiles, setBatchRawFiles, handleRawBatchProcess, batchLogs, addBatchLog, batchConfirmFirst, setBatchConfirmFirst, batchConfirmData, batchCancelRequested, handleCancelBatch, continueBatchProcess, cancelBatchProcess, batchStats, batchLutId, setBatchLutId, batchLutIntensity, setBatchLutIntensity, batchCustomLutData, setBatchCustomLutData, batchCustomLutName, setBatchCustomLutName }} />
+
         ) : activeTab === "cull" ? (
           <CullPage {...{ dm, cardBg, cardBdr, inputSt, sourceHandle, outputHandle, batchImages, selectSourceFolder, selectRawSourceFolder, selectOutputFolder, batchLogs, addBatchLog, batchSection, setBatchSection, isMobile, user, setActiveTab }} />
         ) : activeTab === "account" ? (
@@ -2095,7 +2136,7 @@ export default function App() {
           </div>
         ) : activeTab === "batch" ? (
           <div style={{ height: "calc(100vh - 52px)", overflowY: "auto" }}>
-            <BatchPage {...{ dm, cardBg, cardBdr, inputSt, isMobile: true, user, setActiveTab, sourceHandle, outputHandle, batchImages, selectSourceFolder, selectRawSourceFolder, selectOutputFolder, batchResizeMode, setBatchResizeMode, batchResizePreset, setBatchResizePreset, batchCustomW, setBatchCustomW, batchCustomH, setBatchCustomH, batchKeepAspect, setBatchKeepAspect, batchLongEdgePx, setBatchLongEdgePx, batchAutoLevels, setBatchAutoLevels, batchAutoContrast, setBatchAutoContrast, batchSharpen, setBatchSharpen, batchSharpenAmt, setBatchSharpenAmt, batchSharpenRad, setBatchSharpenRad, batchDenoise, setBatchDenoise, batchDenoiseAmt, setBatchDenoiseAmt, batchLogo, setBatchLogo, batchLogoFile, setBatchLogoFile, handleBatchLogoUpload, batchLogoScale, setBatchLogoScale, batchLogoScalePortrait, setBatchLogoScalePortrait, batchLogoOpacity, setBatchLogoOpacity, batchLogoPos, setBatchLogoPos, batchLogoMargin, setBatchLogoMargin, batchOutputFmt, setBatchOutputFmt, batchOutputQ, setBatchOutputQ, batchPrefix, setBatchPrefix, batchSuffix, setBatchSuffix, batchProcessing, batchProgress, batchDone, handleBatchProcess, batchPreviewIdx, batchPreviewOrigUrl, batchPreviewAfterUrl, batchPreviewLoading, batchPreviewSplit, setBatchPreviewSplit, batchPreviewDragging, setBatchPreviewDragging, batchPreviewOpen, setBatchPreviewOpen, generateBatchPreview, filters, setFilters, resetAll, batchFilterGroup, setBatchFilterGroup, calcBatchDims, batchAiUpscale, setBatchAiUpscale, batchAiBeauty, setBatchAiBeauty, batchAiScale, setBatchAiScale, batchAiBeautySmooth, setBatchAiBeautySmooth, batchAiBeautyClarity, setBatchAiBeautyClarity, batchAiBeautyGlow, setBatchAiBeautyGlow, batchAiFaceRestore, setBatchAiFaceRestore, batchAiBeautyUseMask, setBatchAiBeautyUseMask, batchSection, setBatchSection, batchRawFiles, setBatchRawFiles, handleRawBatchProcess, batchLogs, addBatchLog, batchConfirmFirst, setBatchConfirmFirst, batchConfirmData, batchCancelRequested, handleCancelBatch, continueBatchProcess, cancelBatchProcess, batchStats }} />
+            <BatchPage {...{ dm, cardBg, cardBdr, inputSt, isMobile: true, user, setActiveTab, sourceHandle, outputHandle, batchImages, selectSourceFolder, selectRawSourceFolder, selectOutputFolder, batchResizeMode, setBatchResizeMode, batchResizePreset, setBatchResizePreset, batchCustomW, setBatchCustomW, batchCustomH, setBatchCustomH, batchKeepAspect, setBatchKeepAspect, batchLongEdgePx, setBatchLongEdgePx, batchAutoLevels, setBatchAutoLevels, batchAutoContrast, setBatchAutoContrast, batchSharpen, setBatchSharpen, batchSharpenAmt, setBatchSharpenAmt, batchSharpenRad, setBatchSharpenRad, batchDenoise, setBatchDenoise, batchDenoiseAmt, setBatchDenoiseAmt, batchLogo, setBatchLogo, batchLogoFile, setBatchLogoFile, handleBatchLogoUpload, batchLogoScale, setBatchLogoScale, batchLogoScalePortrait, setBatchLogoScalePortrait, batchLogoOpacity, setBatchLogoOpacity, batchLogoPos, setBatchLogoPos, batchLogoMargin, setBatchLogoMargin, batchOutputFmt, setBatchOutputFmt, batchOutputQ, setBatchOutputQ, batchPrefix, setBatchPrefix, batchSuffix, setBatchSuffix, batchProcessing, batchProgress, batchDone, handleBatchProcess, batchPreviewIdx, batchPreviewOrigUrl, batchPreviewAfterUrl, batchPreviewLoading, batchPreviewSplit, setBatchPreviewSplit, batchPreviewDragging, setBatchPreviewDragging, batchPreviewOpen, setBatchPreviewOpen, generateBatchPreview, filters, setFilters, resetAll, batchFilterGroup, setBatchFilterGroup, calcBatchDims, batchAiUpscale, setBatchAiUpscale, batchAiBeauty, setBatchAiBeauty, batchAiScale, setBatchAiScale, batchAiBeautySmooth, setBatchAiBeautySmooth, batchAiBeautyClarity, setBatchAiBeautyClarity, batchAiBeautyGlow, setBatchAiBeautyGlow, batchAiFaceRestore, setBatchAiFaceRestore, batchAiBeautyUseMask, setBatchAiBeautyUseMask, batchSection, setBatchSection, batchRawFiles, setBatchRawFiles, handleRawBatchProcess, batchLogs, addBatchLog, batchConfirmFirst, setBatchConfirmFirst, batchConfirmData, batchCancelRequested, handleCancelBatch, continueBatchProcess, cancelBatchProcess, batchStats, batchLutId, setBatchLutId, batchLutIntensity, setBatchLutIntensity, batchCustomLutData, setBatchCustomLutData, batchCustomLutName, setBatchCustomLutName }} />
           </div>
         ) : activeTab === "cull" ? (
           <div style={{ height: "calc(100vh - 52px)", overflowY: "auto", padding: "16px" }}>

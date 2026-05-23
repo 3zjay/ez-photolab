@@ -41,6 +41,130 @@ export const PRESETS = [
   { name:"Neo-Tokyo",  icon:"🌃", values:{ contrast:130,saturation:150,temperature:-30,tint:30,clarity:10,vignette:25 }},
 ];
 
+export const LUT_PRESETS = [
+  {
+    id: 'none',
+    icon: '⊘',
+    name: 'None',
+    description: 'No color lookup curves applied.',
+    bestFor: 'Neutral editing',
+    tier: 'free'
+  },
+  {
+    id: 'arena_lights',
+    icon: '💡',
+    name: 'Arena Lights',
+    description: 'Neutralizes harsh overhead yellow/green glare and stabilizes high-key arena spotlights.',
+    bestFor: 'High school gyms & major arenas',
+    tier: 'premium'
+  },
+  {
+    id: 'ymca',
+    icon: '🏢',
+    name: 'YMCA Rec Gym',
+    description: 'Combats muddy green-yellow tint casts and lifts flat midtones in poorly-lit community centers.',
+    bestFor: 'Low-ceiling recreational gyms',
+    tier: 'premium'
+  },
+  {
+    id: 'msg',
+    icon: '🏟️',
+    name: 'MSG High Drama',
+    description: 'Isolates the court wood floor while crushing dark crowd shadows for high-stakes broadcast drama.',
+    bestFor: 'Tournament games & spotlight events',
+    tier: 'premium'
+  },
+  {
+    id: 'team_pride',
+    icon: '🎽',
+    name: 'Team Pride',
+    description: 'Selectively boosts uniform primary colors (reds, blues, greens) while preserving natural warm skin tones.',
+    bestFor: 'Bright jersey colors & team uniform details',
+    tier: 'premium'
+  },
+  {
+    id: 'hardwood_tones',
+    icon: '🪵',
+    name: 'Hardwood Tones',
+    description: 'Enriches wood floor textures and boosts warm amber floor reflections.',
+    bestFor: 'Varnished maple court texture & floor shine',
+    tier: 'premium'
+  },
+  {
+    id: 'mvp_sport',
+    icon: '🏆',
+    name: 'MVP Sport Clean',
+    description: 'A clean, newsroom-standard contrast curve with high-end white point normalization.',
+    bestFor: 'Action journalism & fast-turnaround media',
+    tier: 'premium'
+  },
+  {
+    id: 'kodachrome',
+    icon: '🎞️',
+    name: 'Kodachrome Retro',
+    description: 'Warm nostalgic film simulation with deep reds, vintage amber highlights, and soft matte blacks.',
+    bestFor: 'Retro lifestyle & player portrait captures',
+    tier: 'premium'
+  },
+  {
+    id: 'teal_orange',
+    icon: '🎬',
+    name: 'Teal & Orange',
+    description: 'Pushes shadows to cool cyan tones and highlights to warm skin-tone orange frequencies.',
+    bestFor: 'Cinematic commercials & marketing assets',
+    tier: 'premium'
+  },
+  {
+    id: 'doc_30_30',
+    icon: '🎥',
+    name: '30 for 30 Gritty',
+    description: 'Gritty, high-contrast, desaturated slate-tint look for intense character-driven emotion.',
+    bestFor: 'Intense player close-ups & dramatic locker rooms',
+    tier: 'premium'
+  },
+  {
+    id: 'carbon_clean',
+    icon: '💎',
+    name: 'Carbon Clean',
+    description: 'Subtle black crush with linear color replication to keep jersey colors brand-accurate.',
+    bestFor: 'Sleek sports commercial branding',
+    tier: 'premium'
+  },
+  {
+    id: 'portra',
+    icon: '📷',
+    name: 'Portra 400',
+    description: 'Recreates the iconic portrait film look with warm golden skin rendering and soft highlight compression.',
+    bestFor: 'Outdoor courts & athlete lifestyle portraits',
+    tier: 'premium'
+  },
+  {
+    id: 'fuji',
+    icon: '🌿',
+    name: 'Fuji Superia',
+    description: 'Emulates organic film contrast with cooler green/cyan highlight shifts and punchy midtones.',
+    bestFor: 'Outdoor courts & daylight environment captures',
+    tier: 'premium'
+  },
+  {
+    id: 'vintage',
+    icon: '🏺',
+    name: 'Vintage Gold',
+    description: 'Warm golden color wash with beautifully faded matte shadows for a classic analog vibe.',
+    bestFor: 'Retro streetball & nostalgic street captures',
+    tier: 'premium'
+  },
+  {
+    id: 'trix',
+    icon: '🖤',
+    name: 'Tri-X B&W',
+    description: 'Ilford Tri-X style punchy analog black-and-white curve with strong highlights and rich grit.',
+    bestFor: 'Timeless dynamic action & high-contrast street art',
+    tier: 'premium'
+  }
+];
+
+
 export const FB_MODES = [
   { id:"portrait",  label:"Portrait",      desc:"1080 × 1350",  w:1080, h:1350 },
   { id:"square",    label:"Square",        desc:"1080 × 1080",  w:1080, h:1080 },

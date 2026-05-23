@@ -1,25 +1,7 @@
 import { useCallback } from "react";
 import { SL, Row, Spin, PBar, AB, SmoothSlider } from "../ui/common";
-import { PRESETS, FILTER_GROUPS, COLOR_FILTERS, DEFAULT_FILTERS } from "../../constants";
+import { PRESETS, FILTER_GROUPS, COLOR_FILTERS, DEFAULT_FILTERS, LUT_PRESETS } from "../../constants";
 import { parseCubeLut } from "../../lutParser";
-
-const LUT_PRESETS = [
-    { id: 'none',    icon: '⊘', name: 'None' },
-    { id: 'arena_lights', icon: '💡', name: 'Arena Lights' },
-    { id: 'ymca',    icon: '🏢', name: 'YMCA Rec Gym' },
-    { id: 'msg',     icon: '🏟️', name: 'MSG High Drama' },
-    { id: 'team_pride', icon: '🎽', name: 'Team Pride' },
-    { id: 'hardwood_tones', icon: '🪵', name: 'Hardwood Tones' },
-    { id: 'mvp_sport', icon: '🏆', name: 'MVP Sport Clean' },
-    { id: 'kodachrome', icon: '🎞️', name: 'Kodachrome Retro' },
-    { id: 'teal_orange', icon: '🎬', name: 'Teal & Orange' },
-    { id: 'doc_30_30', icon: '🎥', name: '30 for 30 Gritty' },
-    { id: 'carbon_clean', icon: '💎', name: 'Carbon Clean' },
-    { id: 'portra',  icon: '📷', name: 'Portra 400' },
-    { id: 'fuji',    icon: '🌿', name: 'Fuji Superia' },
-    { id: 'vintage', icon: '🏺', name: 'Vintage Gold' },
-    { id: 'trix',    icon: '🖤', name: 'Tri-X B&W' },
-];
 
 export function EditPanel({
     filters, setFilters, filterGroup, setFilterGroup, isEdited, resetAll, dm, cardBdr, cardBg,
@@ -126,6 +108,55 @@ export function EditPanel({
                                         onChange={v => setLutIntensity(v / 100)} />
                                 </div>
                             )}
+
+                            {/* Premium LUT Info Card */}
+                            {lutId !== 'none' && (() => {
+                                const activePreset = lutId === 'custom'
+                                    ? { name: customLutName || 'Custom LUT', description: 'User-uploaded custom 3D LUT curve configuration.', bestFor: 'Custom grading workflows', tier: 'premium', icon: '📂' }
+                                    : LUT_PRESETS.find(p => p.id === lutId);
+                                if (!activePreset) return null;
+                                return (
+                                    <div style={{
+                                        padding: "12px",
+                                        background: dm ? "rgba(108, 99, 255, 0.06)" : "rgba(108, 99, 255, 0.03)",
+                                        border: `1px solid ${dm ? "rgba(108, 99, 255, 0.25)" : "rgba(108, 99, 255, 0.15)"}`,
+                                        borderRadius: "10px",
+                                        marginTop: "4px",
+                                        display: "flex",
+                                        flexDirection: "column",
+                                        gap: "6px"
+                                    }}>
+                                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                            <span style={{ fontSize: "12px", fontWeight: 800, color: dm ? "#f3f4f6" : "#1f2937", display: "flex", alignItems: "center", gap: "6px" }}>
+                                                <span>{activePreset.icon}</span>
+                                                <span>{activePreset.name}</span>
+                                            </span>
+                                            {activePreset.tier === 'premium' && (
+                                                <span style={{
+                                                    fontSize: "9px",
+                                                    fontWeight: 800,
+                                                    padding: "2px 6px",
+                                                    background: "linear-gradient(135deg, #06b6d4 0%, #6c63ff 100%)",
+                                                    color: "#fff",
+                                                    borderRadius: "6px",
+                                                    textTransform: "uppercase",
+                                                    letterSpacing: "0.05em",
+                                                    boxShadow: "0 2px 5px rgba(108,99,255,0.25)"
+                                                }}>
+                                                    💎 Premium Look
+                                                </span>
+                                            )}
+                                        </div>
+                                        <p style={{ fontSize: "11px", color: dm ? "#bbb" : "#4b5563", margin: 0, lineHeight: 1.4 }}>
+                                            {activePreset.description}
+                                        </p>
+                                        <div style={{ display: "flex", alignItems: "center", gap: "4px", marginTop: "2px" }}>
+                                            <span style={{ fontSize: "10px", fontWeight: 700, color: "#6c63ff" }}>Best for:</span>
+                                            <span style={{ fontSize: "10px", color: dm ? "#999" : "#666", fontWeight: 600 }}>{activePreset.bestFor}</span>
+                                        </div>
+                                    </div>
+                                );
+                            })()}
                         </div>
                     </div>
                 )}
