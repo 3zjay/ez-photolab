@@ -270,6 +270,8 @@ export default function App() {
   const [logoOpacity, setLogoOpacity] = useState(0.7);
   const [logoPos, setLogoPos] = useState("bottom-right");
   const [logoMargin, setLogoMargin] = useState(20);
+  const [logoX, setLogoX] = useState(null);
+  const [logoY, setLogoY] = useState(null);
 
   // BATCH STATE
   const [sourceHandle, setSourceHandle] = useState(null);
@@ -825,7 +827,7 @@ export default function App() {
       const tmpImg = await loadImageFromSrc(src);
       const { W, H } = getExportDims(tmpImg.naturalWidth, tmpImg.naturalHeight, exportScale);
       setExportInfo(`Rendering ${W.toLocaleString()}×${H.toLocaleString()}px…`);
-      const { canvas, W: rW, H: rH } = await renderFinal(src, cssFilter, filters, rotation, flipH, flipV, texts, W, H, activeLutData?.data || null, activeLutData?.size || 33, lutIntensity, logo, logoScale, logoScalePortrait, logoOpacity, logoPos, logoMargin);
+      const { canvas, W: rW, H: rH } = await renderFinal(src, cssFilter, filters, rotation, flipH, flipV, texts, W, H, activeLutData?.data || null, activeLutData?.size || 33, lutIntensity, logo, logoScale, logoScalePortrait, logoOpacity, logoPos, logoMargin, logoX, logoY);
       const fmts = { jpg: { mime: "image/jpeg", ext: "jpg" }, png: { mime: "image/png", ext: "png" }, webp: { mime: "image/webp", ext: "webp" } };
       const { mime, ext } = fmts[exportFmt];
       const q = exportFmt === "png" ? undefined : exportQ / 100;
@@ -850,7 +852,7 @@ export default function App() {
       const mode = FB_MODES.find(m => m.id === fbMode);
       let tW = mode.w, tH = mode.h;
       if (!tH) { const sc = Math.min(1, tW / Math.max(tmpImg.naturalWidth, tmpImg.naturalHeight)); tW = Math.round(tmpImg.naturalWidth * sc); tH = Math.round(tmpImg.naturalHeight * sc); }
-      const { canvas, W, H } = await renderFinal(src, cssFilter, filters, rotation, flipH, flipV, texts, tW, tH, activeLutData?.data || null, activeLutData?.size || 33, lutIntensity, logo, logoScale, logoScalePortrait, logoOpacity, logoPos, logoMargin);
+      const { canvas, W, H } = await renderFinal(src, cssFilter, filters, rotation, flipH, flipV, texts, tW, tH, activeLutData?.data || null, activeLutData?.size || 33, lutIntensity, logo, logoScale, logoScalePortrait, logoOpacity, logoPos, logoMargin, logoX, logoY);
       const blob = await canvasToBlob(canvas, "image/jpeg", 0.82);
       if (!blob || blob.size === 0) throw new Error("Empty blob");
       const kb = Math.round(blob.size / 1024);
@@ -1997,7 +1999,7 @@ export default function App() {
         <OverlayPanel {...{ image, texts, selText, setSelText, addText, deleteText, updateText, dm, cardBg, cardBdr, inputSt }} />
       )}
       {activeTab === "edit" && (
-        <EditPanel {...{ filters, setFilters, filterGroup, setFilterGroup, isEdited, resetAll, revertAi, dm, cardBdr, cardBg, image, runBrowserUpscale, aiUpscaleStatus, aiUpscaleLog, aiUpscaleProgress, aiUpscaleResult, aiUpscaleResultSize, applyAiResult, runBrowserBeauty, aiBeautyStatus, aiBeautyLog, aiBeautyResult, saveFile, aiScale, setAiScale, aiBeautySmooth, setAiBeautySmooth, aiBeautyClarity, setAiBeautyClarity, aiBeautyGlow, setAiBeautyGlow, aiBeautyUseMask, setAiBeautyUseMask, runFalFaceRestore, aiFaceRestoreStatus, aiFaceRestoreLog, aiFaceRestoreResult, lutId, setLutId, lutIntensity, setLutIntensity, customLutData, setCustomLutData, customLutName, setCustomLutName, user, logo, setLogo, logoFile, setLogoFile, logoScale, setLogoScale, logoScalePortrait, setLogoScalePortrait, logoOpacity, setLogoOpacity, logoPos, setLogoPos, logoMargin, setLogoMargin, handleLogoUpload }} />
+        <EditPanel {...{ filters, setFilters, filterGroup, setFilterGroup, isEdited, resetAll, revertAi, dm, cardBdr, cardBg, image, runBrowserUpscale, aiUpscaleStatus, aiUpscaleLog, aiUpscaleProgress, aiUpscaleResult, aiUpscaleResultSize, applyAiResult, runBrowserBeauty, aiBeautyStatus, aiBeautyLog, aiBeautyResult, saveFile, aiScale, setAiScale, aiBeautySmooth, setAiBeautySmooth, aiBeautyClarity, setAiBeautyClarity, aiBeautyGlow, setAiBeautyGlow, aiBeautyUseMask, setAiBeautyUseMask, runFalFaceRestore, aiFaceRestoreStatus, aiFaceRestoreLog, aiFaceRestoreResult, lutId, setLutId, lutIntensity, setLutIntensity, customLutData, setCustomLutData, customLutName, setCustomLutName, user, logo, setLogo, logoFile, setLogoFile, logoScale, setLogoScale, logoScalePortrait, setLogoScalePortrait, logoOpacity, setLogoOpacity, logoPos, setLogoPos, logoMargin, setLogoMargin, handleLogoUpload, logoX, setLogoX, logoY, setLogoY }} />
       )}
       {activeTab === "batch" && (
         <div style={{ padding: "16px", color: dm ? '#aaa' : '#888', fontSize: "13px", textAlign: "center" }}>
@@ -2188,7 +2190,7 @@ export default function App() {
               {renderPanel()}
             </div>
             <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: "20px", position: "relative", overflow: "hidden" }}>
-              <Preview {...{ image, originalImage, dragging, setDragging, loadImage, fileInputRef, imgRef, splitRef, previewRef, activeTab, bgResult, bgMode, showBefore, setShowBefore, showSplit, splitPos, isDragSplit, setIsDragSplit, cssFilter, transformCSS, filters, texts, selText, setSelText, updateText, cropMode, cropBox, setCropBox, cropAspect, isEdited, setImage, setBgStatus, setBgSubUrl, setBgResult, isMobile, rotation, flipH, flipV, activeLutData, lutIntensity, lutId, dm, rawLoading, rawProgressMsg, logo, logoScale, logoScalePortrait, logoOpacity, logoPos, logoMargin }} />
+              <Preview {...{ image, originalImage, dragging, setDragging, loadImage, fileInputRef, imgRef, splitRef, previewRef, activeTab, bgResult, bgMode, showBefore, setShowBefore, showSplit, splitPos, isDragSplit, setIsDragSplit, cssFilter, transformCSS, filters, texts, selText, setSelText, updateText, cropMode, cropBox, setCropBox, cropAspect, isEdited, setImage, setBgStatus, setBgSubUrl, setBgResult, isMobile, rotation, flipH, flipV, activeLutData, lutIntensity, lutId, dm, rawLoading, rawProgressMsg, logo, logoScale, logoScalePortrait, logoOpacity, logoPos, logoMargin, logoX, setLogoX, logoY, setLogoY, setLogoPos, filterGroup }} />
             </div>
           </div>
         )
@@ -2214,7 +2216,7 @@ export default function App() {
         ) : (
           <div style={{ display: "flex", flexDirection: "column", height: "calc(100vh - 52px)", overflow: "hidden" }}>
             <div style={{ height: "42vh", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", position: "relative", borderBottom: `1px solid ${dm ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'}` }}>
-              <Preview {...{ image, originalImage, dragging, setDragging, loadImage, fileInputRef, imgRef, splitRef, previewRef, activeTab, bgResult, bgMode, showBefore, setShowBefore, showSplit, splitPos, isDragSplit, setIsDragSplit, cssFilter, transformCSS, filters, texts, selText, setSelText, updateText, cropMode, cropBox, setCropBox, cropAspect, isEdited, setImage, setBgStatus, setBgSubUrl, setBgResult, isMobile, rotation, flipH, flipV, activeLutData, lutIntensity, lutId, dm, rawLoading, rawProgressMsg, logo, logoScale, logoScalePortrait, logoOpacity, logoPos, logoMargin }} />
+              <Preview {...{ image, originalImage, dragging, setDragging, loadImage, fileInputRef, imgRef, splitRef, previewRef, activeTab, bgResult, bgMode, showBefore, setShowBefore, showSplit, splitPos, isDragSplit, setIsDragSplit, cssFilter, transformCSS, filters, texts, selText, setSelText, updateText, cropMode, cropBox, setCropBox, cropAspect, isEdited, setImage, setBgStatus, setBgSubUrl, setBgResult, isMobile, rotation, flipH, flipV, activeLutData, lutIntensity, lutId, dm, rawLoading, rawProgressMsg, logo, logoScale, logoScalePortrait, logoOpacity, logoPos, logoMargin, logoX, setLogoX, logoY, setLogoY, setLogoPos, filterGroup }} />
             </div>
             <div className="glass-panel" style={{ flex: 1, overflowY: "auto", WebkitOverflowScrolling: "touch", borderTop: `1px solid ${dm ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'}` }}>
               {renderPanel(true)}

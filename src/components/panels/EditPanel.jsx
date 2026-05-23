@@ -463,6 +463,11 @@ export function EditPanel({
 
                                     <div style={{ padding: "14px", background: cardBg, border: `1.5px solid ${cardBdr}`, borderRadius: "12px", display: "flex", flexDirection: "column", gap: "12px" }}>
                                         <SL>Logo Position</SL>
+                                        {logoPos === "custom" && (
+                                            <div style={{ fontSize: "11.5px", color: '#6c63ff', fontWeight: 600, padding: "6px 10px", background: dm ? 'rgba(108,99,255,0.08)' : 'rgba(108,99,255,0.04)', border: `1px solid ${dm ? 'rgba(108,99,255,0.15)' : 'rgba(108,99,255,0.08)'}`, borderRadius: "6px", lineHeight: 1.4 }}>
+                                                📍 Custom Position (Drag logo on preview to move). Click any grid item to snap back.
+                                            </div>
+                                        )}
                                         <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "5px" }}>
                                             {[
                                                 { id: "top-left", l: "↖" }, { id: "top-center", l: "↑" }, { id: "top-right", l: "↗" },
@@ -472,7 +477,7 @@ export function EditPanel({
                                                 const posId = p.id;
                                                 const active = logoPos === posId;
                                                 return (
-                                                    <button key={posId} onClick={() => setLogoPos(posId)}
+                                                    <button key={posId} onClick={() => { setLogoPos(posId); setLogoX(null); setLogoY(null); }}
                                                         style={{
                                                             padding: "10px 4px",
                                                             border: `1.5px solid ${active ? '#6c63ff' : cardBdr}`,

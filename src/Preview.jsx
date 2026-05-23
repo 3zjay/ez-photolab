@@ -4,7 +4,7 @@ import { FONT_MAP, PRESETS, LUT_PRESETS } from "./constants";
 import { apply3DLut } from "./utils";
 import { RAW_EXTENSIONS } from "./rawProcessor";
 
-export function Preview({ image, originalImage, dragging, setDragging, loadImage, fileInputRef, imgRef, splitRef, activeTab, bgResult, bgMode, showBefore, setShowBefore, showSplit, splitPos, isDragSplit, setIsDragSplit, cssFilter, transformCSS, filters, texts, selText, setSelText, updateText, cropMode, cropBox, setCropBox, cropAspect, isEdited, setImage, setBgStatus, setBgSubUrl, setBgResult, isMobile, rotation, flipH, flipV, activeLutData, lutIntensity, lutId, dm, rawLoading, rawProgressMsg, logo, logoScale, logoScalePortrait, logoOpacity, logoPos, logoMargin }) {
+export function Preview({ image, originalImage, dragging, setDragging, loadImage, fileInputRef, imgRef, splitRef, activeTab, bgResult, bgMode, showBefore, setShowBefore, showSplit, splitPos, isDragSplit, setIsDragSplit, cssFilter, transformCSS, filters, texts, selText, setSelText, updateText, cropMode, cropBox, setCropBox, cropAspect, isEdited, setImage, setBgStatus, setBgSubUrl, setBgResult, isMobile, rotation, flipH, flipV, activeLutData, lutIntensity, lutId, dm, rawLoading, rawProgressMsg, logo, logoScale, logoScalePortrait, logoOpacity, logoPos, logoMargin, logoX, setLogoX, logoY, setLogoY, setLogoPos, filterGroup }) {
   const maxH = isMobile ? "40vh" : "calc(100vh - 120px)";
   const activeLut = (lutId && lutId !== 'none') ? (lutId === 'custom'
       ? { name: 'Custom LUT', description: 'User-uploaded custom 3D LUT curve configuration.', bestFor: 'Custom grading workflows', tier: 'premium', icon: '📂' }
@@ -15,6 +15,7 @@ export function Preview({ image, originalImage, dragging, setDragging, loadImage
   );
 
   const [dragTxt, setDragTxt] = useState(null);
+  const [draggingLogo, setDraggingLogo] = useState(false);
   const containerRef = useRef(null);
   const lutCanvasRef = useRef(null);
 
@@ -96,6 +97,37 @@ export function Preview({ image, originalImage, dragging, setDragging, loadImage
     window.addEventListener("mousemove", mm); window.addEventListener("mouseup", up);
     return () => { window.removeEventListener("mousemove", mm); window.removeEventListener("mouseup", up); };
   }, [dragTxt]);
+
+  const startDragLogo = (e) => {
+    e.stopPropagation();
+    e.preventDefault();
+    setDraggingLogo(true);
+  };
+  useEffect(() => {
+    if (!draggingLogo) return;
+    const mm = e => {
+      if (!splitRef.current) return;
+      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+      const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+      const r = splitRef.current.getBoundingClientRect();
+      const nx = Math.min(98, Math.max(2, ((clientX - r.left) / r.width) * 100));
+      const ny = Math.min(98, Math.max(2, ((clientY - r.top) / r.height) * 100));
+      setLogoX(nx);
+      setLogoY(ny);
+      setLogoPos("custom");
+    };
+    const up = () => setDraggingLogo(false);
+    window.addEventListener("mousemove", mm);
+    window.addEventListener("mouseup", up);
+    window.addEventListener("touchmove", mm, { passive: true });
+    window.addEventListener("touchend", up);
+    return () => {
+      window.removeEventListener("mousemove", mm);
+      window.removeEventListener("mouseup", up);
+      window.removeEventListener("touchmove", mm);
+      window.removeEventListener("touchend", up);
+    };
+  }, [draggingLogo, setLogoX, setLogoY, setLogoPos]);
 
   // Render glassmorphic loading screen during RAW decoding
   if (rawLoading) {
@@ -189,11 +221,16 @@ export function Preview({ image, originalImage, dragging, setDragging, loadImage
     position: "absolute",
     width: `${logoWidthPct}%`,
     opacity: logoOpacity,
-    pointerEvents: "none",
+    pointerEvents: (activeTab === 'edit' && filterGroup === 'watermark') ? 'auto' : 'none',
+    cursor: (activeTab === 'edit' && filterGroup === 'watermark') ? (draggingLogo ? 'grabbing' : 'grab') : 'default',
     zIndex: 15,
   };
 
-  if (logoPos === "top-left") {
+  if (logoX !== null && logoY !== null) {
+    logoStyles.left = `${logoX}%`;
+    logoStyles.top = `${logoY}%`;
+    logoStyles.transform = "translate(-50%, -50%)";
+  } else if (logoPos === "top-left") {
     logoStyles.top = `${mPct}%`;
     logoStyles.left = `${mPct}%`;
   } else if (logoPos === "top-center") {
@@ -383,7 +420,8 @@ export function Preview({ image, originalImage, dragging, setDragging, loadImage
             <div style={{ position: "absolute", bottom: "12px", left: "12px", padding: "3px 10px", background: "rgba(108,99,255,.85)", borderRadius: "20px", fontSize: "11px", fontWeight: 700, color: "#fff" }}>AFTER</div>
             <div style={{ position: "absolute", bottom: "12px", right: "12px", padding: "3px 10px", background: "rgba(0,0,0,.5)", borderRadius: "20px", fontSize: "11px", fontWeight: 700, color: "#fff" }}>BEFORE</div>
             {logo && (
-              <img src={logo.src} style={logoStyles} alt="logo-watermark" />
+              <img src={logo.src} style={logoStyles} alt="logo-watermark"
+                onMouseDown={startDragLogo} onTouchStart={startDragLogo} />
             )}
           </>
         ) : (
@@ -427,7 +465,8 @@ export function Preview({ image, originalImage, dragging, setDragging, loadImage
                 </div>
               )}
               {logo && !showBefore && (
-                <img src={logo.src} style={logoStyles} alt="logo-watermark" />
+                <img src={logo.src} style={logoStyles} alt="logo-watermark"
+                  onMouseDown={startDragLogo} onTouchStart={startDragLogo} />
               )}
             </div>
           </>

@@ -261,7 +261,7 @@ export function apply3DLut(imgData, lutData, size, intensity = 1.0) {
   }
 }
 
-export async function renderFinal(imageSrc, cssFilterStr, filters, rotation, flipH, flipV, texts, targetW, targetH, lutData = null, lutSize = 33, lutIntensity = 1.0, logo = null, logoScale = 0.15, logoScalePortrait = 0.30, logoOpacity = 0.7, logoPos = "bottom-right", logoMargin = 20) {
+export async function renderFinal(imageSrc, cssFilterStr, filters, rotation, flipH, flipV, texts, targetW, targetH, lutData = null, lutSize = 33, lutIntensity = 1.0, logo = null, logoScale = 0.15, logoScalePortrait = 0.30, logoOpacity = 0.7, logoPos = "bottom-right", logoMargin = 20, logoX = null, logoY = null) {
   // Always load a fresh Image to avoid canvas taint and stale DOM refs
   const imgEl = await loadImageFromSrc(imageSrc);
   const natW = imgEl.naturalWidth;
@@ -356,19 +356,27 @@ export async function renderFinal(imageSrc, cssFilterStr, filters, rotation, fli
     const isPortrait = H > W;
     const logoW = W * (isPortrait ? logoScalePortrait : logoScale);
     const logoH = (logo.height / logo.width) * logoW;
-    const m = logoMargin;
-    const positions = {
-      'top-left': { x: m, y: m },
-      'top-right': { x: W - logoW - m, y: m },
-      'top-center': { x: (W - logoW) / 2, y: m },
-      'bottom-left': { x: m, y: H - logoH - m },
-      'bottom-right': { x: W - logoW - m, y: H - logoH - m },
-      'bottom-center': { x: (W - logoW) / 2, y: H - logoH - m },
-      'center': { x: (W - logoW) / 2, y: (H - logoH) / 2 },
-      'center-left': { x: m, y: (H - logoH) / 2 },
-      'center-right': { x: W - logoW - m, y: (H - logoH) / 2 }
-    };
-    const { x, y } = positions[logoPos] || positions['bottom-right'];
+    let x, y;
+    if (logoX !== null && logoY !== null) {
+      x = (logoX / 100) * W - logoW / 2;
+      y = (logoY / 100) * H - logoH / 2;
+    } else {
+      const m = logoMargin;
+      const positions = {
+        'top-left': { x: m, y: m },
+        'top-right': { x: W - logoW - m, y: m },
+        'top-center': { x: (W - logoW) / 2, y: m },
+        'bottom-left': { x: m, y: H - logoH - m },
+        'bottom-right': { x: W - logoW - m, y: H - logoH - m },
+        'bottom-center': { x: (W - logoW) / 2, y: H - logoH - m },
+        'center': { x: (W - logoW) / 2, y: (H - logoH) / 2 },
+        'center-left': { x: m, y: (H - logoH) / 2 },
+        'center-right': { x: W - logoW - m, y: (H - logoH) / 2 }
+      };
+      const pos = positions[logoPos] || positions['bottom-right'];
+      x = pos.x;
+      y = pos.y;
+    }
     ctx.globalAlpha = logoOpacity;
     ctx.drawImage(logo, x, y, logoW, logoH);
     ctx.globalAlpha = 1.0;
