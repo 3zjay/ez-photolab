@@ -4,7 +4,7 @@ import { PRESETS, FILTER_GROUPS, COLOR_FILTERS, DEFAULT_FILTERS, LUT_PRESETS } f
 import { parseCubeLut } from "../../lutParser";
 
 export function EditPanel({
-    filters, setFilters, filterGroup, setFilterGroup, isEdited, resetAll, dm, cardBdr, cardBg,
+    filters, setFilters, filterGroup, setFilterGroup, isEdited, resetAll, revertAi, dm, cardBdr, cardBg,
     image, runBrowserUpscale, aiUpscaleStatus, aiUpscaleLog, aiUpscaleProgress, aiUpscaleResult, aiUpscaleResultSize, applyAiResult,
     runBrowserBeauty, aiBeautyStatus, aiBeautyLog, aiBeautyResult, saveFile,
     aiScale, setAiScale, aiBeautySmooth, setAiBeautySmooth, aiBeautyClarity, setAiBeautyClarity, aiBeautyGlow, setAiBeautyGlow,
@@ -246,7 +246,7 @@ export function EditPanel({
                                         <div style={{ position: "absolute", bottom: "6px", right: "6px", padding: "3px 8px", background: "rgba(0,0,0,.6)", borderRadius: "12px", fontSize: "10px", fontWeight: 600, color: "#fff" }}>{aiUpscaleResultSize}</div>
                                     </div>
                                     <div style={{ display: "flex", gap: "7px" }}>
-                                        <AB onClick={() => applyAiResult(aiUpscaleResult)} color={dm ? '#252525' : '#f2f2f8'} textColor={dm ? '#ccc' : '#555'} style={{ flex: 1, padding: "9px", fontSize: "12px" }}>← Apply to Editor</AB>
+                                        <AB onClick={revertAi} color={dm ? '#252525' : '#f2f2f8'} textColor={dm ? '#ccc' : '#555'} style={{ flex: 1, padding: "9px", fontSize: "12px" }}>↺ Revert AI</AB>
                                         <AB onClick={async () => saveFile(await (await fetch(aiUpscaleResult)).blob(), 'upscaled.jpg')} color="purple" textColor="#fff" style={{ flex: 1, padding: "9px", fontSize: "12px" }}>↓ Download</AB>
                                     </div>
                                 </div>
@@ -306,7 +306,7 @@ export function EditPanel({
                                         <img src={aiBeautyResult} alt="beauty" style={{ width: "100%", display: "block" }} />
                                     </div>
                                     <div style={{ display: "flex", gap: "7px" }}>
-                                        <AB onClick={() => applyAiResult(aiBeautyResult)} color={dm ? '#252525' : '#f2f2f8'} textColor={dm ? '#ccc' : '#555'} style={{ flex: 1, padding: "9px", fontSize: "12px" }}>← Apply to Editor</AB>
+                                        <AB onClick={revertAi} color={dm ? '#252525' : '#f2f2f8'} textColor={dm ? '#ccc' : '#555'} style={{ flex: 1, padding: "9px", fontSize: "12px" }}>↺ Revert AI</AB>
                                         <AB onClick={async () => saveFile(await (await fetch(aiBeautyResult)).blob(), 'beauty.jpg')} color="purple" textColor="#fff" style={{ flex: 1, padding: "9px", fontSize: "12px" }}>↓ Download</AB>
                                     </div>
                                 </div>
@@ -337,7 +337,7 @@ export function EditPanel({
                                         <img src={aiFaceRestoreResult} alt="restored" style={{ width: "100%", display: "block" }} />
                                     </div>
                                     <div style={{ display: "flex", gap: "7px" }}>
-                                        <AB onClick={() => applyAiResult(aiFaceRestoreResult)} color={dm ? '#252525' : '#f2f2f8'} textColor={dm ? '#ccc' : '#555'} style={{ flex: 1, padding: "9px", fontSize: "12px" }}>← Apply to Editor</AB>
+                                        <AB onClick={revertAi} color={dm ? '#252525' : '#f2f2f8'} textColor={dm ? '#ccc' : '#555'} style={{ flex: 1, padding: "9px", fontSize: "12px" }}>↺ Revert AI</AB>
                                         <AB onClick={async () => saveFile(await (await fetch(aiFaceRestoreResult)).blob(), 'restored.jpg')} color="purple" textColor="#fff" style={{ flex: 1, padding: "9px", fontSize: "12px" }}>↓ Download</AB>
                                     </div>
                                 </div>

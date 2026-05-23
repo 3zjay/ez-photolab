@@ -158,9 +158,16 @@ async function verifyWritePermission(handle) {
 
 export default function App() {
   const [image, setImage] = useState(null);
+  const [originalImage, setOriginalImage] = useState(null);
   const [filters, setFilters] = useState(DEFAULT_FILTERS);
   const [rawLoading, setRawLoading] = useState(false);
   const [rawProgressMsg, setRawProgressMsg] = useState("");
+
+  useEffect(() => {
+    if (!image) {
+      setOriginalImage(null);
+    }
+  }, [image]);
   
   // PWA INSTALL STATE & LOGIC
   const [deferredPrompt, setDeferredPrompt] = useState(null);
@@ -633,6 +640,7 @@ export default function App() {
           });
           if (result && result.url) {
             setImage(result.url);
+            setOriginalImage(result.url);
             setFilters(DEFAULT_FILTERS);
             
             // Map EXIF orientation to rotation and flips
@@ -686,6 +694,7 @@ export default function App() {
       const reader = new FileReader();
       reader.onload = e => {
         setImage(e.target.result);
+        setOriginalImage(e.target.result);
         setFilters(DEFAULT_FILTERS);
         setRotation(0);
         setFlipH(false);
@@ -708,7 +717,35 @@ export default function App() {
     }
   };
 
-  const resetAll = () => { setFilters(DEFAULT_FILTERS); setRotation(0); setFlipH(false); setFlipV(false); setTexts([]); setSelText(null); setLutId('none'); setLutIntensity(1.0); setCustomLutData(null); setCustomLutName(''); };
+  const resetAll = () => {
+    setFilters(DEFAULT_FILTERS);
+    setRotation(0);
+    setFlipH(false);
+    setFlipV(false);
+    setTexts([]);
+    setSelText(null);
+    setLutId('none');
+    setLutIntensity(1.0);
+    setCustomLutData(null);
+    setCustomLutName('');
+    if (originalImage) {
+      setImage(originalImage);
+    }
+  };
+
+  const revertAi = useCallback(() => {
+    if (originalImage) {
+      setImage(originalImage);
+      setFilters(DEFAULT_FILTERS);
+      setLutId('none');
+      setLutIntensity(1.0);
+      setCustomLutData(null);
+      setCustomLutName('');
+      setAiUpscaleResult(null);
+      setAiBeautyResult(null);
+      setAiFaceRestoreResult(null);
+    }
+  }, [originalImage]);
 
   const applyCrop = () => {
     const img = imgRef.current; if (!img) return;
@@ -1856,6 +1893,7 @@ export default function App() {
       setAiUpscaleResultSize(`${W.toLocaleString()}×${H.toLocaleString()}px · ~${approxKb > 1024 ? (approxKb / 1024).toFixed(1) + 'MB' : approxKb + 'KB'}`);
       setAiUpscaleResult(resultUrl);
       setAiUpscaleStatus('done'); setAiUpscaleLog(''); setAiUpscaleProgress(100);
+      applyAiResult(resultUrl);
     } catch (e) {
       console.error('Upscale error:', e);
       setAiUpscaleStatus('error'); setAiUpscaleLog(e.message || 'Upscale failed');
@@ -1886,8 +1924,10 @@ export default function App() {
       setAiBeautyLog('Applying beauty filters...');
       await applyBeautyPipeline(canvas, ctx, W, H, aiBeautySmooth, aiBeautyClarity, aiBeautyGlow, mask);
 
-      setAiBeautyResult(canvas.toDataURL('image/jpeg', 0.95));
+      const beautyUrl = canvas.toDataURL('image/jpeg', 0.95);
+      setAiBeautyResult(beautyUrl);
       setAiBeautyStatus('done'); setAiBeautyLog('');
+      applyAiResult(beautyUrl);
     } catch (e) {
       console.error('Beauty error:', e);
       setAiBeautyStatus('error'); setAiBeautyLog(e.message || 'Beauty filter failed');
@@ -1908,6 +1948,7 @@ export default function App() {
       const resultUrl = await restoreFaceLocal(tmp, msg => setAiFaceRestoreLog(msg));
       setAiFaceRestoreResult(resultUrl);
       setAiFaceRestoreStatus('done'); setAiFaceRestoreLog('');
+      applyAiResult(resultUrl);
     } catch (e) {
       console.error('Face Restore error:', e);
       setAiFaceRestoreStatus('error');
@@ -1932,7 +1973,7 @@ export default function App() {
         <OverlayPanel {...{ image, texts, selText, setSelText, addText, deleteText, updateText, dm, cardBg, cardBdr, inputSt }} />
       )}
       {activeTab === "edit" && (
-        <EditPanel {...{ filters, setFilters, filterGroup, setFilterGroup, isEdited, resetAll, dm, cardBdr, cardBg, image, runBrowserUpscale, aiUpscaleStatus, aiUpscaleLog, aiUpscaleProgress, aiUpscaleResult, aiUpscaleResultSize, applyAiResult, runBrowserBeauty, aiBeautyStatus, aiBeautyLog, aiBeautyResult, saveFile, aiScale, setAiScale, aiBeautySmooth, setAiBeautySmooth, aiBeautyClarity, setAiBeautyClarity, aiBeautyGlow, setAiBeautyGlow, aiBeautyUseMask, setAiBeautyUseMask, runFalFaceRestore, aiFaceRestoreStatus, aiFaceRestoreLog, aiFaceRestoreResult, lutId, setLutId, lutIntensity, setLutIntensity, customLutData, setCustomLutData, customLutName, setCustomLutName }} />
+        <EditPanel {...{ filters, setFilters, filterGroup, setFilterGroup, isEdited, resetAll, revertAi, dm, cardBdr, cardBg, image, runBrowserUpscale, aiUpscaleStatus, aiUpscaleLog, aiUpscaleProgress, aiUpscaleResult, aiUpscaleResultSize, applyAiResult, runBrowserBeauty, aiBeautyStatus, aiBeautyLog, aiBeautyResult, saveFile, aiScale, setAiScale, aiBeautySmooth, setAiBeautySmooth, aiBeautyClarity, setAiBeautyClarity, aiBeautyGlow, setAiBeautyGlow, aiBeautyUseMask, setAiBeautyUseMask, runFalFaceRestore, aiFaceRestoreStatus, aiFaceRestoreLog, aiFaceRestoreResult, lutId, setLutId, lutIntensity, setLutIntensity, customLutData, setCustomLutData, customLutName, setCustomLutName }} />
       )}
       {activeTab === "batch" && (
         <div style={{ padding: "16px", color: dm ? '#aaa' : '#888', fontSize: "13px", textAlign: "center" }}>
@@ -2123,7 +2164,7 @@ export default function App() {
               {renderPanel()}
             </div>
             <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: "20px", position: "relative", overflow: "hidden" }}>
-              <Preview {...{ image, dragging, setDragging, loadImage, fileInputRef, imgRef, splitRef, previewRef, activeTab, bgResult, bgMode, showBefore, setShowBefore, showSplit, splitPos, isDragSplit, setIsDragSplit, cssFilter, transformCSS, filters, texts, selText, setSelText, updateText, cropMode, cropBox, setCropBox, cropAspect, isEdited, setImage, setBgStatus, setBgSubUrl, setBgResult, isMobile, rotation, flipH, flipV, activeLutData, lutIntensity, lutId, dm, rawLoading, rawProgressMsg }} />
+              <Preview {...{ image, originalImage, dragging, setDragging, loadImage, fileInputRef, imgRef, splitRef, previewRef, activeTab, bgResult, bgMode, showBefore, setShowBefore, showSplit, splitPos, isDragSplit, setIsDragSplit, cssFilter, transformCSS, filters, texts, selText, setSelText, updateText, cropMode, cropBox, setCropBox, cropAspect, isEdited, setImage, setBgStatus, setBgSubUrl, setBgResult, isMobile, rotation, flipH, flipV, activeLutData, lutIntensity, lutId, dm, rawLoading, rawProgressMsg }} />
             </div>
           </div>
         )
@@ -2149,7 +2190,7 @@ export default function App() {
         ) : (
           <div style={{ display: "flex", flexDirection: "column", height: "calc(100vh - 52px)", overflow: "hidden" }}>
             <div style={{ height: "42vh", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", position: "relative", borderBottom: `1px solid ${dm ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'}` }}>
-              <Preview {...{ image, dragging, setDragging, loadImage, fileInputRef, imgRef, splitRef, previewRef, activeTab, bgResult, bgMode, showBefore, setShowBefore, showSplit, splitPos, isDragSplit, setIsDragSplit, cssFilter, transformCSS, filters, texts, selText, setSelText, updateText, cropMode, cropBox, setCropBox, cropAspect, isEdited, setImage, setBgStatus, setBgSubUrl, setBgResult, isMobile, rotation, flipH, flipV, activeLutData, lutIntensity, lutId, dm, rawLoading, rawProgressMsg }} />
+              <Preview {...{ image, originalImage, dragging, setDragging, loadImage, fileInputRef, imgRef, splitRef, previewRef, activeTab, bgResult, bgMode, showBefore, setShowBefore, showSplit, splitPos, isDragSplit, setIsDragSplit, cssFilter, transformCSS, filters, texts, selText, setSelText, updateText, cropMode, cropBox, setCropBox, cropAspect, isEdited, setImage, setBgStatus, setBgSubUrl, setBgResult, isMobile, rotation, flipH, flipV, activeLutData, lutIntensity, lutId, dm, rawLoading, rawProgressMsg }} />
             </div>
             <div className="glass-panel" style={{ flex: 1, overflowY: "auto", WebkitOverflowScrolling: "touch", borderTop: `1px solid ${dm ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'}` }}>
               {renderPanel(true)}

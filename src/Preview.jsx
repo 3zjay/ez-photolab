@@ -1,11 +1,19 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import { FONT_MAP } from "./constants";
+import { FONT_MAP, PRESETS, LUT_PRESETS } from "./constants";
 import { apply3DLut } from "./utils";
 import { RAW_EXTENSIONS } from "./rawProcessor";
 
-export function Preview({ image, dragging, setDragging, loadImage, fileInputRef, imgRef, splitRef, activeTab, bgResult, bgMode, showBefore, setShowBefore, showSplit, splitPos, isDragSplit, setIsDragSplit, cssFilter, transformCSS, filters, texts, selText, setSelText, updateText, cropMode, cropBox, setCropBox, cropAspect, isEdited, setImage, setBgStatus, setBgSubUrl, setBgResult, isMobile, rotation, flipH, flipV, activeLutData, lutIntensity, lutId, dm, rawLoading, rawProgressMsg }) {
+export function Preview({ image, originalImage, dragging, setDragging, loadImage, fileInputRef, imgRef, splitRef, activeTab, bgResult, bgMode, showBefore, setShowBefore, showSplit, splitPos, isDragSplit, setIsDragSplit, cssFilter, transformCSS, filters, texts, selText, setSelText, updateText, cropMode, cropBox, setCropBox, cropAspect, isEdited, setImage, setBgStatus, setBgSubUrl, setBgResult, isMobile, rotation, flipH, flipV, activeLutData, lutIntensity, lutId, dm, rawLoading, rawProgressMsg }) {
   const maxH = isMobile ? "40vh" : "calc(100vh - 120px)";
+  const activeLut = (lutId && lutId !== 'none') ? (lutId === 'custom'
+      ? { name: 'Custom LUT', description: 'User-uploaded custom 3D LUT curve configuration.', bestFor: 'Custom grading workflows', tier: 'premium', icon: '📂' }
+      : LUT_PRESETS.find(p => p.id === lutId)) : null;
+
+  const activePreset = PRESETS.find(p => 
+      filters && Object.keys(p.values).every(k => filters[k] === p.values[k])
+  );
+
   const [dragTxt, setDragTxt] = useState(null);
   const containerRef = useRef(null);
   const lutCanvasRef = useRef(null);
@@ -153,6 +161,77 @@ export function Preview({ image, dragging, setDragging, loadImage, fileInputRef,
 
   return (
     <>
+      {activeTab === "edit" && (activeLut || activePreset) && (
+        <div className="glass-panel" style={{
+          position: "absolute",
+          top: "12px",
+          left: "12px",
+          zIndex: 30,
+          maxWidth: isMobile ? "180px" : "280px",
+          background: dm ? "rgba(30, 30, 40, 0.75)" : "rgba(255, 255, 255, 0.85)",
+          backdropFilter: "blur(16px)",
+          WebkitBackdropFilter: "blur(16px)",
+          border: `1px solid ${dm ? "rgba(255, 255, 255, 0.08)" : "rgba(108, 99, 255, 0.15)"}`,
+          borderRadius: "12px",
+          padding: "10px 12px",
+          boxShadow: "0 8px 32px rgba(0, 0, 0, 0.25)",
+          display: "flex",
+          flexDirection: "column",
+          gap: "4px",
+          pointerEvents: "none",
+          animation: "fadeIn 0.2s ease"
+        }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+            <span style={{ fontSize: "12px", fontWeight: 800, color: dm ? "#f3f4f6" : "#1f2937", display: "flex", alignItems: "center", gap: "6px" }}>
+              <span>{activeLut ? activeLut.icon : (activePreset?.icon || "🎨")}</span>
+              <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "90px" }}>
+                {activeLut ? activeLut.name : activePreset?.name}
+              </span>
+            </span>
+            {activeLut?.tier === 'premium' && (
+              <span style={{
+                fontSize: "8px",
+                fontWeight: 800,
+                padding: "2px 5px",
+                background: "linear-gradient(135deg, #06b6d4 0%, #6c63ff 100%)",
+                color: "#fff",
+                borderRadius: "5px",
+                textTransform: "uppercase",
+                letterSpacing: "0.05em",
+                boxShadow: "0 2px 5px rgba(108,99,255,0.25)",
+                whiteSpace: "nowrap"
+              }}>
+                💎 Premium Look
+              </span>
+            )}
+            {!activeLut && activePreset && (
+              <span style={{
+                fontSize: "8px",
+                fontWeight: 800,
+                padding: "2px 5px",
+                background: dm ? "#3b3b4f" : "#e8e8f8",
+                color: dm ? "#a78bfa" : "#6c63ff",
+                borderRadius: "5px",
+                textTransform: "uppercase",
+                letterSpacing: "0.05em",
+                whiteSpace: "nowrap"
+              }}>
+                Preset
+              </span>
+            )}
+          </div>
+          <p style={{ fontSize: "10px", color: dm ? "#ccc" : "#4b5563", margin: 0, lineHeight: 1.3, display: isMobile ? "none" : "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+            {activeLut ? activeLut.description : `Preset color values applied: ${Object.keys(activePreset.values).join(', ')}`}
+          </p>
+          <div style={{ display: isMobile ? "none" : "flex", alignItems: "center", gap: "4px", marginTop: "2px" }}>
+            <span style={{ fontSize: "9px", fontWeight: 700, color: "#6c63ff" }}>Best for:</span>
+            <span style={{ fontSize: "9px", color: dm ? "#aaa" : "#666", fontWeight: 600 }}>
+              {activeLut ? activeLut.bestFor : "Unified tone styles"}
+            </span>
+          </div>
+        </div>
+      )}
+
       {activeTab === "edit" && !showSplit && !cropMode && (
         <div style={{ position: "absolute", top: "12px", right: "12px", display: "flex", background: "#fff", border: "1.5px solid #eee", zIndex: 10, borderRadius: "10px", padding: "3px", gap: "2px", boxShadow: "0 2px 8px rgba(0,0,0,.08)" }}>
           {["After", "Before"].map(l => (
@@ -182,7 +261,7 @@ export function Preview({ image, dragging, setDragging, loadImage, fileInputRef,
             {filters.temperature !== 0 && <div style={{ position: "absolute", inset: 0, background: tempColor, mixBlendMode: "overlay", pointerEvents: "none", clipPath: `inset(0 ${100 - splitPos}% 0 0)` }} />}
             {filters.vignette > 0 && <div style={{ position: "absolute", inset: 0, background: `radial-gradient(ellipse at center,transparent 38%,rgba(0,0,0,${filters.vignette / 100}) 100%)`, pointerEvents: "none", clipPath: `inset(0 ${100 - splitPos}% 0 0)` }} />}
             <div style={{ position: "absolute", inset: 0, clipPath: `inset(0 0 0 ${splitPos}%)` }}>
-              <img src={image} alt="before" style={{ maxWidth: "100%", maxHeight: maxH, objectFit: "contain", display: "block", filter: "none", transform: transformCSS }} />
+              <img src={originalImage || image} alt="before" style={{ maxWidth: "100%", maxHeight: maxH, objectFit: "contain", display: "block", filter: "none", transform: transformCSS }} />
             </div>
             <div onMouseDown={e => { e.preventDefault(); setIsDragSplit(true); }} onTouchStart={e => { e.preventDefault(); setIsDragSplit(true); }}
               style={{ position: "absolute", top: 0, bottom: 0, left: `${splitPos}%`, transform: "translateX(-50%)", width: "44px", zIndex: 20, display: "flex", alignItems: "center", justifyContent: "center", cursor: isDragSplit ? "grabbing" : "ew-resize" }}>
@@ -195,7 +274,7 @@ export function Preview({ image, dragging, setDragging, loadImage, fileInputRef,
         ) : (
           <>
             <div ref={containerRef} style={{ position: "relative", lineHeight: 0 }}>
-              <img ref={imgRef} src={image} alt="photo"
+              <img ref={imgRef} src={showBefore ? (originalImage || image) : image} alt="photo"
                 style={{ maxWidth: "100%", maxHeight: maxH, objectFit: "contain", display: "block", filter: showBefore || activeTab === "tools" ? "none" : (activeLutData && lutId !== 'none' && !showBefore && activeTab === 'edit' ? 'none' : cssFilter), transition: "filter .08s ease", transform: showBefore ? "none" : transformCSS, visibility: (activeLutData && lutId !== 'none' && !showBefore && activeTab === 'edit') ? 'hidden' : 'visible' }} />
               {/* LUT Preview Canvas */}
               <canvas ref={lutCanvasRef} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "contain", pointerEvents: "none", display: (activeLutData && lutId !== 'none' && !showBefore && activeTab === 'edit') ? 'block' : 'none', transform: showBefore ? "none" : transformCSS }} />
