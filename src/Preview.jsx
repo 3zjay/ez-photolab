@@ -4,7 +4,7 @@ import { FONT_MAP, PRESETS, LUT_PRESETS } from "./constants";
 import { apply3DLut } from "./utils";
 import { RAW_EXTENSIONS } from "./rawProcessor";
 
-export function Preview({ image, originalImage, dragging, setDragging, loadImage, fileInputRef, imgRef, splitRef, activeTab, bgResult, bgMode, showBefore, setShowBefore, showSplit, splitPos, isDragSplit, setIsDragSplit, cssFilter, transformCSS, filters, texts, selText, setSelText, updateText, cropMode, cropBox, setCropBox, cropAspect, isEdited, setImage, setBgStatus, setBgSubUrl, setBgResult, isMobile, rotation, flipH, flipV, activeLutData, lutIntensity, lutId, dm, rawLoading, rawProgressMsg }) {
+export function Preview({ image, originalImage, dragging, setDragging, loadImage, fileInputRef, imgRef, splitRef, activeTab, bgResult, bgMode, showBefore, setShowBefore, showSplit, splitPos, isDragSplit, setIsDragSplit, cssFilter, transformCSS, filters, texts, selText, setSelText, updateText, cropMode, cropBox, setCropBox, cropAspect, isEdited, setImage, setBgStatus, setBgSubUrl, setBgResult, isMobile, rotation, flipH, flipV, activeLutData, lutIntensity, lutId, dm, rawLoading, rawProgressMsg, logo, logoScale, logoScalePortrait, logoOpacity, logoPos, logoMargin }) {
   const maxH = isMobile ? "40vh" : "calc(100vh - 120px)";
   const activeLut = (lutId && lutId !== 'none') ? (lutId === 'custom'
       ? { name: 'Custom LUT', description: 'User-uploaded custom 3D LUT curve configuration.', bestFor: 'Custom grading workflows', tier: 'premium', icon: '📂' }
@@ -181,6 +181,52 @@ export function Preview({ image, originalImage, dragging, setDragging, loadImage
 
 
 
+  const isPortrait = dimensions.h > dimensions.w;
+  const mPct = dimensions.w ? (logoMargin / dimensions.w) * 100 : 2;
+  const logoWidthPct = (isPortrait ? logoScalePortrait : logoScale) * 100;
+
+  const logoStyles = {
+    position: "absolute",
+    width: `${logoWidthPct}%`,
+    opacity: logoOpacity,
+    pointerEvents: "none",
+    zIndex: 15,
+  };
+
+  if (logoPos === "top-left") {
+    logoStyles.top = `${mPct}%`;
+    logoStyles.left = `${mPct}%`;
+  } else if (logoPos === "top-center") {
+    logoStyles.top = `${mPct}%`;
+    logoStyles.left = "50%";
+    logoStyles.transform = "translateX(-50%)";
+  } else if (logoPos === "top-right") {
+    logoStyles.top = `${mPct}%`;
+    logoStyles.right = `${mPct}%`;
+  } else if (logoPos === "center-left") {
+    logoStyles.top = "50%";
+    logoStyles.left = `${mPct}%`;
+    logoStyles.transform = "translateY(-50%)";
+  } else if (logoPos === "center") {
+    logoStyles.top = "50%";
+    logoStyles.left = "50%";
+    logoStyles.transform = "translate(-50%, -50%)";
+  } else if (logoPos === "center-right") {
+    logoStyles.top = "50%";
+    logoStyles.right = `${mPct}%`;
+    logoStyles.transform = "translateY(-50%)";
+  } else if (logoPos === "bottom-left") {
+    logoStyles.bottom = `${mPct}%`;
+    logoStyles.left = `${mPct}%`;
+  } else if (logoPos === "bottom-center") {
+    logoStyles.bottom = `${mPct}%`;
+    logoStyles.left = "50%";
+    logoStyles.transform = "translateX(-50%)";
+  } else { // bottom-right
+    logoStyles.bottom = `${mPct}%`;
+    logoStyles.right = `${mPct}%`;
+  }
+
   return (
     <>
       {activeTab === "edit" && (activeLut || activePreset) && (
@@ -336,6 +382,9 @@ export function Preview({ image, originalImage, dragging, setDragging, loadImage
             </div>
             <div style={{ position: "absolute", bottom: "12px", left: "12px", padding: "3px 10px", background: "rgba(108,99,255,.85)", borderRadius: "20px", fontSize: "11px", fontWeight: 700, color: "#fff" }}>AFTER</div>
             <div style={{ position: "absolute", bottom: "12px", right: "12px", padding: "3px 10px", background: "rgba(0,0,0,.5)", borderRadius: "20px", fontSize: "11px", fontWeight: 700, color: "#fff" }}>BEFORE</div>
+            {logo && (
+              <img src={logo.src} style={logoStyles} alt="logo-watermark" />
+            )}
           </>
         ) : (
           <>
@@ -376,6 +425,9 @@ export function Preview({ image, originalImage, dragging, setDragging, loadImage
                     ))}
                   </div>
                 </div>
+              )}
+              {logo && !showBefore && (
+                <img src={logo.src} style={logoStyles} alt="logo-watermark" />
               )}
             </div>
           </>

@@ -9,7 +9,9 @@ export function EditPanel({
     runBrowserBeauty, aiBeautyStatus, aiBeautyLog, aiBeautyResult, saveFile,
     aiScale, setAiScale, aiBeautySmooth, setAiBeautySmooth, aiBeautyClarity, setAiBeautyClarity, aiBeautyGlow, setAiBeautyGlow,
     aiBeautyUseMask, setAiBeautyUseMask, runFalFaceRestore, aiFaceRestoreStatus, aiFaceRestoreLog, aiFaceRestoreResult,
-    lutId, setLutId, lutIntensity, setLutIntensity, customLutData, setCustomLutData, customLutName, setCustomLutName
+    lutId, setLutId, lutIntensity, setLutIntensity, customLutData, setCustomLutData, customLutName, setCustomLutName,
+    user, logo, setLogo, logoFile, setLogoFile, logoScale, setLogoScale, logoScalePortrait, setLogoScalePortrait,
+    logoOpacity, setLogoOpacity, logoPos, setLogoPos, logoMargin, setLogoMargin, handleLogoUpload
 }) {
     const [styleType, setStyleType] = useState(lutId !== 'none' ? 'lut' : 'preset');
 
@@ -350,6 +352,149 @@ export function EditPanel({
                         <span style={{ fontSize: "13px", color: dm ? '#ccc' : '#666' }}>Upload a photo to use AI Tools.</span>
                     </div>
                 )}
+                {filterGroup === 'watermark' && (() => {
+                    const isStudioTeam = user && (user.tier === "team" || user.tier === "admin");
+                    if (!isStudioTeam) {
+                        return (
+                            <div style={{
+                                position: "relative",
+                                overflow: "hidden",
+                                border: `1.5px dashed rgba(108, 99, 255, ${dm ? "0.2" : "0.15"})`,
+                                background: dm ? "rgba(108, 99, 255, 0.02)" : "rgba(108, 99, 255, 0.015)",
+                                padding: "20px 14px",
+                                borderRadius: "12px"
+                            }}>
+                                <SL>Logo / Watermark</SL>
+                                <div style={{
+                                    display: "flex",
+                                    flexDirection: "column",
+                                    alignItems: "center",
+                                    textAlign: "center",
+                                    gap: "12px",
+                                    padding: "10px 0"
+                                }}>
+                                    <span style={{ fontSize: "24px" }}>💎</span>
+                                    <div style={{ fontSize: "13px", fontWeight: 800, color: dm ? "#ffffff" : "#111827" }}>
+                                        Studio Team Plan Required
+                                    </div>
+                                    <p style={{ fontSize: "11.5px", color: dm ? "#cbd5e1" : "#4b5563", lineHeight: 1.5, margin: 0 }}>
+                                        Custom brand watermarking and asset layout design require the Studio Team Plan. Update your subscription to unlock.
+                                    </p>
+                                    <button
+                                        onClick={() => {
+                                            const el = document.getElementById("pricing-container");
+                                            if (el) {
+                                                el.scrollIntoView({ behavior: "smooth" });
+                                            } else {
+                                                window.location.hash = "#pricing-container";
+                                            }
+                                        }}
+                                        style={{
+                                            background: "linear-gradient(135deg, #06b6d4 0%, #6c63ff 100%)",
+                                            color: "#ffffff",
+                                            border: "none",
+                                            borderRadius: "8px",
+                                            padding: "8px 16px",
+                                            fontSize: "12px",
+                                            fontWeight: 800,
+                                            cursor: "pointer",
+                                            boxShadow: "0 4px 12px rgba(108, 99, 255, 0.2)",
+                                            fontFamily: "inherit"
+                                        }}
+                                    >
+                                        💎 Upgrade to Studio Team
+                                    </button>
+                                </div>
+                            </div>
+                        );
+                    }
+                    return (
+                        <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                            <div style={{ padding: "14px", background: cardBg, border: `1.5px solid ${cardBdr}`, borderRadius: "12px", display: "flex", flexDirection: "column", gap: "12px" }}>
+                                <SL>Logo / Watermark</SL>
+                                <label style={{ display: "block", padding: "16px 12px", border: `2px dashed ${logo ? '#6c63ff' : cardBdr}`, borderRadius: "10px", cursor: "pointer", textAlign: "center", transition: "all .2s", background: logo ? (dm ? '#1e1a3a' : '#faf9ff') : dm ? '#252525' : '#fafafa' }}>
+                                    <input type="file" accept="image/*" onChange={handleLogoUpload} style={{ display: "none" }} />
+                                    {logo
+                                        ? <><div style={{ fontSize: "26px", marginBottom: "5px" }}>✅</div><div style={{ fontSize: "12px", fontWeight: 600, color: '#6c63ff', marginBottom: "2px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{logoFile?.name || "Logo Active"}</div><div style={{ fontSize: "11px", color: "#bbb" }}>Click to replace</div></>
+                                        : <><div style={{ fontSize: "26px", marginBottom: "5px" }}>🖼</div><div style={{ fontSize: "12px", fontWeight: 600, color: dm ? '#ccc' : '#555', marginBottom: "2px" }}>Click to upload logo</div><div style={{ fontSize: "11px", color: "#bbb" }}>PNG with transparency works best</div></>}
+                                </label>
+                                {logo && (
+                                    <AB onClick={() => { setLogo(null); setLogoFile(null); }} color="red" textColor="#fff" style={{ width: "100%", padding: "8px", fontSize: "12px" }}>
+                                        ✕ Remove Logo
+                                    </AB>
+                                )}
+                            </div>
+
+                            {logo && (
+                                <>
+                                    <div style={{ padding: "14px", background: cardBg, border: `1.5px solid ${cardBdr}`, borderRadius: "12px", display: "flex", flexDirection: "column", gap: "12px" }}>
+                                        <SL>Logo Size & Opacity</SL>
+                                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                                            <div>
+                                                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "5px" }}>
+                                                    <span style={{ fontSize: "11px", color: dm ? '#ccc' : '#555' }}>Size (Landscape)</span>
+                                                    <span style={{ fontSize: "11px", color: '#6c63ff', fontWeight: 700 }}>{(logoScale * 100).toFixed(0)}%</span>
+                                                </div>
+                                                <SmoothSlider min={0.03} max={1.0} step={0.01} value={logoScale} defaultValue={0.15} onChange={setLogoScale} />
+                                            </div>
+                                            <div>
+                                                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "5px" }}>
+                                                    <span style={{ fontSize: "11px", color: dm ? '#ccc' : '#555' }}>Size (Portrait)</span>
+                                                    <span style={{ fontSize: "11px", color: '#6c63ff', fontWeight: 700 }}>{(logoScalePortrait * 100).toFixed(0)}%</span>
+                                                </div>
+                                                <SmoothSlider min={0.03} max={1.0} step={0.01} value={logoScalePortrait} defaultValue={0.30} onChange={setLogoScalePortrait} />
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "5px" }}>
+                                                <span style={{ fontSize: "12px", color: dm ? '#ccc' : '#555' }}>Opacity</span>
+                                                <span style={{ fontSize: "12px", color: '#6c63ff', fontWeight: 700 }}>{Math.round(logoOpacity * 100)}%</span>
+                                            </div>
+                                            <SmoothSlider min={0.1} max={1.0} step={0.05} value={logoOpacity} defaultValue={0.7} onChange={setLogoOpacity} />
+                                        </div>
+                                        <div>
+                                            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "5px" }}>
+                                                <span style={{ fontSize: "12px", color: dm ? '#ccc' : '#555' }}>Margin from edge</span>
+                                                <span style={{ fontSize: "12px", color: '#6c63ff', fontWeight: 700 }}>{logoMargin}px</span>
+                                            </div>
+                                            <SmoothSlider min={0} max={100} step={5} value={logoMargin} defaultValue={20} onChange={setLogoMargin} />
+                                        </div>
+                                    </div>
+
+                                    <div style={{ padding: "14px", background: cardBg, border: `1.5px solid ${cardBdr}`, borderRadius: "12px", display: "flex", flexDirection: "column", gap: "12px" }}>
+                                        <SL>Logo Position</SL>
+                                        <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "5px" }}>
+                                            {[
+                                                { id: "top-left", l: "↖" }, { id: "top-center", l: "↑" }, { id: "top-right", l: "↗" },
+                                                { id: "center-left", l: "←" }, { id: "center", l: "⊕" }, { id: "center-right", l: "→" },
+                                                { id: "bottom-left", l: "↙" }, { id: "bottom-center", l: "↓" }, { id: "bottom-right", l: "↘" },
+                                            ].map(p => {
+                                                const posId = p.id;
+                                                const active = logoPos === posId;
+                                                return (
+                                                    <button key={posId} onClick={() => setLogoPos(posId)}
+                                                        style={{
+                                                            padding: "10px 4px",
+                                                            border: `1.5px solid ${active ? '#6c63ff' : cardBdr}`,
+                                                            background: active ? '#6c63ff' : dm ? '#252525' : '#f8f8fd',
+                                                            borderRadius: "8px",
+                                                            fontSize: "14px",
+                                                            cursor: "pointer",
+                                                            color: active ? "#fff" : dm ? '#ccc' : '#555',
+                                                            transition: "all .15s",
+                                                            fontFamily: "inherit"
+                                                        }}>
+                                                        {p.l}
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                </>
+                            )}
+                        </div>
+                    );
+                })()}
             </div>
             {isEdited && (
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: "4px", borderTop: `1px solid ${cardBdr}` }}>

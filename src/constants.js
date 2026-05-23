@@ -26,6 +26,7 @@ export const FILTER_GROUPS = [
   { key:"hsl",     label:"Color" },
   { key:"style",   label:"Style" },
   { key:"ai",      label:"✨ AI" },
+  { key:"watermark", label:"🏷 Logo" },
 ];
 
 export const PRESETS = [
