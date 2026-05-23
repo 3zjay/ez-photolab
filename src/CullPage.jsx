@@ -26,6 +26,93 @@ function StarRating({ rating, onChange, size = 18 }) {
   );
 }
 
+const TimelineItem = React.memo(({ grp, idx, isCurrent, onClick, accent }) => {
+  const rep = grp[0];
+  const elementRef = useRef(null);
+
+  useEffect(() => {
+    if (isCurrent && elementRef.current) {
+      elementRef.current.scrollIntoView({
+        behavior: "smooth",
+        block: "nearest",
+        inline: "center"
+      });
+    }
+  }, [isCurrent]);
+
+  if (!rep) return null;
+
+  const catColorMap = { keeper: "#22c55e", alternate: "#3b82f6", blurry: "#eab308", rejected: "#ef4444" };
+  const repCat = rep.category || (rep.isKeyPhoto ? "keeper" : "alternate");
+  const tierColor = catColorMap[repCat] || accent;
+
+  const gKeepers   = grp.filter(x => (x.category || "alternate") === "keeper").length;
+  const gBlurry    = grp.filter(x => x.category === "blurry").length;
+  const gRejected  = grp.filter(x => x.category === "rejected").length;
+
+  return (
+    <div
+      ref={elementRef}
+      onClick={() => onClick(idx)}
+      style={{
+        flexShrink: 0,
+        width: "90px",
+        borderRadius: "10px",
+        border: `2px solid ${isCurrent ? tierColor : "transparent"}`,
+        overflow: "hidden",
+        cursor: "pointer",
+        position: "relative",
+        background: "#000",
+        transition: "all 0.15s ease",
+        boxShadow: isCurrent ? `0 4px 12px ${tierColor}44` : "none"
+      }}
+      onMouseEnter={(e) => {
+        if (!isCurrent) e.currentTarget.style.borderColor = `${tierColor}88`;
+      }}
+      onMouseLeave={(e) => {
+        if (!isCurrent) e.currentTarget.style.borderColor = "transparent";
+      }}
+    >
+      <img
+        src={rep.thumbnailUrl || rep.previewUrl}
+        alt=""
+        loading="lazy"
+        style={{ width: "100%", height: "64px", objectFit: "cover", opacity: isCurrent ? 1.0 : 0.6, display: "block" }}
+      />
+
+      {/* Tier color dot top-left */}
+      <div style={{
+        position: "absolute", top: "4px", left: "4px",
+        width: "8px", height: "8px", borderRadius: "50%",
+        background: tierColor,
+        boxShadow: `0 0 5px ${tierColor}`
+      }} />
+
+      {/* Group Count Badge */}
+      <div style={{
+        position: "absolute", bottom: "4px", right: "4px",
+        background: "rgba(10,10,15,0.92)", color: "#fff",
+        fontSize: "9px", fontWeight: 800,
+        padding: "2px 5px", borderRadius: "5px",
+        border: "1px solid rgba(255,255,255,0.05)"
+      }}>
+        x{grp.length}
+      </div>
+
+      {/* Warn badges */}
+      {(gBlurry > 0 || gRejected > 0) && (
+        <div style={{
+          position: "absolute", bottom: "4px", left: "4px",
+          display: "flex", gap: "2px"
+        }}>
+          {gBlurry > 0 && <span style={{ fontSize: "8px", background: "#eab30888", color: "#fff", padding: "1px 3px", borderRadius: "3px", fontWeight: 800 }}>◐{gBlurry}</span>}
+          {gRejected > 0 && <span style={{ fontSize: "8px", background: "#ef444488", color: "#fff", padding: "1px 3px", borderRadius: "3px", fontWeight: 800 }}>✕{gRejected}</span>}
+        </div>
+      )}
+    </div>
+  );
+});
+
 export default function CullPage({
   dm,
   cardBg,
@@ -99,6 +186,12 @@ export default function CullPage({
 
     setGroups(groupedList);
     setActiveGroupIndex(0);
+    setActiveAlternateIndex(0);
+  }, []);
+
+  // Stable callback for timeline item selection to prevent memoized re-render triggers
+  const handleTimelineItemClick = useCallback((idx) => {
+    setActiveGroupIndex(idx);
     setActiveAlternateIndex(0);
   }, []);
 
@@ -1623,84 +1716,16 @@ export default function CullPage({
               scrollBehavior: "smooth"
             }}
           >
-            {groups.map((grp, idx) => {
-              const isCurrent = idx === activeGroupIndex;
-              const rep = grp[0]; // Representative / key photo
-
-              // Color-code strip border by the key photo's tier
-              const catColorMap = { keeper: "#22c55e", alternate: "#3b82f6", blurry: "#eab308", rejected: "#ef4444" };
-              const repCat = rep.category || (rep.isKeyPhoto ? "keeper" : "alternate");
-              const tierColor = catColorMap[repCat] || accent;
-
-              // Count each tier inside this group
-              const gKeepers   = grp.filter(x => (x.category || "alternate") === "keeper").length;
-              const gBlurry    = grp.filter(x => x.category === "blurry").length;
-              const gRejected  = grp.filter(x => x.category === "rejected").length;
-
-              return (
-                <div
-                  key={idx}
-                  onClick={() => {
-                    setActiveGroupIndex(idx);
-                    setActiveAlternateIndex(0);
-                  }}
-                  style={{
-                    flexShrink: 0,
-                    width: "90px",
-                    borderRadius: "10px",
-                    border: `2px solid ${isCurrent ? tierColor : "transparent"}`,
-                    overflow: "hidden",
-                    cursor: "pointer",
-                    position: "relative",
-                    background: "#000",
-                    transition: "all 0.15s ease",
-                    boxShadow: isCurrent ? `0 4px 12px ${tierColor}44` : "none"
-                  }}
-                  onMouseEnter={(e) => {
-                    if (!isCurrent) e.currentTarget.style.borderColor = `${tierColor}88`;
-                  }}
-                  onMouseLeave={(e) => {
-                    if (!isCurrent) e.currentTarget.style.borderColor = "transparent";
-                  }}
-                >
-                  <img
-                    src={rep.thumbnailUrl || rep.previewUrl}
-                    alt=""
-                    style={{ width: "100%", height: "64px", objectFit: "cover", opacity: isCurrent ? 1.0 : 0.6, display: "block" }}
-                  />
-
-                  {/* Tier color dot top-left */}
-                  <div style={{
-                    position: "absolute", top: "4px", left: "4px",
-                    width: "8px", height: "8px", borderRadius: "50%",
-                    background: tierColor,
-                    boxShadow: `0 0 5px ${tierColor}`
-                  }} />
-
-                  {/* Group Count Badge */}
-                  <div style={{
-                    position: "absolute", bottom: "4px", right: "4px",
-                    background: "rgba(10,10,15,0.92)", color: "#fff",
-                    fontSize: "9px", fontWeight: 800,
-                    padding: "2px 5px", borderRadius: "5px",
-                    border: "1px solid rgba(255,255,255,0.05)"
-                  }}>
-                    x{grp.length}
-                  </div>
-
-                  {/* Warn badges */}
-                  {(gBlurry > 0 || gRejected > 0) && (
-                    <div style={{
-                      position: "absolute", bottom: "4px", left: "4px",
-                      display: "flex", gap: "2px"
-                    }}>
-                      {gBlurry > 0 && <span style={{ fontSize: "8px", background: "#eab30888", color: "#fff", padding: "1px 3px", borderRadius: "3px", fontWeight: 800 }}>◐{gBlurry}</span>}
-                      {gRejected > 0 && <span style={{ fontSize: "8px", background: "#ef444488", color: "#fff", padding: "1px 3px", borderRadius: "3px", fontWeight: 800 }}>✕{gRejected}</span>}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
+            {groups.map((grp, idx) => (
+              <TimelineItem
+                key={idx}
+                grp={grp}
+                idx={idx}
+                isCurrent={idx === activeGroupIndex}
+                onClick={handleTimelineItemClick}
+                accent={accent}
+              />
+            ))}
           </div>
         </div>
       )}
