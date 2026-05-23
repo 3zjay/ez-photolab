@@ -736,16 +736,21 @@ export default function App() {
   const revertAi = useCallback(() => {
     if (originalImage) {
       setImage(originalImage);
-      setFilters(DEFAULT_FILTERS);
-      setLutId('none');
-      setLutIntensity(1.0);
-      setCustomLutData(null);
-      setCustomLutName('');
       setAiUpscaleResult(null);
       setAiBeautyResult(null);
       setAiFaceRestoreResult(null);
     }
   }, [originalImage]);
+
+  const applyAiBaseImage = useCallback(async (url) => {
+    const res = await fetch(url);
+    const blob = await res.blob();
+    const reader = new FileReader();
+    reader.onload = e => {
+      setImage(e.target.result);
+    };
+    reader.readAsDataURL(blob);
+  }, []);
 
   const applyCrop = () => {
     const img = imgRef.current; if (!img) return;
@@ -1868,7 +1873,7 @@ export default function App() {
     if (!image) return;
     setAiUpscaleStatus('loading'); setAiUpscaleResult(null); setAiUpscaleLog('Loading image…'); setAiUpscaleProgress(10);
     try {
-      const src = bgResult || image;
+      const src = originalImage || image;
       const srcImg = await loadImageFromSrc(src);
       const natW = srcImg.naturalWidth, natH = srcImg.naturalHeight;
       const targetW = natW * aiScale, targetH = natH * aiScale;
@@ -1878,9 +1883,7 @@ export default function App() {
       let currentCanvas = document.createElement('canvas');
       currentCanvas.width = natW; currentCanvas.height = natH;
       const initCtx = currentCanvas.getContext('2d');
-      initCtx.filter = toCSSFilter(filters);
       initCtx.drawImage(srcImg, 0, 0, natW, natH);
-      initCtx.filter = 'none';
 
       const finalCanvas = await applyUpscalePipeline(currentCanvas, aiScale, (pass, total) => {
         setAiUpscaleProgress(Math.round((pass / total) * 90) + 5);
@@ -1893,27 +1896,25 @@ export default function App() {
       setAiUpscaleResultSize(`${W.toLocaleString()}×${H.toLocaleString()}px · ~${approxKb > 1024 ? (approxKb / 1024).toFixed(1) + 'MB' : approxKb + 'KB'}`);
       setAiUpscaleResult(resultUrl);
       setAiUpscaleStatus('done'); setAiUpscaleLog(''); setAiUpscaleProgress(100);
-      applyAiResult(resultUrl);
+      applyAiBaseImage(resultUrl);
     } catch (e) {
       console.error('Upscale error:', e);
       setAiUpscaleStatus('error'); setAiUpscaleLog(e.message || 'Upscale failed');
     }
-  }, [image, bgResult, filters, aiScale]);
+  }, [image, originalImage, aiScale, applyAiBaseImage]);
 
   const runBrowserBeauty = useCallback(async () => {
     if (!image) return;
     setAiBeautyStatus('loading'); setAiBeautyResult(null); setAiBeautyLog('Processing…');
     try {
-      const src = bgResult || image;
+      const src = originalImage || image;
       const srcImg = await loadImageFromSrc(src);
       const W = srcImg.naturalWidth, H = srcImg.naturalHeight;
       const canvas = document.createElement('canvas');
       canvas.width = W; canvas.height = H;
       const ctx = canvas.getContext('2d');
 
-      ctx.filter = toCSSFilter(filters);
       ctx.drawImage(srcImg, 0, 0, W, H);
-      ctx.filter = 'none';
 
       let mask = null;
       if (aiBeautyUseMask) {
@@ -1927,12 +1928,12 @@ export default function App() {
       const beautyUrl = canvas.toDataURL('image/jpeg', 0.95);
       setAiBeautyResult(beautyUrl);
       setAiBeautyStatus('done'); setAiBeautyLog('');
-      applyAiResult(beautyUrl);
+      applyAiBaseImage(beautyUrl);
     } catch (e) {
       console.error('Beauty error:', e);
       setAiBeautyStatus('error'); setAiBeautyLog(e.message || 'Beauty filter failed');
     }
-  }, [image, bgResult, filters, aiBeautySmooth, aiBeautyClarity, aiBeautyGlow, aiBeautyUseMask]);
+  }, [image, originalImage, aiBeautySmooth, aiBeautyClarity, aiBeautyGlow, aiBeautyUseMask, applyAiBaseImage]);
 
   const runFalFaceRestore = useCallback(async () => {
     if (!image) { alert('Upload a photo first.'); return; }
@@ -1948,13 +1949,13 @@ export default function App() {
       const resultUrl = await restoreFaceLocal(tmp, msg => setAiFaceRestoreLog(msg));
       setAiFaceRestoreResult(resultUrl);
       setAiFaceRestoreStatus('done'); setAiFaceRestoreLog('');
-      applyAiResult(resultUrl);
+      applyAiBaseImage(resultUrl);
     } catch (e) {
       console.error('Face Restore error:', e);
       setAiFaceRestoreStatus('error');
       setAiFaceRestoreLog(e.message || 'Face restoration failed');
     }
-  }, [image]);
+  }, [image, applyAiBaseImage]);
 
   const dm = darkMode;
   const cardBg = dm ? '#2a2a2a' : '#f8f8fd';
