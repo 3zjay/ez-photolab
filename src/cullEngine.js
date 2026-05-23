@@ -237,6 +237,10 @@ export async function cullBatch(images, options = {}, onProgress) {
   const results = [];
   const total = images.length;
 
+  // Single reusable canvas to prevent context/memory leaks
+  const tempCanvas = document.createElement("canvas");
+  const tempCtx = tempCanvas.getContext("2d");
+
   for (let i = 0; i < total; i++) {
     const imgObj = images[i];
     let tempUrl = null;
@@ -266,35 +270,33 @@ export async function cullBatch(images, options = {}, onProgress) {
         throw new Error("No image source found");
       }
 
-      // Create a downscaled preview canvas (max dimension 1200px)
-      const maxDim = 1200;
       const sW = loadedImg.naturalWidth || loadedImg.width;
       const sH = loadedImg.naturalHeight || loadedImg.height;
+
+      // 1. Generate lightweight 1200px Preview
+      const maxDim = 1200;
       const scale = Math.min(1, maxDim / Math.max(sW, sH));
       const pW = Math.round(sW * scale);
       const pH = Math.round(sH * scale);
 
-      const previewCanvas = document.createElement("canvas");
-      previewCanvas.width = pW;
-      previewCanvas.height = pH;
-      const previewCtx = previewCanvas.getContext("2d");
-      previewCtx.imageSmoothingEnabled = true;
-      previewCtx.imageSmoothingQuality = "high";
-      previewCtx.drawImage(loadedImg, 0, 0, pW, pH);
+      tempCanvas.width = pW;
+      tempCanvas.height = pH;
+      tempCtx.imageSmoothingEnabled = true;
+      tempCtx.imageSmoothingQuality = "high";
+      tempCtx.drawImage(loadedImg, 0, 0, pW, pH);
 
-      // Generate a lightweight JPEG data URL
-      const previewUrl = previewCanvas.toDataURL("image/jpeg", 0.85);
+      const previewUrl = tempCanvas.toDataURL("image/jpeg", 0.85);
 
-      // 2. Compute dHash for similarity grouping
-      const dHash = computeDHash(previewCanvas);
+      // 2. Compute dHash using preview canvas
+      const dHash = computeDHash(tempCanvas);
 
-      // 3. Facial Analysis (optional)
+      // 3. Facial Analysis using preview canvas
       let faces = [];
       let blinkDetected = false;
       let highestSmile = 0;
 
       if (fl) {
-        const detection = fl.detect(previewCanvas);
+        const detection = fl.detect(tempCanvas);
         if (detection?.faceLandmarks && detection.faceLandmarks.length > 0) {
           faces = detection.faceLandmarks.map((landmarks) => {
             // Find face bounding rectangle
@@ -318,11 +320,25 @@ export async function cullBatch(images, options = {}, onProgress) {
         }
       }
 
-      // 4. Compute Sharpness Score (prefer crop on first face, fallback to center crop)
+      // 4. Compute Sharpness Score using preview canvas
       const primaryFace = faces[0]?.rect || null;
-      const sharpness = computeSharpness(previewCanvas, primaryFace);
+      const sharpness = computeSharpness(tempCanvas, primaryFace);
 
-      // 5. Aggregate Quality Score (0 to 100)
+      // 5. Generate 160px Thumbnail using the same canvas
+      const tMaxDim = 160;
+      const tScale = Math.min(1, tMaxDim / Math.max(sW, sH));
+      const tW = Math.round(sW * tScale);
+      const tH = Math.round(sH * tScale);
+
+      tempCanvas.width = tW;
+      tempCanvas.height = tH;
+      tempCtx.imageSmoothingEnabled = true;
+      tempCtx.imageSmoothingQuality = "high";
+      tempCtx.drawImage(loadedImg, 0, 0, tW, tH);
+
+      const thumbnailUrl = tempCanvas.toDataURL("image/jpeg", 0.80);
+
+      // 6. Aggregate Quality Score (0 to 100)
       let score = sharpness;
       const warnings = [];
 
@@ -341,7 +357,8 @@ export async function cullBatch(images, options = {}, onProgress) {
 
       results.push({
         ...imgObj,
-        previewUrl, // Store downscaled JPEG data URL
+        previewUrl,
+        thumbnailUrl, // Store downscaled 160px thumbnail
         dHash,
         sharpness,
         faces,
@@ -358,6 +375,7 @@ export async function cullBatch(images, options = {}, onProgress) {
       results.push({
         ...imgObj,
         previewUrl: imgObj.previewUrl || null,
+        thumbnailUrl: null,
         cullScore: 10,
         cullGroup: -1,
         isKeyPhoto: false,
@@ -369,7 +387,16 @@ export async function cullBatch(images, options = {}, onProgress) {
       if (tempUrl) {
         URL.revokeObjectURL(tempUrl);
       }
+      if (loadedImg) {
+        loadedImg.onload = null;
+        loadedImg.onerror = null;
+        loadedImg.src = "";
+        loadedImg = null;
+      }
     }
+
+    // Yield control to the browser event loop to let the GC run and UI update
+    await new Promise((resolve) => setTimeout(resolve, 15));
   }
 
   // 6. PERCEPTUAL SIMILARITY GROUPING & KEY PHOTO auto-selection

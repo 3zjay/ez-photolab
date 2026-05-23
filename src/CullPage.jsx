@@ -1361,7 +1361,7 @@ export default function CullPage({
                         }}
                       >
                         <img
-                          src={item.previewUrl}
+                          src={item.thumbnailUrl || item.previewUrl}
                           alt=""
                           style={{ width: "100%", height: "100%", objectFit: "cover" }}
                         />
@@ -1641,7 +1641,7 @@ export default function CullPage({
                   }}
                 >
                   <img
-                    src={rep.previewUrl}
+                    src={rep.thumbnailUrl || rep.previewUrl}
                     alt=""
                     style={{ width: "100%", height: "64px", objectFit: "cover", opacity: isCurrent ? 1.0 : 0.6, display: "block" }}
                   />
