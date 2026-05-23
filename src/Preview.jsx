@@ -18,14 +18,8 @@ export function Preview({ image, originalImage, dragging, setDragging, loadImage
   const containerRef = useRef(null);
   const lutCanvasRef = useRef(null);
 
-  const [zoom100, setZoom100] = useState(false);
   const [dimensions, setDimensions] = useState({ w: 0, h: 0 });
   const [origDimensions, setOrigDimensions] = useState({ w: 0, h: 0 });
-  const activeShowSplit = showSplit && !zoom100;
-
-  useEffect(() => {
-    setZoom100(false);
-  }, [image]);
 
   useEffect(() => {
     if (!image) return;
@@ -43,12 +37,6 @@ export function Preview({ image, originalImage, dragging, setDragging, loadImage
     img.src = originalImage;
     img.onload = () => setOrigDimensions({ w: img.naturalWidth, h: img.naturalHeight });
   }, [originalImage]);
-
-  useEffect(() => {
-    if (cropMode) {
-      setZoom100(false);
-    }
-  }, [cropMode]);
 
   // Render LUT preview onto a canvas overlay
   useEffect(() => {
@@ -191,49 +179,7 @@ export function Preview({ image, originalImage, dragging, setDragging, loadImage
   const tempAlpha = Math.abs(filters.temperature) / 300;
   const tempColor = filters.temperature > 0 ? `rgba(255,140,0,${tempAlpha})` : `rgba(100,149,237,${tempAlpha})`;
 
-  const imgStyle = zoom100 ? {
-    width: `${dimensions.w}px`,
-    height: `${dimensions.h}px`,
-    maxWidth: "none",
-    maxHeight: "none",
-    objectFit: "fill",
-    display: "block",
-    filter: showBefore || activeTab === "tools" ? "none" : (activeLutData && lutId !== 'none' && !showBefore && activeTab === 'edit' ? 'none' : cssFilter),
-    transition: "filter .08s ease",
-    transform: showBefore ? "none" : transformCSS,
-    visibility: (activeLutData && lutId !== 'none' && !showBefore && activeTab === 'edit') ? 'hidden' : 'visible'
-  } : {
-    maxWidth: "100%",
-    maxHeight: maxH,
-    objectFit: "contain",
-    display: "block",
-    filter: showBefore || activeTab === "tools" ? "none" : (activeLutData && lutId !== 'none' && !showBefore && activeTab === 'edit' ? 'none' : cssFilter),
-    transition: "filter .08s ease",
-    transform: showBefore ? "none" : transformCSS,
-    visibility: (activeLutData && lutId !== 'none' && !showBefore && activeTab === 'edit') ? 'hidden' : 'visible'
-  };
 
-  const canvasStyle = zoom100 ? {
-    position: "absolute",
-    inset: 0,
-    width: `${dimensions.w}px`,
-    height: `${dimensions.h}px`,
-    maxWidth: "none",
-    maxHeight: "none",
-    objectFit: "fill",
-    pointerEvents: "none",
-    display: (activeLutData && lutId !== 'none' && !showBefore && activeTab === 'edit') ? 'block' : 'none',
-    transform: showBefore ? "none" : transformCSS
-  } : {
-    position: "absolute",
-    inset: 0,
-    width: "100%",
-    height: "100%",
-    objectFit: "contain",
-    pointerEvents: "none",
-    display: (activeLutData && lutId !== 'none' && !showBefore && activeTab === 'edit') ? 'block' : 'none',
-    transform: showBefore ? "none" : transformCSS
-  };
 
   return (
     <>
@@ -308,7 +254,7 @@ export function Preview({ image, originalImage, dragging, setDragging, loadImage
         </div>
       )}
 
-      {!cropMode && (
+      {!showSplit && !cropMode && (
         <div style={{
           position: "absolute",
           top: "12px",
@@ -324,7 +270,7 @@ export function Preview({ image, originalImage, dragging, setDragging, loadImage
           gap: "2px",
           boxShadow: "0 4px 20px rgba(0,0,0,.15)"
         }}>
-          {!activeShowSplit && ["After", "Before"].map(l => (
+          {["After", "Before"].map(l => (
             <button
               key={l}
               onClick={() => setShowBefore(l === "Before")}
@@ -347,33 +293,9 @@ export function Preview({ image, originalImage, dragging, setDragging, loadImage
               {l}
             </button>
           ))}
-          {!activeShowSplit && <div style={{ width: "1px", background: dm ? "rgba(255,255,255,0.1)" : "#eee", margin: "2px 4px" }} />}
-          <button
-            onClick={() => setZoom100(!zoom100)}
-            style={{
-              padding: "5px 12px",
-              fontSize: "12px",
-              fontWeight: 600,
-              border: "none",
-              cursor: "pointer",
-              background: zoom100
-                ? "linear-gradient(135deg,#06b6d4,#6c63ff)"
-                : "transparent",
-              color: zoom100
-                ? "#fff"
-                : (dm ? "#9ca3af" : "#888"),
-              borderRadius: "7px",
-              transition: "all .18s",
-              display: "flex",
-              alignItems: "center",
-              gap: "4px"
-            }}
-          >
-            🔍 {zoom100 ? "1:1 Zoomed" : "1:1 Zoom"}
-          </button>
         </div>
       )}
-      {activeShowSplit && <div style={{ position: "absolute", top: "12px", right: "12px", zIndex: 10, padding: "5px 12px", background: "rgba(108,99,255,.9)", borderRadius: "20px", fontSize: "11px", fontWeight: 600, color: "#fff" }}>← Drag to compare →</div>}
+      {showSplit && <div style={{ position: "absolute", top: "12px", right: "12px", zIndex: 10, padding: "5px 12px", background: "rgba(108,99,255,.9)", borderRadius: "20px", fontSize: "11px", fontWeight: 600, color: "#fff" }}>← Drag to compare →</div>}
       {activeTab === "tools" && bgResult && <div style={{ position: "absolute", top: "12px", right: "12px", padding: "4px 12px", background: "#f0fff4", border: "1.5px solid #86efac", borderRadius: "20px", fontSize: "11px", fontWeight: 600, color: "#16a34a", zIndex: 10 }}>✓ BG Removed</div>}
       {cropMode && <div style={{ position: "absolute", top: "12px", right: "12px", padding: "5px 12px", background: "rgba(234,179,8,.9)", borderRadius: "20px", fontSize: "11px", fontWeight: 600, color: "#fff", zIndex: 10 }}>✂ Crop Mode</div>}
 
@@ -384,9 +306,9 @@ export function Preview({ image, originalImage, dragging, setDragging, loadImage
           maxHeight: maxH,
           lineHeight: 0,
           borderRadius: "14px",
-          overflow: zoom100 ? "auto" : "hidden",
+          overflow: "hidden",
           boxShadow: "0 8px 40px rgba(0,0,0,.12)",
-          cursor: activeShowSplit ? (isDragSplit ? "grabbing" : "ew-resize") : "default",
+          cursor: showSplit ? (isDragSplit ? "grabbing" : "ew-resize") : "default",
           userSelect: "none"
         }}
       >
@@ -395,7 +317,7 @@ export function Preview({ image, originalImage, dragging, setDragging, loadImage
             {bgMode === "transparent" && <div className="checker" style={{ position: "absolute", inset: 0 }} />}
             <img src={bgResult} alt="result" style={{ maxWidth: "100%", maxHeight: maxH, objectFit: "contain", display: "block", position: "relative" }} />
           </>
-        ) : activeShowSplit ? (
+        ) : showSplit ? (
           <>
             <div style={{ position: "relative", lineHeight: 0 }}>
               <img ref={imgRef} src={image} alt="after"
@@ -419,9 +341,9 @@ export function Preview({ image, originalImage, dragging, setDragging, loadImage
           <>
             <div ref={containerRef} style={{ position: "relative", lineHeight: 0 }}>
               <img ref={imgRef} src={showBefore ? (originalImage || image) : image} alt="photo"
-                style={imgStyle} />
+                style={{ maxWidth: "100%", maxHeight: maxH, objectFit: "contain", display: "block", filter: showBefore || activeTab === "tools" ? "none" : (activeLutData && lutId !== 'none' && !showBefore && activeTab === 'edit' ? 'none' : cssFilter), transition: "filter .08s ease", transform: showBefore ? "none" : transformCSS, visibility: (activeLutData && lutId !== 'none' && !showBefore && activeTab === 'edit') ? 'hidden' : 'visible' }} />
               {/* LUT Preview Canvas */}
-              <canvas ref={lutCanvasRef} style={canvasStyle} />
+              <canvas ref={lutCanvasRef} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "contain", pointerEvents: "none", display: (activeLutData && lutId !== 'none' && !showBefore && activeTab === 'edit') ? 'block' : 'none', transform: showBefore ? "none" : transformCSS }} />
               {!showBefore && activeTab === "edit" && filters.temperature !== 0 && <div style={{ position: "absolute", inset: 0, background: tempColor, mixBlendMode: "overlay", pointerEvents: "none" }} />}
               {!showBefore && activeTab === "edit" && filters.fade > 0 && <div style={{ position: "absolute", inset: 0, background: `rgba(255,255,255,${filters.fade / 180})`, mixBlendMode: "screen", pointerEvents: "none" }} />}
               {!showBefore && activeTab === "edit" && filters.vignette > 0 && <div style={{ position: "absolute", inset: 0, background: `radial-gradient(ellipse at center,transparent 38%,rgba(0,0,0,${filters.vignette / 100}) 100%)`, pointerEvents: "none" }} />}
@@ -459,7 +381,7 @@ export function Preview({ image, originalImage, dragging, setDragging, loadImage
           </>
         )}
       </div>
-      {image && dimensions.w > 0 && !activeShowSplit && !cropMode && (
+      {image && dimensions.w > 0 && !showSplit && !cropMode && (
         <div style={{
           position: "absolute",
           bottom: "12px",

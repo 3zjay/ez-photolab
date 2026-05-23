@@ -742,14 +742,8 @@ export default function App() {
     }
   }, [originalImage]);
 
-  const applyAiBaseImage = useCallback(async (url) => {
-    const res = await fetch(url);
-    const blob = await res.blob();
-    const reader = new FileReader();
-    reader.onload = e => {
-      setImage(e.target.result);
-    };
-    reader.readAsDataURL(blob);
+  const applyAiBaseImage = useCallback((url) => {
+    setImage(url);
   }, []);
 
   const applyCrop = () => {
@@ -1890,9 +1884,10 @@ export default function App() {
       });
 
       setAiUpscaleProgress(98); setAiUpscaleLog('Encoding result…');
-      const resultUrl = finalCanvas.toDataURL('image/jpeg', 0.95);
+      const blob = await canvasToBlob(finalCanvas, 'image/jpeg', 0.95);
+      const resultUrl = URL.createObjectURL(blob);
       const W = finalCanvas.width, H = finalCanvas.height;
-      const approxKb = Math.round((resultUrl.length * 0.75) / 1024);
+      const approxKb = Math.round(blob.size / 1024);
       setAiUpscaleResultSize(`${W.toLocaleString()}×${H.toLocaleString()}px · ~${approxKb > 1024 ? (approxKb / 1024).toFixed(1) + 'MB' : approxKb + 'KB'}`);
       setAiUpscaleResult(resultUrl);
       setAiUpscaleStatus('done'); setAiUpscaleLog(''); setAiUpscaleProgress(100);
@@ -1925,7 +1920,8 @@ export default function App() {
       setAiBeautyLog('Applying beauty filters...');
       await applyBeautyPipeline(canvas, ctx, W, H, aiBeautySmooth, aiBeautyClarity, aiBeautyGlow, mask);
 
-      const beautyUrl = canvas.toDataURL('image/jpeg', 0.95);
+      const blob = await canvasToBlob(canvas, 'image/jpeg', 0.95);
+      const beautyUrl = URL.createObjectURL(blob);
       setAiBeautyResult(beautyUrl);
       setAiBeautyStatus('done'); setAiBeautyLog('');
       applyAiBaseImage(beautyUrl);
