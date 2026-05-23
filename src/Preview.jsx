@@ -21,6 +21,7 @@ export function Preview({ image, originalImage, dragging, setDragging, loadImage
   const [zoom100, setZoom100] = useState(false);
   const [dimensions, setDimensions] = useState({ w: 0, h: 0 });
   const [origDimensions, setOrigDimensions] = useState({ w: 0, h: 0 });
+  const activeShowSplit = showSplit && !zoom100;
 
   useEffect(() => {
     setZoom100(false);
@@ -44,10 +45,10 @@ export function Preview({ image, originalImage, dragging, setDragging, loadImage
   }, [originalImage]);
 
   useEffect(() => {
-    if (showSplit || cropMode) {
+    if (cropMode) {
       setZoom100(false);
     }
-  }, [showSplit, cropMode]);
+  }, [cropMode]);
 
   // Render LUT preview onto a canvas overlay
   useEffect(() => {
@@ -307,7 +308,7 @@ export function Preview({ image, originalImage, dragging, setDragging, loadImage
         </div>
       )}
 
-      {!showSplit && !cropMode && (
+      {!cropMode && (
         <div style={{
           position: "absolute",
           top: "12px",
@@ -323,7 +324,7 @@ export function Preview({ image, originalImage, dragging, setDragging, loadImage
           gap: "2px",
           boxShadow: "0 4px 20px rgba(0,0,0,.15)"
         }}>
-          {["After", "Before"].map(l => (
+          {!activeShowSplit && ["After", "Before"].map(l => (
             <button
               key={l}
               onClick={() => setShowBefore(l === "Before")}
@@ -346,7 +347,7 @@ export function Preview({ image, originalImage, dragging, setDragging, loadImage
               {l}
             </button>
           ))}
-          <div style={{ width: "1px", background: dm ? "rgba(255,255,255,0.1)" : "#eee", margin: "2px 4px" }} />
+          {!activeShowSplit && <div style={{ width: "1px", background: dm ? "rgba(255,255,255,0.1)" : "#eee", margin: "2px 4px" }} />}
           <button
             onClick={() => setZoom100(!zoom100)}
             style={{
@@ -372,7 +373,7 @@ export function Preview({ image, originalImage, dragging, setDragging, loadImage
           </button>
         </div>
       )}
-      {showSplit && <div style={{ position: "absolute", top: "12px", right: "12px", zIndex: 10, padding: "5px 12px", background: "rgba(108,99,255,.9)", borderRadius: "20px", fontSize: "11px", fontWeight: 600, color: "#fff" }}>← Drag to compare →</div>}
+      {activeShowSplit && <div style={{ position: "absolute", top: "12px", right: "12px", zIndex: 10, padding: "5px 12px", background: "rgba(108,99,255,.9)", borderRadius: "20px", fontSize: "11px", fontWeight: 600, color: "#fff" }}>← Drag to compare →</div>}
       {activeTab === "tools" && bgResult && <div style={{ position: "absolute", top: "12px", right: "12px", padding: "4px 12px", background: "#f0fff4", border: "1.5px solid #86efac", borderRadius: "20px", fontSize: "11px", fontWeight: 600, color: "#16a34a", zIndex: 10 }}>✓ BG Removed</div>}
       {cropMode && <div style={{ position: "absolute", top: "12px", right: "12px", padding: "5px 12px", background: "rgba(234,179,8,.9)", borderRadius: "20px", fontSize: "11px", fontWeight: 600, color: "#fff", zIndex: 10 }}>✂ Crop Mode</div>}
 
@@ -385,7 +386,7 @@ export function Preview({ image, originalImage, dragging, setDragging, loadImage
           borderRadius: "14px",
           overflow: zoom100 ? "auto" : "hidden",
           boxShadow: "0 8px 40px rgba(0,0,0,.12)",
-          cursor: showSplit ? (isDragSplit ? "grabbing" : "ew-resize") : "default",
+          cursor: activeShowSplit ? (isDragSplit ? "grabbing" : "ew-resize") : "default",
           userSelect: "none"
         }}
       >
@@ -394,7 +395,7 @@ export function Preview({ image, originalImage, dragging, setDragging, loadImage
             {bgMode === "transparent" && <div className="checker" style={{ position: "absolute", inset: 0 }} />}
             <img src={bgResult} alt="result" style={{ maxWidth: "100%", maxHeight: maxH, objectFit: "contain", display: "block", position: "relative" }} />
           </>
-        ) : showSplit ? (
+        ) : activeShowSplit ? (
           <>
             <div style={{ position: "relative", lineHeight: 0 }}>
               <img ref={imgRef} src={image} alt="after"
@@ -458,7 +459,7 @@ export function Preview({ image, originalImage, dragging, setDragging, loadImage
           </>
         )}
       </div>
-      {image && dimensions.w > 0 && !showSplit && !cropMode && (
+      {image && dimensions.w > 0 && !activeShowSplit && !cropMode && (
         <div style={{
           position: "absolute",
           bottom: "12px",
