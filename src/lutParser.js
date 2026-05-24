@@ -411,3 +411,20 @@ export function generateBuiltInLut(type, size = 33) {
 function lumaColor(r, g, b) {
   return 0.299 * r + 0.587 * g + 0.114 * b;
 }
+
+// Exports a built-in LUT preset to a standard IRIDAS .cube string format
+export function exportLutToCube(type) {
+  if (!type || type === 'none' || type === 'custom') return null;
+  const { size, data } = generateBuiltInLut(type, 33);
+  let content = `# Created by EZ PhotoLab\n`;
+  content += `# Preset ID: ${type}\n`;
+  content += `LUT_3D_SIZE ${size}\n\n`;
+  for (let i = 0; i < data.length; i += 3) {
+    const r = data[i].toFixed(6);
+    const g = data[i+1].toFixed(6);
+    const b = data[i+2].toFixed(6);
+    content += `${r} ${g} ${b}\n`;
+  }
+  return content;
+}
+

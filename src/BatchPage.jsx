@@ -1,9 +1,9 @@
-import { useMemo, useRef, useEffect, useCallback, memo } from "react";
+import { useMemo, useRef, useEffect, useCallback, memo, useState } from "react";
 import { Spin, SmoothSlider } from "./components/ui/common";
 import { BATCH_RESIZE_PRESETS, DEFAULT_FILTERS, COLOR_FILTERS, FILTER_GROUPS, PRESETS, LUT_PRESETS } from "./constants";
 import { toCSSFilter } from "./utils";
 import { RawBatchPanel } from "./components/panels/RawBatchPanel";
-import { parseCubeLut } from "./lutParser";
+import { parseCubeLut, exportLutToCube } from "./lutParser";
 
 // Isolated slider — zero React re-renders during drag, commits on pointerUp
 const BatchFilterSlider = memo(function BatchFilterSlider({ f, value, setFilters, dm, accent }) {
@@ -123,6 +123,33 @@ export function BatchPage({ dm, cardBg, cardBdr, inputSt, isMobile = false,
   const bg = dm ? '#121212' : '#f0f1f5';
   const panelBg = dm ? '#1e1e1e' : '#ffffff';
   const accent = '#6c63ff';
+
+  const [batchLutTab, setBatchLutTab] = useState("all");
+
+  const SPORTS_LUT_IDS = useMemo(() => [
+    'ice_rink', 'friday_lights', 'green_field', 'royal_pride', 'red_storm',
+    'arena_lights', 'ymca', 'msg', 'team_pride', 'hardwood_tones', 'mvp_sport'
+  ], []);
+
+  const downloadSportsPack = useCallback(() => {
+    SPORTS_LUT_IDS.forEach((id, idx) => {
+      setTimeout(() => {
+        const preset = LUT_PRESETS.find(p => p.id === id);
+        if (!preset) return;
+        const content = exportLutToCube(id);
+        if (content) {
+          const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement("a");
+          link.href = url;
+          link.download = `${id}.cube`;
+          link.click();
+          URL.revokeObjectURL(url);
+        }
+      }, idx * 250);
+    });
+  }, [SPORTS_LUT_IDS]);
+
 
   const Card = ({ children, style = {} }) => (
     <div style={{ background: panelBg, border: `1px solid ${cardBdr}`, borderRadius: "14px", padding: "18px", display: "flex", flexDirection: "column", gap: "12px", ...style }}>
@@ -371,9 +398,6 @@ export function BatchPage({ dm, cardBg, cardBdr, inputSt, isMobile = false,
                    </div>
                 </div>
               )}
-              <div style={{ padding: "10px", background: dm ? "rgba(255, 193, 7, 0.1)" : "#fff3cd", color: dm ? "#ffc107" : "#856404", borderRadius: "8px", fontSize: "11px", lineHeight: 1.4, marginTop: "8px" }}>
-                <strong>Note:</strong> AI operations run locally or via cloud APIs and will significantly increase processing time per image.
-              </div>
             </>
           ) : batchFilterGroup === 'lut' ? (
             <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
@@ -381,10 +405,50 @@ export function BatchPage({ dm, cardBg, cardBdr, inputSt, isMobile = false,
                 <span style={{ fontSize: "12px", color: dm ? '#ccc' : '#666', fontWeight: 600 }}>Color Lookup (LUT)</span>
                 <span style={{ fontSize: "9px", fontWeight: 700, padding: "1px 6px", background: "#f0fff4", color: "#16a34a", borderRadius: "20px", border: "1px solid #86efac" }}>In-Browser</span>
               </div>
+
+              {/* Tab/Pack Selector */}
+              <div style={{ display: "flex", gap: "4px", background: dm ? '#2a2a2a' : '#f2f2f8', padding: "3px", borderRadius: "8px", alignSelf: "flex-start" }}>
+                {[{ id: "all", label: "⚡ All" }, { id: "sports", label: "🏆 Sports Pack" }, { id: "film", label: "🎬 Film & Retro" }].map(tab => {
+                  const active = batchLutTab === tab.id;
+                  return (
+                    <button key={tab.id} onClick={() => setBatchLutTab(tab.id)}
+                      style={{
+                        padding: "5px 10px", fontSize: "11px", fontWeight: 600, border: "none", cursor: "pointer", fontFamily: "inherit",
+                        background: active ? (dm ? '#444' : '#fff') : 'transparent',
+                        color: active ? "#6c63ff" : dm ? "#ccc" : "#666",
+                        borderRadius: "6px",
+                        boxShadow: active ? "0 1px 3px rgba(0,0,0,.1)" : "none",
+                        transition: "all .15s"
+                      }}>
+                      {tab.label}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {batchLutTab === 'sports' && (
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "2px" }}>
+                  <span style={{ fontSize: "11px", color: dm ? "#aaa" : "#555", fontWeight: 600 }}>🏆 Sports Pro Pack (11 LUTs)</span>
+                  <button onClick={downloadSportsPack} 
+                    style={{ 
+                      background: "transparent", border: "none", color: "#6c63ff", fontSize: "11px", fontWeight: 700, cursor: "pointer", textDecoration: "underline", padding: 0,
+                      fontFamily: "inherit"
+                    }}>
+                    Download Pack (.cube)
+                  </button>
+                </div>
+              )}
               
               {/* Presets Grid */}
               <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", maxHeight: "190px", overflowY: "auto", paddingRight: "4px", scrollbarWidth: "thin" }}>
-                {LUT_PRESETS.map(p => {
+                {LUT_PRESETS.filter(p => {
+                  if (p.id === 'none') return true;
+                  if (batchLutTab === 'all') return true;
+                  const isSports = SPORTS_LUT_IDS.includes(p.id);
+                  if (batchLutTab === 'sports') return isSports;
+                  if (batchLutTab === 'film') return !isSports;
+                  return true;
+                }).map(p => {
                   const active = batchLutId === p.id;
                   return (
                     <button key={p.id} onClick={() => setBatchLutId(p.id)}
@@ -489,6 +553,44 @@ export function BatchPage({ dm, cardBg, cardBdr, inputSt, isMobile = false,
                       <span style={{ fontSize: "9.5px", fontWeight: 700, color: "#6c63ff" }}>Best for:</span>
                       <span style={{ fontSize: "9.5px", color: dm ? "#999" : "#666", fontWeight: 600 }}>{activePreset.bestFor}</span>
                     </div>
+                    {batchLutId !== 'custom' && (
+                      <button
+                        onClick={() => {
+                          const content = exportLutToCube(batchLutId);
+                          if (content) {
+                            const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
+                            const url = URL.createObjectURL(blob);
+                            const link = document.createElement("a");
+                            link.href = url;
+                            link.download = `${batchLutId}.cube`;
+                            link.click();
+                            URL.revokeObjectURL(url);
+                          }
+                        }}
+                        style={{
+                          marginTop: "6px",
+                          padding: "6px 8px",
+                          fontSize: "10px",
+                          fontWeight: 700,
+                          color: "#fff",
+                          background: "linear-gradient(135deg, #6c63ff 0%, #3b82f6 100%)",
+                          border: "none",
+                          borderRadius: "6px",
+                          cursor: "pointer",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          gap: "4px",
+                          transition: "all .15s",
+                          fontFamily: "inherit",
+                          boxShadow: "0 1px 4px rgba(108,99,255,0.2)"
+                        }}
+                        onMouseOver={e => e.currentTarget.style.transform = 'translateY(-1px)'}
+                        onMouseOut={e => e.currentTarget.style.transform = 'translateY(0)'}
+                      >
+                        📥 Download .cube (for Lightroom / Photoshop)
+                      </button>
+                    )}
                   </div>
                 );
               })()}

@@ -1,7 +1,12 @@
 import { useCallback, useState, useEffect } from "react";
 import { SL, Row, Spin, PBar, AB, SmoothSlider } from "../ui/common";
 import { PRESETS, FILTER_GROUPS, COLOR_FILTERS, DEFAULT_FILTERS, LUT_PRESETS } from "../../constants";
-import { parseCubeLut } from "../../lutParser";
+import { parseCubeLut, exportLutToCube } from "../../lutParser";
+
+const SPORTS_LUT_IDS = [
+    'ice_rink', 'friday_lights', 'green_field', 'royal_pride', 'red_storm',
+    'arena_lights', 'ymca', 'msg', 'team_pride', 'hardwood_tones', 'mvp_sport'
+];
 
 export function EditPanel({
     filters, setFilters, filterGroup, setFilterGroup, isEdited, resetAll, revertAi, dm, cardBdr, cardBg,
@@ -14,6 +19,27 @@ export function EditPanel({
     logoOpacity, setLogoOpacity, logoPos, setLogoPos, logoMargin, setLogoMargin, handleLogoUpload
 }) {
     const [styleType, setStyleType] = useState(lutId !== 'none' ? 'lut' : 'preset');
+    const [lutTab, setLutTab] = useState("all");
+
+    const downloadSportsPack = useCallback(() => {
+        SPORTS_LUT_IDS.forEach((id, idx) => {
+            setTimeout(() => {
+                const preset = LUT_PRESETS.find(p => p.id === id);
+                if (!preset) return;
+                const content = exportLutToCube(id);
+                if (content) {
+                    const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
+                    const url = URL.createObjectURL(blob);
+                    const link = document.createElement("a");
+                    link.href = url;
+                    link.download = `${id}.cube`;
+                    link.click();
+                    URL.revokeObjectURL(url);
+                }
+            }, idx * 250);
+        });
+    }, []);
+
 
     useEffect(() => {
         if (lutId !== 'none') {
@@ -78,8 +104,48 @@ export function EditPanel({
                             </div>
                             <p style={{ fontSize: "11px", color: "#aaa", lineHeight: 1.5, margin: 0 }}>Apply professional film simulations and cinematic color grades. Select a built-in look or upload your own .cube file.</p>
 
+                            {/* Tab/Pack Selector */}
+                            <div style={{ display: "flex", gap: "4px", background: dm ? '#2a2a2a' : '#f2f2f8', padding: "3px", borderRadius: "8px", alignSelf: "flex-start" }}>
+                                {[{ id: "all", label: "⚡ All" }, { id: "sports", label: "🏆 Sports Pack" }, { id: "film", label: "🎬 Film & Retro" }].map(tab => {
+                                    const active = lutTab === tab.id;
+                                    return (
+                                        <button key={tab.id} onClick={() => setLutTab(tab.id)}
+                                            style={{
+                                                padding: "5px 10px", fontSize: "11px", fontWeight: 600, border: "none", cursor: "pointer", fontFamily: "inherit",
+                                                background: active ? (dm ? '#444' : '#fff') : 'transparent',
+                                                color: active ? "#6c63ff" : dm ? "#ccc" : "#666",
+                                                borderRadius: "6px",
+                                                boxShadow: active ? "0 1px 3px rgba(0,0,0,.1)" : "none",
+                                                transition: "all .15s"
+                                            }}>
+                                            {tab.label}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+
+                            {lutTab === 'sports' && (
+                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "2px" }}>
+                                    <span style={{ fontSize: "11px", color: dm ? "#aaa" : "#555", fontWeight: 600 }}>🏆 Sports Pro Pack (11 LUTs)</span>
+                                    <button onClick={downloadSportsPack} 
+                                        style={{ 
+                                            background: "transparent", border: "none", color: "#6c63ff", fontSize: "11px", fontWeight: 700, cursor: "pointer", textDecoration: "underline", padding: 0,
+                                            fontFamily: "inherit"
+                                        }}>
+                                        Download Pack (.cube)
+                                    </button>
+                                </div>
+                            )}
+
                             <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-                                {LUT_PRESETS.map(p => {
+                                {LUT_PRESETS.filter(p => {
+                                    if (p.id === 'none') return true;
+                                    if (lutTab === 'all') return true;
+                                    const isSports = SPORTS_LUT_IDS.includes(p.id);
+                                    if (lutTab === 'sports') return isSports;
+                                    if (lutTab === 'film') return !isSports;
+                                    return true;
+                                }).map(p => {
                                     const active = lutId === p.id;
                                     return (
                                         <button key={p.id} onClick={() => {
@@ -172,6 +238,44 @@ export function EditPanel({
                                             <span style={{ fontSize: "10px", fontWeight: 700, color: "#6c63ff" }}>Best for:</span>
                                             <span style={{ fontSize: "10px", color: dm ? "#999" : "#666", fontWeight: 600 }}>{activePreset.bestFor}</span>
                                         </div>
+                                        {lutId !== 'custom' && (
+                                            <button
+                                                onClick={() => {
+                                                    const content = exportLutToCube(lutId);
+                                                    if (content) {
+                                                        const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
+                                                        const url = URL.createObjectURL(blob);
+                                                        const link = document.createElement("a");
+                                                        link.href = url;
+                                                        link.download = `${lutId}.cube`;
+                                                        link.click();
+                                                        URL.revokeObjectURL(url);
+                                                    }
+                                                }}
+                                                style={{
+                                                    marginTop: "6px",
+                                                    padding: "8px 10px",
+                                                    fontSize: "11px",
+                                                    fontWeight: 700,
+                                                    color: "#fff",
+                                                    background: "linear-gradient(135deg, #6c63ff 0%, #3b82f6 100%)",
+                                                    border: "none",
+                                                    borderRadius: "8px",
+                                                    cursor: "pointer",
+                                                    display: "flex",
+                                                    alignItems: "center",
+                                                    justifyContent: "center",
+                                                    gap: "6px",
+                                                    transition: "all .15s",
+                                                    fontFamily: "inherit",
+                                                    boxShadow: "0 2px 6px rgba(108,99,255,0.2)"
+                                                }}
+                                                onMouseOver={e => e.currentTarget.style.transform = 'translateY(-1px)'}
+                                                onMouseOut={e => e.currentTarget.style.transform = 'translateY(0)'}
+                                            >
+                                                📥 Download .cube (for Lightroom / Photoshop)
+                                            </button>
+                                        )}
                                     </div>
                                 );
                             })()}
