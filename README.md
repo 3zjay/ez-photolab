@@ -8,6 +8,16 @@ Built with React + Vite — runs entirely in your browser with zero server costs
 ![MediaPipe](https://img.shields.io/badge/AI-MediaPipe-orange?logo=google&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-green)
 
+
+---
+
+## 🚀 What's New in v2.8.0 (Sports LUT Packs & Guided Workflow Release)
+
+- **🎨 Curated Top 30 Sports LUTs & 5 Packs**: Added 30 custom Looks modeled after trending sports media creators (e.g. Beyond the Game, Peter Sarellas, Luxe Lens). Categorized into 🏟️ Arena, 🏈 Action, 🎬 Cinematic, 🎽 Colors, and 🎞️ Vintage packs.
+- **⚡ Sequential Pack Downloader**: Added a staggered (250ms interval) multi-file download controller that lets creators download all `.cube` LUT configurations for an active pack in one click.
+- **📋 Guided Sports Media Workflow**: Added an interactive step-by-step pipeline section on the landing dashboard (Cull AI 🔍 → Studio Editor 🎨 → Batch Processor 📦) to streamline high-volume sports media workflows.
+- **✨ Dynamic Grid Filtering & CSS wrapping**: Updated single-image edits and batch processors with wrapped tab rows and real-time category filtering.
+
 ---
 
 ## 🚀 What's New in v2.7.0 (Detail Zoom & Non-Destructive Workflow Release)
