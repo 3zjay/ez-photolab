@@ -290,6 +290,111 @@ export function generateBuiltInLut(type, size = 33) {
           // Faded blacks and slightly soft highlights
           s = 0.02 + 0.96 * s;
           outR = outG = outB = s;
+        } else if (type === 'ice_rink') {
+          // Cool down white balances, clean up yellowed ice sheets, pop blue/cyan hockey lines
+          outR = rv * 0.93;
+          outG = gv * 0.97;
+          outB = bv * 1.08;
+
+          // Ice sheet whitening: if high brightness, neutralize yellow casts towards clean cool white
+          const luma = 0.299 * outR + 0.587 * outG + 0.114 * outB;
+          if (luma > 0.7) {
+            const blend = (luma - 0.7) * 2.0;
+            const factor = Math.min(0.65, blend);
+            outR = outR * (1 - factor) + luma * factor * 0.96;
+            outG = outG * (1 - factor) + luma * factor * 0.98;
+            outB = outB * (1 - factor) + luma * factor * 1.05;
+          }
+
+          // Pop blue/cyan frequencies
+          if (outB > outR && outB > outG) {
+            const diff = outB - Math.max(outR, outG);
+            outB += diff * 0.25;
+            outR -= diff * 0.1;
+            outG -= diff * 0.05;
+          }
+        } else if (type === 'friday_lights') {
+          // High-contrast sports look with amber highlights and faded deep-blue shadows
+          const sCurve = (x) => 3 * x * x - 2 * x * x * x;
+          let rC = sCurve(rv);
+          let gC = sCurve(gv);
+          let bC = sCurve(bv);
+
+          // Matte black lift
+          rC = 0.02 + 0.96 * rC;
+          gC = 0.02 + 0.96 * gC;
+          bC = 0.03 + 0.95 * bC;
+
+          const luma = 0.299 * rC + 0.587 * gC + 0.114 * bC;
+          if (luma < 0.45) {
+            const amt = (0.45 - luma) * 0.2;
+            outR = rC - amt * 0.3;
+            outG = gC - amt * 0.1;
+            outB = bC + amt * 0.4;
+          } else {
+            const amt = (luma - 0.45) * 0.18;
+            outR = rC + amt * 0.35;
+            outG = gC + amt * 0.18;
+            outB = bC - amt * 0.25;
+          }
+        } else if (type === 'green_field') {
+          // Grass green hue stabilization and turf glare removal
+          let rC = rv;
+          let gC = gv;
+          let bC = bv;
+
+          // Boost contrast slightly
+          const contrast = (x) => Math.pow(x, 1.05);
+          rC = contrast(rC);
+          gC = contrast(gC);
+          bC = contrast(bC);
+
+          // Grass detection and stabilization
+          if (gC > rC && gC > bC) {
+            rC *= 0.91; // reduce yellow-red turf glare
+            gC = gC * 0.98 + 0.02 * bC;
+            bC = bC * 0.93 + gC * 0.08; // shift towards hunter/cyan green
+          }
+
+          outR = rC;
+          outG = gC;
+          outB = bC;
+        } else if (type === 'royal_pride') {
+          // Pop primary blue/cyan range, suppress court yellow casts
+          let rC = rv;
+          let gC = gv;
+          let bC = bv;
+
+          if (rC > 0.4 && gC > 0.4 && bC < Math.min(rC, gC) - 0.15) {
+            rC *= 0.97;
+            gC *= 0.95;
+          }
+
+          if (bC > rC && (bC > gC || (gC > rC && bC > rC * 1.3))) {
+            const diff = bC - rC;
+            bC = bC + diff * 0.24;
+            gC = gC + diff * 0.08;
+            rC = rC - diff * 0.05;
+          }
+
+          outR = rC;
+          outG = gC;
+          outB = bC;
+        } else if (type === 'red_storm') {
+          // Pops primary red range and desaturates greens/ambers
+          const luma = 0.299 * rv + 0.587 * gv + 0.114 * bv;
+          
+          if (rv > gv * 1.25 && rv > bv * 1.25) {
+            const diff = rv - Math.max(gv, bv);
+            outR = rv + diff * 0.20;
+            outG = gv - diff * 0.15;
+            outB = bv - diff * 0.15;
+          } else {
+            const satFactor = 0.72;
+            outR = luma + (rv - luma) * satFactor;
+            outG = luma + (gv - luma) * satFactor;
+            outB = luma + (bv - luma) * satFactor;
+          }
         }
         
         // Clamp output colors to [0.0, 1.0]

@@ -162,6 +162,46 @@ export const LUT_PRESETS = [
     description: 'Ilford Tri-X style punchy analog black-and-white curve with strong highlights and rich grit.',
     bestFor: 'Timeless dynamic action & high-contrast street art',
     tier: 'premium'
+  },
+  {
+    id: 'ice_rink',
+    icon: '❄️',
+    name: 'Ice Cold Rink',
+    description: 'Cools down white balances, cleans up yellowed ice sheets, and punches blue hockey lines.',
+    bestFor: 'Hockey & ice rink sports',
+    tier: 'premium'
+  },
+  {
+    id: 'friday_lights',
+    icon: '🏈',
+    name: 'Friday Night Lights',
+    description: 'High-contrast sports look with amber highlights and faded deep-blue shadows.',
+    bestFor: 'Night stadium football & soccer',
+    tier: 'premium'
+  },
+  {
+    id: 'green_field',
+    icon: '🌱',
+    name: 'Green Field Clear',
+    description: 'Stabilizes grass to a deep hunter green and cleans up background turf glare.',
+    bestFor: 'Grass field & outdoor turf sports',
+    tier: 'premium'
+  },
+  {
+    id: 'royal_pride',
+    icon: '🔵',
+    name: 'Royal Pride Blue',
+    description: 'Selectively vibrates primary blues and deep cyans while toning down court yellow casts.',
+    bestFor: 'Blue jersey teams & court focus',
+    tier: 'premium'
+  },
+  {
+    id: 'red_storm',
+    icon: '🔴',
+    name: 'Red Storm Pop',
+    description: 'Pops primary red uniforms while desaturating green and amber background details.',
+    bestFor: 'Red jersey teams & subject focus',
+    tier: 'premium'
   }
 ];
 
