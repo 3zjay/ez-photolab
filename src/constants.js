@@ -49,159 +49,283 @@ export const LUT_PRESETS = [
     name: 'None',
     description: 'No color lookup curves applied.',
     bestFor: 'Neutral editing',
-    tier: 'free'
+    tier: 'free',
+    pack: 'all'
   },
+  // --- PACK 1: Indoor Arena & Rec Gym Correction (arena) ---
   {
     id: 'arena_lights',
     icon: '💡',
-    name: 'Arena Lights',
-    description: 'Neutralizes harsh overhead yellow/green glare and stabilizes high-key arena spotlights.',
-    bestFor: 'High school gyms & major arenas',
-    tier: 'premium'
+    name: 'Arena Spotlight',
+    description: 'Desaturates crowd backgrounds, boosts highlights on players, and adds a soft cool rim light.',
+    bestFor: 'Spotlighted tournament games (NBA style)',
+    tier: 'premium',
+    pack: 'arena'
   },
   {
     id: 'ymca',
     icon: '🏢',
-    name: 'YMCA Rec Gym',
-    description: 'Combats muddy green-yellow tint casts and lifts flat midtones in poorly-lit community centers.',
-    bestFor: 'Low-ceiling recreational gyms',
-    tier: 'premium'
-  },
-  {
-    id: 'msg',
-    icon: '🏟️',
-    name: 'MSG High Drama',
-    description: 'Isolates the court wood floor while crushing dark crowd shadows for high-stakes broadcast drama.',
-    bestFor: 'Tournament games & spotlight events',
-    tier: 'premium'
-  },
-  {
-    id: 'team_pride',
-    icon: '🎽',
-    name: 'Team Pride',
-    description: 'Selectively boosts uniform primary colors (reds, blues, greens) while preserving natural warm skin tones.',
-    bestFor: 'Bright jersey colors & team uniform details',
-    tier: 'premium'
+    name: 'Rec-Gym Fluorescent',
+    description: 'Neutralizes muddy yellow-green casts from old overhead tubes; shifts highlights to clean daylight white.',
+    bestFor: 'YMCA/High School basketball & volleyball',
+    tier: 'premium',
+    pack: 'arena'
   },
   {
     id: 'hardwood_tones',
     icon: '🪵',
-    name: 'Hardwood Tones',
-    description: 'Enriches wood floor textures and boosts warm amber floor reflections.',
-    bestFor: 'Varnished maple court texture & floor shine',
-    tier: 'premium'
-  },
-  {
-    id: 'mvp_sport',
-    icon: '🏆',
-    name: 'MVP Sport Clean',
-    description: 'A clean, newsroom-standard contrast curve with high-end white point normalization.',
-    bestFor: 'Action journalism & fast-turnaround media',
-    tier: 'premium'
-  },
-  {
-    id: 'kodachrome',
-    icon: '🎞️',
-    name: 'Kodachrome Retro',
-    description: 'Warm nostalgic film simulation with deep reds, vintage amber highlights, and soft matte blacks.',
-    bestFor: 'Retro lifestyle & player portrait captures',
-    tier: 'premium'
-  },
-  {
-    id: 'teal_orange',
-    icon: '🎬',
-    name: 'Teal & Orange',
-    description: 'Pushes shadows to cool cyan tones and highlights to warm skin-tone orange frequencies.',
-    bestFor: 'Cinematic commercials & marketing assets',
-    tier: 'premium'
-  },
-  {
-    id: 'doc_30_30',
-    icon: '🎥',
-    name: '30 for 30 Gritty',
-    description: 'Gritty, high-contrast, desaturated slate-tint look for intense character-driven emotion.',
-    bestFor: 'Intense player close-ups & dramatic locker rooms',
-    tier: 'premium'
-  },
-  {
-    id: 'carbon_clean',
-    icon: '💎',
-    name: 'Carbon Clean',
-    description: 'Subtle black crush with linear color replication to keep jersey colors brand-accurate.',
-    bestFor: 'Sleek sports commercial branding',
-    tier: 'premium'
-  },
-  {
-    id: 'portra',
-    icon: '📷',
-    name: 'Portra 400',
-    description: 'Recreates the iconic portrait film look with warm golden skin rendering and soft highlight compression.',
-    bestFor: 'Outdoor courts & athlete lifestyle portraits',
-    tier: 'premium'
-  },
-  {
-    id: 'fuji',
-    icon: '🌿',
-    name: 'Fuji Superia',
-    description: 'Emulates organic film contrast with cooler green/cyan highlight shifts and punchy midtones.',
-    bestFor: 'Outdoor courts & daylight environment captures',
-    tier: 'premium'
-  },
-  {
-    id: 'vintage',
-    icon: '🏺',
-    name: 'Vintage Gold',
-    description: 'Warm golden color wash with beautifully faded matte shadows for a classic analog vibe.',
-    bestFor: 'Retro streetball & nostalgic street captures',
-    tier: 'premium'
-  },
-  {
-    id: 'trix',
-    icon: '🖤',
-    name: 'Tri-X B&W',
-    description: 'Ilford Tri-X style punchy analog black-and-white curve with strong highlights and rich grit.',
-    bestFor: 'Timeless dynamic action & high-contrast street art',
-    tier: 'premium'
+    name: 'Hardwood Glow',
+    description: 'Enriches warm amber/yellow wood grains, adding contrast to player shoe reflections.',
+    bestFor: 'Basketball courts with varnished maple floors',
+    tier: 'premium',
+    pack: 'arena'
   },
   {
     id: 'ice_rink',
     icon: '❄️',
     name: 'Ice Cold Rink',
-    description: 'Cools down white balances, cleans up yellowed ice sheets, and punches blue hockey lines.',
-    bestFor: 'Hockey & ice rink sports',
-    tier: 'premium'
+    description: 'Cools down white balances, cleans up yellowed ice sheets to bright ice-white, and punches blue hockey lines.',
+    bestFor: 'Hockey, figure skating, curling',
+    tier: 'premium',
+    pack: 'arena'
+  },
+  {
+    id: 'matte_gym',
+    icon: '🤸',
+    name: 'Matte Gym Cast',
+    description: 'Reduces glare off gymnastics and wrestling mats; increases contrast in player midtones.',
+    bestFor: 'Wrestling mats, martial arts, gymnastics',
+    tier: 'premium',
+    pack: 'arena'
+  },
+  {
+    id: 'msg',
+    icon: '🏟️',
+    name: 'Stadium Night',
+    description: 'Increases shadows to hide empty dark stadium seats, highlighting player catch-lights.',
+    bestFor: 'Indoor stadium soccer & track',
+    tier: 'premium',
+    pack: 'arena'
+  },
+  // --- PACK 2: Dynamic Game-Day Action (action) ---
+  {
+    id: 'mvp_sport',
+    icon: '🏆',
+    name: 'Clarity Punch',
+    description: 'Heavy contrast curves, slightly pulled-back blacks, and a sharp boost to micro-details in jerseys and sweat.',
+    bestFor: 'Close-up basketball and football action',
+    tier: 'premium',
+    pack: 'action'
+  },
+  {
+    id: 'hyper_active',
+    icon: '⚡',
+    name: 'Hyper-Active',
+    description: 'Boosts dynamic range, controls clipping highlights, and adds high-frequency edge definition.',
+    bestFor: 'Fast-motion athletics, sprinting, hurdles',
+    tier: 'premium',
+    pack: 'action'
+  },
+  {
+    id: 'mud_grit',
+    icon: '🚜',
+    name: 'Mud & Grit',
+    description: 'Enhances earthy browns and grassy greens while crushing shadows for a dirty, battle-tested aesthetic.',
+    bestFor: 'Rugby, motocross, outdoor soccer',
+    tier: 'premium',
+    pack: 'action'
+  },
+  {
+    id: 'velodrome',
+    icon: '🚴',
+    name: 'Velodrome Speed',
+    description: 'Pushes colors slightly warm and adds linear speed motion-blur highlights.',
+    bestFor: 'Cycling, track cycling, speed skating',
+    tier: 'premium',
+    pack: 'action'
+  },
+  {
+    id: 'sweat_steel',
+    icon: '🏋️',
+    name: 'Sweat & Steel',
+    description: 'Desaturates general environments, but highlights metallic shine and wet specular highlights on skin.',
+    bestFor: 'Weightlifting, bodybuilding, training reels',
+    tier: 'premium',
+    pack: 'action'
+  },
+  {
+    id: 'extreme_peak',
+    icon: '🏂',
+    name: 'Extreme Peak',
+    description: 'High exposure highlight roll-offs with crisp white point normalization.',
+    bestFor: 'Skiing, snowboarding, extreme snow sports',
+    tier: 'premium',
+    pack: 'action'
+  },
+  // --- PACK 3: Cinematic Narrative & Storytelling (cinematic) ---
+  {
+    id: 'doc_30_30',
+    icon: '🎥',
+    name: '30 for 30 Gritty',
+    description: 'Highly desaturated, heavy black crush, and a cold blue/slate-tint shadow profile.',
+    bestFor: 'Locker rooms, emotional pre-game segments',
+    tier: 'premium',
+    pack: 'cinematic'
+  },
+  {
+    id: 'drive_survive',
+    icon: '🏎️',
+    name: 'Drive to Survive',
+    description: 'Modern cinema look with deep, rich greens, high-contrast reds, and cinematic warm skin tones.',
+    bestFor: 'Motorsports, high-end commercial athletic promos',
+    tier: 'premium',
+    pack: 'cinematic'
+  },
+  {
+    id: 'underdog',
+    icon: '🥊',
+    name: 'Underdog Story',
+    description: 'Dark, moody shadows with a subtle warm olive/green undertone in the midtones.',
+    bestFor: 'Behind-the-scenes, practice reels, coaching',
+    tier: 'premium',
+    pack: 'cinematic'
   },
   {
     id: 'friday_lights',
     icon: '🏈',
     name: 'Friday Night Lights',
-    description: 'High-contrast sports look with amber highlights and faded deep-blue shadows.',
-    bestFor: 'Night stadium football & soccer',
-    tier: 'premium'
+    description: 'Amber highlights, faded deep-blue shadows, and high contrast under stadium light posts.',
+    bestFor: 'Night football games, outdoor stadium sports',
+    tier: 'premium',
+    pack: 'cinematic'
+  },
+  {
+    id: 'locker_room',
+    icon: '🚪',
+    name: 'Locker Room Shadow',
+    description: 'Deep, dark shadows with flat ambers. Puts focus on single key lights.',
+    bestFor: 'Cinematic pre-game locker talk',
+    tier: 'premium',
+    pack: 'cinematic'
+  },
+  {
+    id: 'victory_glow',
+    icon: '🥇',
+    name: 'Victory Glow',
+    description: 'Warm, golden-hour highlights with soft matte blacks and clean, rich skin tones.',
+    bestFor: 'Post-game celebrations, trophy lifts',
+    tier: 'premium',
+    pack: 'cinematic'
+  },
+  // --- PACK 4: Color Isolation & Brand Aesthetics (colors) ---
+  {
+    id: 'red_storm',
+    icon: '🔴',
+    name: 'Red Storm',
+    description: 'Desaturates background greens and ambers, making team primary reds pop intensely.',
+    bestFor: 'Teams with Red/Scarlet jerseys',
+    tier: 'premium',
+    pack: 'colors'
+  },
+  {
+    id: 'royal_pride',
+    icon: '🔵',
+    name: 'Royal Pride',
+    description: 'Vibrates primary blues and deep cyans while keeping basketball courts from looking too yellow.',
+    bestFor: 'Teams with Blue/Navy uniforms',
+    tier: 'premium',
+    pack: 'colors'
   },
   {
     id: 'green_field',
     icon: '🌱',
     name: 'Green Field Clear',
-    description: 'Stabilizes grass to a deep hunter green and cleans up background turf glare.',
-    bestFor: 'Grass field & outdoor turf sports',
-    tier: 'premium'
+    description: 'Stabilizes grass colors to a deep hunter green rather than neon yellow-green; cleans up background turf.',
+    bestFor: 'Soccer, American football, baseball',
+    tier: 'premium',
+    pack: 'colors'
   },
   {
-    id: 'royal_pride',
-    icon: '🔵',
-    name: 'Royal Pride Blue',
-    description: 'Selectively vibrates primary blues and deep cyans while toning down court yellow casts.',
-    bestFor: 'Blue jersey teams & court focus',
-    tier: 'premium'
+    id: 'carbon_clean',
+    icon: '💎',
+    name: 'Carbon Commercial',
+    description: 'Modern clean look with linear color replication and a matte dark crowd shadow curve.',
+    bestFor: 'Social media graphic headers & brand ads',
+    tier: 'premium',
+    pack: 'colors'
   },
   {
-    id: 'red_storm',
-    icon: '🔴',
-    name: 'Red Storm Pop',
-    description: 'Pops primary red uniforms while desaturating green and amber background details.',
-    bestFor: 'Red jersey teams & subject focus',
-    tier: 'premium'
+    id: 'court_gold',
+    icon: '🪙',
+    name: 'Court Gold',
+    description: 'Selectively pulls out gold, yellow, and copper frequencies for premium spotlighting.',
+    bestFor: 'Teams with yellow/gold uniform accents',
+    tier: 'premium',
+    pack: 'colors'
+  },
+  {
+    id: 'neon_high',
+    icon: '🎽',
+    name: 'High-Key Neon',
+    description: 'Saturates fluorescent colors (neon green, pink, bright orange) for a fast-paced streetwear style.',
+    bestFor: 'Running gear, activewear promos, skate parks',
+    tier: 'premium',
+    pack: 'colors'
+  },
+  // --- PACK 5: Vintage Sports & Film Emulation (vintage) ---
+  {
+    id: 'kodachrome',
+    icon: '🎞️',
+    name: 'Kodachrome Retro',
+    description: 'Warm nostalgic film curves, rich red saturation, amber highlights, and soft matte blacks.',
+    bestFor: 'Player lifestyle profiles & retro hoops',
+    tier: 'premium',
+    pack: 'vintage'
+  },
+  {
+    id: 'fuji',
+    icon: '🌿',
+    name: 'Fuji Superia 400',
+    description: 'Cool green/cyan highlight shift with organic midtone contrast.',
+    bestFor: 'Outdoor courts, bright daylight training sessions',
+    tier: 'premium',
+    pack: 'vintage'
+  },
+  {
+    id: 'vintage',
+    icon: '🌇',
+    name: 'Streetball Gold',
+    description: 'Golden-yellow wash with heavily faded shadows and bright, soft highlights.',
+    bestFor: 'Vintage streetball, asphalt courts, summer sunset play',
+    tier: 'premium',
+    pack: 'vintage'
+  },
+  {
+    id: 'trix',
+    icon: '🖤',
+    name: 'Tri-X High Contrast B&W',
+    description: 'High-contrast black and white curve modeled after Ilford Tri-X film; high grain texture.',
+    bestFor: 'Timeless action shots, dramatic grit',
+    tier: 'premium',
+    pack: 'vintage'
+  },
+  {
+    id: 'portra',
+    icon: '📷',
+    name: 'Portra 160 Lifestyle',
+    description: 'Soft contrast, warm skin rendering, and highlight compression.',
+    bestFor: 'Athlete portraits, post-game media calls',
+    tier: 'premium',
+    pack: 'vintage'
+  },
+  {
+    id: 'rucker_park',
+    icon: '🏀',
+    name: 'Rucker Park Faded',
+    description: 'Heavily desaturated retro look with warm concrete grays and faded orange hoops.',
+    bestFor: 'Nostalgic urban sports captures',
+    tier: 'premium',
+    pack: 'vintage'
   }
 ];
 

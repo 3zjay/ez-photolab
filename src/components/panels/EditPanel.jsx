@@ -3,11 +3,6 @@ import { SL, Row, Spin, PBar, AB, SmoothSlider } from "../ui/common";
 import { PRESETS, FILTER_GROUPS, COLOR_FILTERS, DEFAULT_FILTERS, LUT_PRESETS } from "../../constants";
 import { parseCubeLut, exportLutToCube } from "../../lutParser";
 
-const SPORTS_LUT_IDS = [
-    'ice_rink', 'friday_lights', 'green_field', 'royal_pride', 'red_storm',
-    'arena_lights', 'ymca', 'msg', 'team_pride', 'hardwood_tones', 'mvp_sport'
-];
-
 export function EditPanel({
     filters, setFilters, filterGroup, setFilterGroup, isEdited, resetAll, revertAi, dm, cardBdr, cardBg,
     image, runBrowserUpscale, aiUpscaleStatus, aiUpscaleLog, aiUpscaleProgress, aiUpscaleResult, aiUpscaleResultSize, applyAiResult,
@@ -21,24 +16,23 @@ export function EditPanel({
     const [styleType, setStyleType] = useState(lutId !== 'none' ? 'lut' : 'preset');
     const [lutTab, setLutTab] = useState("all");
 
-    const downloadSportsPack = useCallback(() => {
-        SPORTS_LUT_IDS.forEach((id, idx) => {
+    const downloadActivePack = useCallback(() => {
+        const activeLuts = LUT_PRESETS.filter(p => p.id !== 'none' && (lutTab === 'all' || p.pack === lutTab));
+        activeLuts.forEach((preset, idx) => {
             setTimeout(() => {
-                const preset = LUT_PRESETS.find(p => p.id === id);
-                if (!preset) return;
-                const content = exportLutToCube(id);
+                const content = exportLutToCube(preset.id);
                 if (content) {
                     const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
                     const url = URL.createObjectURL(blob);
                     const link = document.createElement("a");
                     link.href = url;
-                    link.download = `${id}.cube`;
+                    link.download = `${preset.id}.cube`;
                     link.click();
                     URL.revokeObjectURL(url);
                 }
             }, idx * 250);
         });
-    }, []);
+    }, [lutTab]);
 
 
     useEffect(() => {
@@ -105,8 +99,15 @@ export function EditPanel({
                             <p style={{ fontSize: "11px", color: "#aaa", lineHeight: 1.5, margin: 0 }}>Apply professional film simulations and cinematic color grades. Select a built-in look or upload your own .cube file.</p>
 
                             {/* Tab/Pack Selector */}
-                            <div style={{ display: "flex", gap: "4px", background: dm ? '#2a2a2a' : '#f2f2f8', padding: "3px", borderRadius: "8px", alignSelf: "flex-start" }}>
-                                {[{ id: "all", label: "⚡ All" }, { id: "sports", label: "🏆 Sports Pack" }, { id: "film", label: "🎬 Film & Retro" }].map(tab => {
+                            <div style={{ display: "flex", gap: "4px", background: dm ? '#2a2a2a' : '#f2f2f8', padding: "3px", borderRadius: "8px", alignSelf: "flex-start", flexWrap: "wrap" }}>
+                                {[
+                                    { id: "all", label: "⚡ All" },
+                                    { id: "arena", label: "🏟️ Arena" },
+                                    { id: "action", label: "🏈 Action" },
+                                    { id: "cinematic", label: "🎬 Cinematic" },
+                                    { id: "colors", label: "🎽 Colors" },
+                                    { id: "vintage", label: "🎞️ Vintage" }
+                                ].map(tab => {
                                     const active = lutTab === tab.id;
                                     return (
                                         <button key={tab.id} onClick={() => setLutTab(tab.id)}
@@ -124,10 +125,16 @@ export function EditPanel({
                                 })}
                             </div>
 
-                            {lutTab === 'sports' && (
-                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "2px" }}>
-                                    <span style={{ fontSize: "11px", color: dm ? "#aaa" : "#555", fontWeight: 600 }}>🏆 Sports Pro Pack (11 LUTs)</span>
-                                    <button onClick={downloadSportsPack} 
+                            {lutTab !== 'all' && (
+                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "2px", width: "100%" }}>
+                                    <span style={{ fontSize: "11px", color: dm ? "#aaa" : "#555", fontWeight: 600 }}>
+                                        {lutTab === 'arena' && "🏟️ Arena Pack (6 LUTs)"}
+                                        {lutTab === 'action' && "🏈 Action Pack (6 LUTs)"}
+                                        {lutTab === 'cinematic' && "🎬 Cinematic Pack (6 LUTs)"}
+                                        {lutTab === 'colors' && "🎽 Colors Pack (6 LUTs)"}
+                                        {lutTab === 'vintage' && "🎞️ Vintage Pack (6 LUTs)"}
+                                    </span>
+                                    <button onClick={downloadActivePack} 
                                         style={{ 
                                             background: "transparent", border: "none", color: "#6c63ff", fontSize: "11px", fontWeight: 700, cursor: "pointer", textDecoration: "underline", padding: 0,
                                             fontFamily: "inherit"
@@ -141,10 +148,7 @@ export function EditPanel({
                                 {LUT_PRESETS.filter(p => {
                                     if (p.id === 'none') return true;
                                     if (lutTab === 'all') return true;
-                                    const isSports = SPORTS_LUT_IDS.includes(p.id);
-                                    if (lutTab === 'sports') return isSports;
-                                    if (lutTab === 'film') return !isSports;
-                                    return true;
+                                    return p.pack === lutTab;
                                 }).map(p => {
                                     const active = lutId === p.id;
                                     return (

@@ -126,29 +126,23 @@ export function BatchPage({ dm, cardBg, cardBdr, inputSt, isMobile = false,
 
   const [batchLutTab, setBatchLutTab] = useState("all");
 
-  const SPORTS_LUT_IDS = useMemo(() => [
-    'ice_rink', 'friday_lights', 'green_field', 'royal_pride', 'red_storm',
-    'arena_lights', 'ymca', 'msg', 'team_pride', 'hardwood_tones', 'mvp_sport'
-  ], []);
-
-  const downloadSportsPack = useCallback(() => {
-    SPORTS_LUT_IDS.forEach((id, idx) => {
+  const downloadActivePack = useCallback(() => {
+    const activeLuts = LUT_PRESETS.filter(p => p.id !== 'none' && (batchLutTab === 'all' || p.pack === batchLutTab));
+    activeLuts.forEach((preset, idx) => {
       setTimeout(() => {
-        const preset = LUT_PRESETS.find(p => p.id === id);
-        if (!preset) return;
-        const content = exportLutToCube(id);
+        const content = exportLutToCube(preset.id);
         if (content) {
           const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
           const url = URL.createObjectURL(blob);
           const link = document.createElement("a");
           link.href = url;
-          link.download = `${id}.cube`;
+          link.download = `${preset.id}.cube`;
           link.click();
           URL.revokeObjectURL(url);
         }
       }, idx * 250);
     });
-  }, [SPORTS_LUT_IDS]);
+  }, [batchLutTab]);
 
 
   const Card = ({ children, style = {} }) => (
@@ -407,8 +401,15 @@ export function BatchPage({ dm, cardBg, cardBdr, inputSt, isMobile = false,
               </div>
 
               {/* Tab/Pack Selector */}
-              <div style={{ display: "flex", gap: "4px", background: dm ? '#2a2a2a' : '#f2f2f8', padding: "3px", borderRadius: "8px", alignSelf: "flex-start" }}>
-                {[{ id: "all", label: "⚡ All" }, { id: "sports", label: "🏆 Sports Pack" }, { id: "film", label: "🎬 Film & Retro" }].map(tab => {
+              <div style={{ display: "flex", gap: "4px", background: dm ? '#2a2a2a' : '#f2f2f8', padding: "3px", borderRadius: "8px", alignSelf: "flex-start", flexWrap: "wrap" }}>
+                {[
+                  { id: "all", label: "⚡ All" },
+                  { id: "arena", label: "🏟️ Arena" },
+                  { id: "action", label: "🏈 Action" },
+                  { id: "cinematic", label: "🎬 Cinematic" },
+                  { id: "colors", label: "🎽 Colors" },
+                  { id: "vintage", label: "🎞️ Vintage" }
+                ].map(tab => {
                   const active = batchLutTab === tab.id;
                   return (
                     <button key={tab.id} onClick={() => setBatchLutTab(tab.id)}
@@ -426,10 +427,16 @@ export function BatchPage({ dm, cardBg, cardBdr, inputSt, isMobile = false,
                 })}
               </div>
 
-              {batchLutTab === 'sports' && (
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "2px" }}>
-                  <span style={{ fontSize: "11px", color: dm ? "#aaa" : "#555", fontWeight: 600 }}>🏆 Sports Pro Pack (11 LUTs)</span>
-                  <button onClick={downloadSportsPack} 
+              {batchLutTab !== 'all' && (
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "2px", width: "100%" }}>
+                  <span style={{ fontSize: "11px", color: dm ? "#aaa" : "#555", fontWeight: 600 }}>
+                    {batchLutTab === 'arena' && "🏟️ Arena Pack (6 LUTs)"}
+                    {batchLutTab === 'action' && "🏈 Action Pack (6 LUTs)"}
+                    {batchLutTab === 'cinematic' && "🎬 Cinematic Pack (6 LUTs)"}
+                    {batchLutTab === 'colors' && "🎽 Colors Pack (6 LUTs)"}
+                    {batchLutTab === 'vintage' && "🎞️ Vintage Pack (6 LUTs)"}
+                  </span>
+                  <button onClick={downloadActivePack} 
                     style={{ 
                       background: "transparent", border: "none", color: "#6c63ff", fontSize: "11px", fontWeight: 700, cursor: "pointer", textDecoration: "underline", padding: 0,
                       fontFamily: "inherit"
@@ -444,10 +451,7 @@ export function BatchPage({ dm, cardBg, cardBdr, inputSt, isMobile = false,
                 {LUT_PRESETS.filter(p => {
                   if (p.id === 'none') return true;
                   if (batchLutTab === 'all') return true;
-                  const isSports = SPORTS_LUT_IDS.includes(p.id);
-                  if (batchLutTab === 'sports') return isSports;
-                  if (batchLutTab === 'film') return !isSports;
-                  return true;
+                  return p.pack === batchLutTab;
                 }).map(p => {
                   const active = batchLutId === p.id;
                   return (
