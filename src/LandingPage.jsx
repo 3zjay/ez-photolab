@@ -706,6 +706,322 @@ export function LandingPage({ dm, loadImage, setActiveTab, handleInstallClick, d
         </div>
       </div>
 
+      {/* Guided Production Workflow Stepper */}
+      <div style={{ maxWidth: "1000px", width: "100%", marginBottom: "80px", marginTop: "30px", animation: "slideup 0.85s ease" }}>
+        <div style={{ textAlign: "center", marginBottom: "40px" }}>
+          <div style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "6px",
+            padding: "5px 14px",
+            background: dm ? "rgba(108, 99, 255, 0.12)" : "rgba(108, 99, 255, 0.06)",
+            border: `1px solid ${dm ? "rgba(108, 99, 255, 0.25)" : "rgba(108, 99, 255, 0.12)"}`,
+            borderRadius: "30px",
+            fontSize: "11px",
+            fontWeight: 800,
+            color: "#6c63ff",
+            letterSpacing: "1px",
+            textTransform: "uppercase",
+            marginBottom: "14px",
+            fontFamily: "'Outfit', sans-serif"
+          }}>
+            📋 Step-by-Step Production Pipeline
+          </div>
+          <h2 style={{
+            fontSize: "28px",
+            fontWeight: 900,
+            color: dm ? "#ffffff" : "#111827",
+            fontFamily: "'Outfit', sans-serif",
+            letterSpacing: "-0.8px"
+          }}>
+            High-Speed Sports Media Workflow
+          </h2>
+          <p style={{ fontSize: "14px", color: dm ? "#9ca3af" : "#4b5563", maxWidth: "600px", margin: "6px auto 0", lineHeight: 1.5 }}>
+            Process RAW negative bursts from camera cards to final branded exports in three steps, completely on your machine.
+          </p>
+        </div>
+
+        <div style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+          gap: "24px",
+          position: "relative"
+        }}>
+          {/* Step 1 Card: Cull */}
+          <div className="glass-panel glow-hover-card" style={{
+            padding: "28px",
+            borderRadius: "20px",
+            border: `1px solid ${dm ? "rgba(255, 255, 255, 0.04)" : "rgba(0, 0, 0, 0.04)"}`,
+            background: dm ? "rgba(30, 30, 45, 0.2)" : "rgba(255, 255, 255, 0.6)",
+            backdropFilter: "blur(10px)",
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: "space-between",
+            gap: "20px",
+            position: "relative",
+            minHeight: "340px",
+            boxShadow: "0 10px 30px rgba(0,0,0,0.05)"
+          }}>
+            {/* Step badge absolute */}
+            <div style={{
+              position: "absolute",
+              top: "-12px",
+              left: "24px",
+              padding: "4px 12px",
+              background: "linear-gradient(135deg, #06b6d4 0%, #6c63ff 100%)",
+              borderRadius: "20px",
+              fontSize: "11px",
+              fontWeight: 800,
+              color: "#ffffff",
+              boxShadow: "0 4px 10px rgba(6, 182, 212, 0.25)",
+              fontFamily: "'Outfit', sans-serif"
+            }}>
+              STEP 01
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: "12px", marginTop: "8px" }}>
+              <div style={{
+                width: "48px",
+                height: "48px",
+                borderRadius: "12px",
+                background: dm ? "rgba(6, 182, 212, 0.12)" : "rgba(6, 182, 212, 0.08)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "#06b6d4",
+                marginBottom: "4px"
+              }}>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="11" cy="11" r="8" />
+                  <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                  <path d="M11 8v6M8 11h6" strokeWidth={1.8} opacity={0.9} />
+                </svg>
+              </div>
+              <h3 style={{ fontSize: "19px", fontWeight: 800, color: dm ? "#ffffff" : "#111827", fontFamily: "'Outfit', sans-serif", letterSpacing: "-0.3px" }}>
+                AI Image Culling
+              </h3>
+              <p style={{ fontSize: "13px", color: dm ? "#9ca3af" : "#4b5563", lineHeight: 1.6 }}>
+                Scan burst sequences and RAW directories in under a second. Local AI groups duplicates, scores focus sharpness, flags blinking eyes/smiles, and exports star-ratings directly to Adobe-compliant <strong>.XMP sidecar files</strong>.
+              </p>
+            </div>
+
+            <button
+              onClick={() => setActiveTab("cull")}
+              style={{
+                width: "100%",
+                padding: "10px 16px",
+                background: dm ? "rgba(255, 255, 255, 0.05)" : "rgba(0, 0, 0, 0.03)",
+                border: `1px solid ${dm ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.08)"}`,
+                borderRadius: "10px",
+                color: dm ? "#ffffff" : "#0f172a",
+                fontSize: "13px",
+                fontWeight: 700,
+                cursor: "pointer",
+                transition: "all 0.2s",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "6px",
+                fontFamily: "'Outfit', sans-serif"
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = "linear-gradient(135deg, rgba(6, 182, 212, 0.15), rgba(108, 99, 255, 0.15))";
+                e.currentTarget.style.borderColor = "#6c63ff";
+                e.currentTarget.style.transform = "translateY(-1px)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = dm ? "rgba(255, 255, 255, 0.05)" : "rgba(0, 0, 0, 0.03)";
+                e.currentTarget.style.borderColor = dm ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.08)";
+                e.currentTarget.style.transform = "none";
+              }}
+            >
+              Launch Cull AI 🔍
+            </button>
+          </div>
+
+          {/* Step 2 Card: Grade */}
+          <div className="glass-panel glow-hover-card" style={{
+            padding: "28px",
+            borderRadius: "20px",
+            border: `1px solid ${dm ? "rgba(255, 255, 255, 0.04)" : "rgba(0, 0, 0, 0.04)"}`,
+            background: dm ? "rgba(30, 30, 45, 0.2)" : "rgba(255, 255, 255, 0.6)",
+            backdropFilter: "blur(10px)",
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: "space-between",
+            gap: "20px",
+            position: "relative",
+            minHeight: "340px",
+            boxShadow: "0 10px 30px rgba(0,0,0,0.05)"
+          }}>
+            {/* Step badge absolute */}
+            <div style={{
+              position: "absolute",
+              top: "-12px",
+              left: "24px",
+              padding: "4px 12px",
+              background: "linear-gradient(135deg, #6c63ff 0%, #ec4899 100%)",
+              borderRadius: "20px",
+              fontSize: "11px",
+              fontWeight: 800,
+              color: "#ffffff",
+              boxShadow: "0 4px 10px rgba(108, 99, 255, 0.25)",
+              fontFamily: "'Outfit', sans-serif"
+            }}>
+              STEP 02
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: "12px", marginTop: "8px" }}>
+              <div style={{
+                width: "48px",
+                height: "48px",
+                borderRadius: "12px",
+                background: dm ? "rgba(108, 99, 255, 0.12)" : "rgba(108, 99, 255, 0.08)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "#6c63ff",
+                marginBottom: "4px"
+              }}>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
+                </svg>
+              </div>
+              <h3 style={{ fontSize: "19px", fontWeight: 800, color: dm ? "#ffffff" : "#111827", fontFamily: "'Outfit', sans-serif", letterSpacing: "-0.3px" }}>
+                Develop & Color Grade
+              </h3>
+              <p style={{ fontSize: "13px", color: dm ? "#9ca3af" : "#4b5563", lineHeight: 1.6 }}>
+                Open selected master files. Refine exposure, brightness, temperature, and shadow recovery. Apply specialized 3D LUTs from our curated **Sports Packs** (Arena Spotlight, Drive to Survive, Hardwood Glow) or upload your own <strong>.CUBE files</strong>.
+              </p>
+            </div>
+
+            <button
+              onClick={() => setActiveTab("edit")}
+              style={{
+                width: "100%",
+                padding: "10px 16px",
+                background: dm ? "rgba(255, 255, 255, 0.05)" : "rgba(0, 0, 0, 0.03)",
+                border: `1px solid ${dm ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.08)"}`,
+                borderRadius: "10px",
+                color: dm ? "#ffffff" : "#0f172a",
+                fontSize: "13px",
+                fontWeight: 700,
+                cursor: "pointer",
+                transition: "all 0.2s",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "6px",
+                fontFamily: "'Outfit', sans-serif"
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = "linear-gradient(135deg, rgba(108, 99, 255, 0.15), rgba(236, 72, 153, 0.15))";
+                e.currentTarget.style.borderColor = "#ec4899";
+                e.currentTarget.style.transform = "translateY(-1px)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = dm ? "rgba(255, 255, 255, 0.05)" : "rgba(0, 0, 0, 0.03)";
+                e.currentTarget.style.borderColor = dm ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.08)";
+                e.currentTarget.style.transform = "none";
+              }}
+            >
+              Open Studio Workspace 🎨
+            </button>
+          </div>
+
+          {/* Step 3 Card: Batch */}
+          <div className="glass-panel glow-hover-card" style={{
+            padding: "28px",
+            borderRadius: "20px",
+            border: `1px solid ${dm ? "rgba(255, 255, 255, 0.04)" : "rgba(0, 0, 0, 0.04)"}`,
+            background: dm ? "rgba(30, 30, 45, 0.2)" : "rgba(255, 255, 255, 0.6)",
+            backdropFilter: "blur(10px)",
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: "space-between",
+            gap: "20px",
+            position: "relative",
+            minHeight: "340px",
+            boxShadow: "0 10px 30px rgba(0,0,0,0.05)"
+          }}>
+            {/* Step badge absolute */}
+            <div style={{
+              position: "absolute",
+              top: "-12px",
+              left: "24px",
+              padding: "4px 12px",
+              background: "linear-gradient(135deg, #f97316 0%, #facc15 100%)",
+              borderRadius: "20px",
+              fontSize: "11px",
+              fontWeight: 800,
+              color: "#ffffff",
+              boxShadow: "0 4px 10px rgba(249, 115, 22, 0.25)",
+              fontFamily: "'Outfit', sans-serif"
+            }}>
+              STEP 03
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: "12px", marginTop: "8px" }}>
+              <div style={{
+                width: "48px",
+                height: "48px",
+                borderRadius: "12px",
+                background: dm ? "rgba(249, 115, 22, 0.12)" : "rgba(249, 115, 22, 0.08)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "#f97316",
+                marginBottom: "4px"
+              }}>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                </svg>
+              </div>
+              <h3 style={{ fontSize: "19px", fontWeight: 800, color: dm ? "#ffffff" : "#111827", fontFamily: "'Outfit', sans-serif", letterSpacing: "-0.3px" }}>
+                Batch Export & Brand
+              </h3>
+              <p style={{ fontSize: "13px", color: dm ? "#9ca3af" : "#4b5563", lineHeight: 1.6 }}>
+                Import selected keepers into the batch processor. Automate resizing for web/print, apply orientation-aware **PNG watermarks** (separate scaling for landscape vs. portrait), batch apply LUT grades, and export locally in WebP, JPEG, or PNG.
+              </p>
+            </div>
+
+            <button
+              onClick={() => setActiveTab("batch")}
+              style={{
+                width: "100%",
+                padding: "10px 16px",
+                background: dm ? "rgba(255, 255, 255, 0.05)" : "rgba(0, 0, 0, 0.03)",
+                border: `1px solid ${dm ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.08)"}`,
+                borderRadius: "10px",
+                color: dm ? "#ffffff" : "#0f172a",
+                fontSize: "13px",
+                fontWeight: 700,
+                cursor: "pointer",
+                transition: "all 0.2s",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "6px",
+                fontFamily: "'Outfit', sans-serif"
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = "linear-gradient(135deg, rgba(249, 115, 22, 0.15), rgba(250, 204, 21, 0.15))";
+                e.currentTarget.style.borderColor = "#facc15";
+                e.currentTarget.style.transform = "translateY(-1px)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = dm ? "rgba(255, 255, 255, 0.05)" : "rgba(0, 0, 0, 0.03)";
+                e.currentTarget.style.borderColor = dm ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.08)";
+                e.currentTarget.style.transform = "none";
+              }}
+            >
+              Start Batch Processor 📦
+            </button>
+          </div>
+        </div>
+      </div>
+
       {/* Interactive System Flow Diagram Section */}
       <div style={{ maxWidth: "1000px", width: "100%", marginBottom: "70px", animation: "slideup 0.9s ease" }}>
         <div style={{ textAlign: "center", marginBottom: "30px" }}>
