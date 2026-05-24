@@ -4,7 +4,7 @@ import { FONT_MAP, PRESETS, LUT_PRESETS } from "./constants";
 import { apply3DLut } from "./utils";
 import { RAW_EXTENSIONS } from "./rawProcessor";
 
-export function Preview({ image, originalImage, dragging, setDragging, loadImage, fileInputRef, imgRef, splitRef, activeTab, bgResult, bgMode, showBefore, setShowBefore, showSplit, splitPos, isDragSplit, setIsDragSplit, cssFilter, transformCSS, filters, texts, selText, setSelText, updateText, cropMode, cropBox, setCropBox, cropAspect, isEdited, setImage, setBgStatus, setBgSubUrl, setBgResult, isMobile, rotation, flipH, flipV, activeLutData, lutIntensity, lutId, dm, rawLoading, rawProgressMsg, logo, logoScale, logoScalePortrait, logoOpacity, logoPos, logoMargin, logoX, setLogoX, logoY, setLogoY, setLogoPos, filterGroup }) {
+export function Preview({ image, originalImage, dragging, setDragging, loadImage, fileInputRef, imgRef, splitRef, activeTab, bgResult, bgMode, showBefore, setShowBefore, showSplit, splitPos, isDragSplit, setIsDragSplit, cssFilter, transformCSS, filters, texts, selText, setSelText, updateText, cropMode, cropBox, setCropBox, cropAspect, isEdited, setImage, setBgStatus, setBgSubUrl, setBgResult, isMobile, rotation, flipH, flipV, activeLutData, lutIntensity, lutId, dm, rawLoading, rawProgressMsg, logo, logoScale, logoScalePortrait, logoOpacity, logoPos, logoMargin, logoX, setLogoX, logoY, setLogoY, setLogoPos, filterGroup, highResImage }) {
   const maxH = isMobile ? "40vh" : "calc(100vh - 120px)";
   const activeLut = (lutId && lutId !== 'none') ? (lutId === 'custom'
       ? { name: 'Custom LUT', description: 'User-uploaded custom 3D LUT curve configuration.', bestFor: 'Custom grading workflows', tier: 'premium', icon: '📂' }
@@ -23,11 +23,12 @@ export function Preview({ image, originalImage, dragging, setDragging, loadImage
   const [origDimensions, setOrigDimensions] = useState({ w: 0, h: 0 });
 
   useEffect(() => {
-    if (!image) return;
+    const src = highResImage || image;
+    if (!src) return;
     const img = new Image();
-    img.src = image;
+    img.src = src;
     img.onload = () => setDimensions({ w: img.naturalWidth, h: img.naturalHeight });
-  }, [image]);
+  }, [highResImage, image]);
 
   useEffect(() => {
     if (!originalImage) {

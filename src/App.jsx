@@ -1983,12 +1983,13 @@ export default function App() {
       setAiUpscaleResultSize(`${W.toLocaleString()}×${H.toLocaleString()}px · ~${approxKb > 1024 ? (approxKb / 1024).toFixed(1) + 'MB' : approxKb + 'KB'}`);
       setAiUpscaleResult(resultUrl);
       setAiUpscaleStatus('done'); setAiUpscaleLog(''); setAiUpscaleProgress(100);
+      setExportScale(1); // Set default export scale to 1x (Original) since it is already upscaled
       applyAiBaseImage(resultUrl);
     } catch (e) {
       console.error('Upscale error:', e);
       setAiUpscaleStatus('error'); setAiUpscaleLog(e.message || 'Upscale failed');
     }
-  }, [image, originalImage, aiScale, applyAiBaseImage]);
+  }, [image, originalImage, aiScale, applyAiBaseImage, setExportScale]);
 
 
   const runFalFaceRestore = useCallback(async () => {
@@ -2221,7 +2222,7 @@ export default function App() {
               {renderPanel()}
             </div>
             <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: "20px", position: "relative", overflow: "hidden" }}>
-              <Preview {...{ image: (aiBeautySmooth > 0 || aiBeautyClarity > 0 || aiBeautyGlow > 0) ? (beautyPreviewUrl || image) : image, originalImage, dragging, setDragging, loadImage, fileInputRef, imgRef, splitRef, previewRef, activeTab, bgResult, bgMode, showBefore, setShowBefore, showSplit, splitPos, isDragSplit, setIsDragSplit, cssFilter, transformCSS, filters, texts, selText, setSelText, updateText, cropMode, cropBox, setCropBox, cropAspect, isEdited, setImage, setBgStatus, setBgSubUrl, setBgResult, isMobile, rotation, flipH, flipV, activeLutData, lutIntensity, lutId, dm, rawLoading, rawProgressMsg, logo, logoScale, logoScalePortrait, logoOpacity, logoPos, logoMargin, logoX, setLogoX, logoY, setLogoY, setLogoPos, filterGroup }} />
+              <Preview {...{ image: (aiBeautySmooth > 0 || aiBeautyClarity > 0 || aiBeautyGlow > 0) ? (beautyPreviewUrl || image) : image, originalImage, dragging, setDragging, loadImage, fileInputRef, imgRef, splitRef, previewRef, activeTab, bgResult, bgMode, showBefore, setShowBefore, showSplit, splitPos, isDragSplit, setIsDragSplit, cssFilter, transformCSS, filters, texts, selText, setSelText, updateText, cropMode, cropBox, setCropBox, cropAspect, isEdited, setImage, setBgStatus, setBgSubUrl, setBgResult, isMobile, rotation, flipH, flipV, activeLutData, lutIntensity, lutId, dm, rawLoading, rawProgressMsg, logo, logoScale, logoScalePortrait, logoOpacity, logoPos, logoMargin, logoX, setLogoX, logoY, setLogoY, setLogoPos, filterGroup }} highResImage={image} />
             </div>
           </div>
         )
@@ -2247,7 +2248,7 @@ export default function App() {
         ) : (
           <div style={{ display: "flex", flexDirection: "column", height: "calc(100vh - 52px)", overflow: "hidden" }}>
             <div style={{ height: "42vh", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", position: "relative", borderBottom: `1px solid ${dm ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'}` }}>
-              <Preview {...{ image: (aiBeautySmooth > 0 || aiBeautyClarity > 0 || aiBeautyGlow > 0) ? (beautyPreviewUrl || image) : image, originalImage, dragging, setDragging, loadImage, fileInputRef, imgRef, splitRef, previewRef, activeTab, bgResult, bgMode, showBefore, setShowBefore, showSplit, splitPos, isDragSplit, setIsDragSplit, cssFilter, transformCSS, filters, texts, selText, setSelText, updateText, cropMode, cropBox, setCropBox, cropAspect, isEdited, setImage, setBgStatus, setBgSubUrl, setBgResult, isMobile, rotation, flipH, flipV, activeLutData, lutIntensity, lutId, dm, rawLoading, rawProgressMsg, logo, logoScale, logoScalePortrait, logoOpacity, logoPos, logoMargin, logoX, setLogoX, logoY, setLogoY, setLogoPos, filterGroup }} />
+              <Preview {...{ image: (aiBeautySmooth > 0 || aiBeautyClarity > 0 || aiBeautyGlow > 0) ? (beautyPreviewUrl || image) : image, originalImage, dragging, setDragging, loadImage, fileInputRef, imgRef, splitRef, previewRef, activeTab, bgResult, bgMode, showBefore, setShowBefore, showSplit, splitPos, isDragSplit, setIsDragSplit, cssFilter, transformCSS, filters, texts, selText, setSelText, updateText, cropMode, cropBox, setCropBox, cropAspect, isEdited, setImage, setBgStatus, setBgSubUrl, setBgResult, isMobile, rotation, flipH, flipV, activeLutData, lutIntensity, lutId, dm, rawLoading, rawProgressMsg, logo, logoScale, logoScalePortrait, logoOpacity, logoPos, logoMargin, logoX, setLogoX, logoY, setLogoY, setLogoPos, filterGroup }} highResImage={image} />
             </div>
             <div className="glass-panel" style={{ flex: 1, overflowY: "auto", WebkitOverflowScrolling: "touch", borderTop: `1px solid ${dm ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'}` }}>
               {renderPanel(true)}
