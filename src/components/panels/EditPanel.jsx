@@ -1,5 +1,5 @@
 import { useCallback, useState, useEffect } from "react";
-import { SL, Row, Spin, PBar, AB, SmoothSlider } from "../ui/common";
+import { SL, Row, Spin, PBar, AB, SmoothSlider, ModernImageUploadIcon } from "../ui/common";
 import { PRESETS, FILTER_GROUPS, COLOR_FILTERS, DEFAULT_FILTERS, LUT_PRESETS } from "../../constants";
 import { parseCubeLut, exportLutToCube } from "../../lutParser";
 
@@ -513,7 +513,7 @@ export function EditPanel({
                                     <input type="file" accept="image/*" onChange={handleLogoUpload} style={{ display: "none" }} />
                                     {logo
                                         ? <><div style={{ fontSize: "26px", marginBottom: "5px" }}>✅</div><div style={{ fontSize: "12px", fontWeight: 600, color: '#6c63ff', marginBottom: "2px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{logoFile?.name || "Logo Active"}</div><div style={{ fontSize: "11px", color: "#bbb" }}>Click to replace</div></>
-                                        : <><div style={{ fontSize: "26px", marginBottom: "5px" }}>🖼</div><div style={{ fontSize: "12px", fontWeight: 600, color: dm ? '#ccc' : '#555', marginBottom: "2px" }}>Click to upload logo</div><div style={{ fontSize: "11px", color: "#bbb" }}>PNG with transparency works best</div></>}
+                                        : <><div style={{ marginBottom: "6px" }}><ModernImageUploadIcon size={30} dm={dm} /></div><div style={{ fontSize: "12px", fontWeight: 600, color: dm ? '#ccc' : '#555', marginBottom: "2px" }}>Click to upload logo</div><div style={{ fontSize: "11px", color: "#bbb" }}>PNG with transparency works best</div></>}
                                 </label>
                                 {logo && (
                                     <AB onClick={() => { setLogo(null); setLogoFile(null); }} color="red" textColor="#fff" style={{ width: "100%", padding: "8px", fontSize: "12px" }}>

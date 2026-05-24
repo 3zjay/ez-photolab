@@ -1,5 +1,5 @@
 import { useMemo, useRef, useEffect, useCallback, memo, useState } from "react";
-import { Spin, SmoothSlider } from "./components/ui/common";
+import { Spin, SmoothSlider, ModernImageUploadIcon } from "./components/ui/common";
 import { BATCH_RESIZE_PRESETS, DEFAULT_FILTERS, COLOR_FILTERS, FILTER_GROUPS, PRESETS, LUT_PRESETS } from "./constants";
 import { toCSSFilter } from "./utils";
 import { RawBatchPanel } from "./components/panels/RawBatchPanel";
@@ -832,7 +832,7 @@ export function BatchPage({ dm, cardBg, cardBdr, inputSt, isMobile = false,
             <input type="file" accept="image/*" onChange={handleBatchLogoUpload} style={{ display: "none" }} />
             {batchLogo
               ? <><div style={{ fontSize: "26px", marginBottom: "5px" }}>✅</div><div style={{ fontSize: "12px", fontWeight: 600, color: accent, marginBottom: "2px" }}>{batchLogoFile?.name}</div><div style={{ fontSize: "11px", color: "#bbb" }}>Click to replace</div></>
-              : <><div style={{ fontSize: "26px", marginBottom: "5px" }}>🖼</div><div style={{ fontSize: "12px", fontWeight: 600, color: dm ? '#ccc' : '#555', marginBottom: "2px" }}>Click to upload logo</div><div style={{ fontSize: "11px", color: "#bbb" }}>PNG with transparency works best</div></>}
+              : <><div style={{ marginBottom: "6px" }}><ModernImageUploadIcon size={30} dm={dm} /></div><div style={{ fontSize: "12px", fontWeight: 600, color: dm ? '#ccc' : '#555', marginBottom: "2px" }}>Click to upload logo</div><div style={{ fontSize: "11px", color: "#bbb" }}>PNG with transparency works best</div></>}
           </label>
           {batchLogo && (
             <button onClick={() => { setBatchLogo(null); setBatchLogoFile(null); }} style={{ padding: "7px", background: "#fee2e2", border: "none", borderRadius: "7px", fontSize: "12px", color: "#ef4444", fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>

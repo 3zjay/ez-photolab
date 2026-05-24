@@ -3,6 +3,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { FONT_MAP, PRESETS, LUT_PRESETS } from "./constants";
 import { apply3DLut } from "./utils";
 import { RAW_EXTENSIONS } from "./rawProcessor";
+import { ModernImageUploadIcon } from "./components/ui/common";
 
 export function Preview({ image, originalImage, dragging, setDragging, loadImage, fileInputRef, imgRef, splitRef, activeTab, bgResult, bgMode, showBefore, setShowBefore, showSplit, splitPos, isDragSplit, setIsDragSplit, cssFilter, transformCSS, filters, texts, selText, setSelText, updateText, cropMode, cropBox, setCropBox, cropAspect, isEdited, setImage, setBgStatus, setBgSubUrl, setBgResult, isMobile, rotation, flipH, flipV, activeLutData, lutIntensity, lutId, dm, rawLoading, rawProgressMsg, logo, logoScale, logoScalePortrait, logoOpacity, logoPos, logoMargin, logoX, setLogoX, logoY, setLogoY, setLogoPos, filterGroup, highResImage }) {
   const maxH = isMobile ? "40vh" : "calc(100vh - 120px)";
@@ -200,7 +201,7 @@ export function Preview({ image, originalImage, dragging, setDragging, loadImage
       onDrop={e => { e.preventDefault(); setDragging(false); loadImage(e.dataTransfer.files[0]); }}
       onClick={() => fileInputRef.current?.click()}>
       <input ref={fileInputRef} type="file" accept={"image/*," + RAW_EXTENSIONS} style={{ display: "none" }} onChange={e => loadImage(e.target.files[0])} />
-      <div style={{ fontSize: "44px", marginBottom: "14px", animation: "pulse 2.5s infinite" }}>🖼</div>
+      <div style={{ marginBottom: "14px", animation: "pulse 2.5s infinite" }}><ModernImageUploadIcon size={46} dm={dm} /></div>
       <div style={{ fontSize: "16px", fontWeight: 600, color: dm ? "#fff" : "#555", marginBottom: "6px" }}>{isMobile ? "Tap to upload photo" : "Drop photo here"}</div>
       {!isMobile && <div style={{ fontSize: "13px", color: dm ? "#a1a1aa" : "#bbb", marginBottom: "20px" }}>or click to browse</div>}
       <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", justifyContent: "center", padding: "0 10px" }}>

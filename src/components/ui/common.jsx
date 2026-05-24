@@ -109,3 +109,32 @@ export const SmoothSlider = memo(function SmoothSlider({
     />
   );
 });
+
+export function ModernImageUploadIcon({ size = 44, dm = true }) {
+  return (
+    <svg 
+      width={size} 
+      height={size} 
+      viewBox="0 0 24 24" 
+      fill="none" 
+      xmlns="http://www.w3.org/2000/svg" 
+      style={{ display: 'inline-block', transition: 'transform 0.3s' }}
+    >
+      <defs>
+        <linearGradient id="modernPhotoGlow" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#06b6d4" />
+          <stop offset="50%" stopColor="#6c63ff" />
+          <stop offset="100%" stopColor="#ec4899" />
+        </linearGradient>
+      </defs>
+      {/* Background overlapping photo */}
+      <rect x="2" y="6" width="13" height="13" rx="3.5" stroke={dm ? "rgba(255,255,255,0.18)" : "rgba(0,0,0,0.15)"} strokeWidth="1.5" strokeLinecap="round" />
+      {/* Foreground primary photo */}
+      <rect x="7" y="3" width="15" height="15" rx="4" fill={dm ? "rgba(108, 99, 255, 0.06)" : "rgba(108, 99, 255, 0.02)"} stroke="url(#modernPhotoGlow)" strokeWidth="1.8" strokeLinecap="round" />
+      {/* Sun/Moon */}
+      <circle cx="11.5" cy="7.5" r="1.5" fill="url(#modernPhotoGlow)" />
+      {/* Mountain hills inside */}
+      <path d="M7.5 17.5L12 12.5L15.5 15.5L18.5 12.5L21.5 15.5" stroke="url(#modernPhotoGlow)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
