@@ -1,4 +1,5 @@
 import { BATCH_RESIZE_PRESETS, FONT_MAP } from "./constants";
+import { createSkinMask } from "./faceMasking";
 
 // Auto-levels: stretches each RGB channel histogram to 0–255
 export function applyAutoLevels(ctx, W, H) {
@@ -261,12 +262,30 @@ export function apply3DLut(imgData, lutData, size, intensity = 1.0) {
   }
 }
 
-export async function renderFinal(imageSrc, cssFilterStr, filters, rotation, flipH, flipV, texts, targetW, targetH, lutData = null, lutSize = 33, lutIntensity = 1.0, logo = null, logoScale = 0.15, logoScalePortrait = 0.30, logoOpacity = 0.7, logoPos = "bottom-right", logoMargin = 20, logoX = null, logoY = null) {
+export async function renderFinal(imageSrc, cssFilterStr, filters, rotation, flipH, flipV, texts, targetW, targetH, lutData = null, lutSize = 33, lutIntensity = 1.0, logo = null, logoScale = 0.15, logoScalePortrait = 0.30, logoOpacity = 0.7, logoPos = "bottom-right", logoMargin = 20, logoX = null, logoY = null, beautySmooth = 0, beautyClarity = 0, beautyGlow = 0, beautyUseMask = false) {
   // Always load a fresh Image to avoid canvas taint and stale DOM refs
   const imgEl = await loadImageFromSrc(imageSrc);
   const natW = imgEl.naturalWidth;
   const natH = imgEl.naturalHeight;
   if (!natW || !natH) throw new Error('Image has zero dimensions — cannot export');
+
+  let sourceEl = imgEl;
+
+  // Run the beauty filter on a temporary canvas at natural resolution if any beauty settings are non-zero
+  if (beautySmooth > 0 || beautyClarity > 0 || beautyGlow > 0) {
+    const tempCanvas = document.createElement('canvas');
+    tempCanvas.width = natW;
+    tempCanvas.height = natH;
+    const tempCtx = tempCanvas.getContext('2d');
+    tempCtx.drawImage(imgEl, 0, 0, natW, natH);
+
+    let mask = null;
+    if (beautyUseMask) {
+      mask = await createSkinMask(tempCanvas);
+    }
+    await applyBeautyPipeline(tempCanvas, tempCtx, natW, natH, beautySmooth, beautyClarity, beautyGlow, mask);
+    sourceEl = tempCanvas;
+  }
 
   const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
   const isSafari = /Safari/i.test(navigator.userAgent) && !/Chrome|CriOS|FxiOS|Firefox/i.test(navigator.userAgent);
@@ -291,7 +310,7 @@ export async function renderFinal(imageSrc, cssFilterStr, filters, rotation, fli
   if (cssFilterStr && cssFilterStr !== 'none' && cssFilterStr.trim() !== '') {
     ctx.filter = cssFilterStr;
   }
-  ctx.drawImage(imgEl, -W / 2, -H / 2, W, H);
+  ctx.drawImage(sourceEl, -W / 2, -H / 2, W, H);
   ctx.restore();
   ctx.filter = 'none';
 
@@ -388,4 +407,46 @@ export async function renderFinal(imageSrc, cssFilterStr, filters, rotation, fli
 export function getExportDims(natW,natH,scaleVal){
   if(scaleVal==="8k"){const s=7680/Math.max(natW,natH);return{W:Math.round(natW*s),H:Math.round(natH*s)};}
   return{W:Math.round(natW*scaleVal),H:Math.round(natH*scaleVal)};
+}
+
+export async function applyBeautyPipeline(canvas, ctx, W, H, smooth, clarity, glow, maskCanvas = null) {
+  let targetCtx = ctx;
+  let targetCanvas = canvas;
+
+  if (maskCanvas) {
+    targetCanvas = document.createElement('canvas');
+    targetCanvas.width = W;
+    targetCanvas.height = H;
+    targetCtx = targetCanvas.getContext('2d');
+    targetCtx.drawImage(canvas, 0, 0);
+  }
+
+  if (smooth > 0) applyNoiseReduction(targetCanvas, targetCtx, W, H, smooth * 0.5);
+  applyAutoLevels(targetCtx, W, H);
+  targetCtx.globalCompositeOperation = 'overlay';
+  targetCtx.fillStyle = `rgba(255,200,150,${glow * 0.012})`;
+  targetCtx.fillRect(0, 0, W, H);
+  targetCtx.globalCompositeOperation = 'source-over';
+
+  if (clarity > 0) applyUnsharpMask(targetCanvas, targetCtx, W, H, clarity * 0.15, 1.2);
+
+  if (glow > 0) {
+    const glowCanvas = document.createElement('canvas');
+    glowCanvas.width = W; glowCanvas.height = H;
+    const gCtx = glowCanvas.getContext('2d');
+    gCtx.filter = `blur(${Math.round(glow * 3)}px) brightness(1.15)`;
+    gCtx.drawImage(targetCanvas, 0, 0);
+    gCtx.filter = 'none';
+    targetCtx.globalCompositeOperation = 'screen';
+    targetCtx.globalAlpha = glow * 0.025;
+    targetCtx.drawImage(glowCanvas, 0, 0);
+    targetCtx.globalAlpha = 1; targetCtx.globalCompositeOperation = 'source-over';
+  }
+
+  if (maskCanvas) {
+    targetCtx.globalCompositeOperation = 'destination-in';
+    targetCtx.drawImage(maskCanvas, 0, 0);
+    targetCtx.globalCompositeOperation = 'source-over';
+    ctx.drawImage(targetCanvas, 0, 0);
+  }
 }

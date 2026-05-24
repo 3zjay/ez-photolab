@@ -10,7 +10,7 @@ export let landmarker = null;
 export async function getLandmarker() {
   if (landmarker) return landmarker;
   const vision = await FilesetResolver.forVisionTasks(
-    "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm"
+    "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.35/wasm"
   );
   try {
     landmarker = await FaceLandmarker.createFromOptions(vision, {
@@ -45,13 +45,19 @@ function unsharpMask(ctx, x, y, w, h, amount = 1.0, radius = 1) {
   const orig = ctx.getImageData(x, y, w, h);
   const origData = new Uint8ClampedArray(orig.data);
 
-  // Blur pass
+  // Copy the region to a temporary canvas first
+  const temp = document.createElement("canvas");
+  temp.width = w; temp.height = h;
+  const tempCtx = temp.getContext("2d");
+  tempCtx.drawImage(ctx.canvas, x, y, w, h, 0, 0, w, h);
+
+  // Blur pass drawing the temp canvas
   ctx.save();
   ctx.beginPath();
   ctx.rect(x, y, w, h);
   ctx.clip();
   ctx.filter = `blur(${radius}px)`;
-  ctx.drawImage(ctx.canvas, x, y, w, h, x, y, w, h);
+  ctx.drawImage(temp, 0, 0, w, h, x, y, w, h);
   ctx.restore();
 
   const blurred = ctx.getImageData(x, y, w, h);
@@ -109,13 +115,19 @@ function highPassOverlay(ctx, x, y, w, h, strength = 0.4, radius = 3) {
   const orig = ctx.getImageData(x, y, w, h);
   const origData = new Uint8ClampedArray(orig.data);
 
-  // Create blurred version
+  // Copy target region to temp canvas to prevent overlapping drawImage calls
+  const temp = document.createElement("canvas");
+  temp.width = w; temp.height = h;
+  const tempCtx = temp.getContext("2d");
+  tempCtx.drawImage(ctx.canvas, x, y, w, h, 0, 0, w, h);
+
+  // Create blurred version using temp canvas
   ctx.save();
   ctx.beginPath();
   ctx.rect(x, y, w, h);
   ctx.clip();
   ctx.filter = `blur(${radius}px)`;
-  ctx.drawImage(ctx.canvas, x, y, w, h, x, y, w, h);
+  ctx.drawImage(temp, 0, 0, w, h, x, y, w, h);
   ctx.restore();
   const blurred = ctx.getImageData(x, y, w, h);
 
@@ -228,12 +240,18 @@ export async function restoreFaceLocal(sourceCanvas, onLog) {
     // We approximate bilateral filtering with a small gaussian
     const preSmooth = ctx.getImageData(fx, fy, fw, fh);
     const preSmoothData = new Uint8ClampedArray(preSmooth.data);
+
+    const tempSmooth = document.createElement("canvas");
+    tempSmooth.width = fw; tempSmooth.height = fh;
+    const tempSmoothCtx = tempSmooth.getContext("2d");
+    tempSmoothCtx.drawImage(canvas, fx, fy, fw, fh, 0, 0, fw, fh);
+
     ctx.save();
     ctx.beginPath();
     ctx.rect(fx, fy, fw, fh);
     ctx.clip();
     ctx.filter = "blur(0.7px)";
-    ctx.drawImage(canvas, fx, fy, fw, fh, fx, fy, fw, fh);
+    ctx.drawImage(tempSmooth, 0, 0, fw, fh, fx, fy, fw, fh);
     ctx.restore();
     // Blend: keep edges from original
     const smoothed = ctx.getImageData(fx, fy, fw, fh);

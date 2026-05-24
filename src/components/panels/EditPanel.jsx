@@ -6,7 +6,7 @@ import { parseCubeLut } from "../../lutParser";
 export function EditPanel({
     filters, setFilters, filterGroup, setFilterGroup, isEdited, resetAll, revertAi, dm, cardBdr, cardBg,
     image, runBrowserUpscale, aiUpscaleStatus, aiUpscaleLog, aiUpscaleProgress, aiUpscaleResult, aiUpscaleResultSize, applyAiResult,
-    runBrowserBeauty, aiBeautyStatus, aiBeautyLog, aiBeautyResult, saveFile,
+    saveFile,
     aiScale, setAiScale, aiBeautySmooth, setAiBeautySmooth, aiBeautyClarity, setAiBeautyClarity, aiBeautyGlow, setAiBeautyGlow,
     aiBeautyUseMask, setAiBeautyUseMask, runFalFaceRestore, aiFaceRestoreStatus, aiFaceRestoreLog, aiFaceRestoreResult,
     lutId, setLutId, lutIntensity, setLutIntensity, customLutData, setCustomLutData, customLutName, setCustomLutName,
@@ -180,10 +180,10 @@ export function EditPanel({
                 )}
             </div>
             <div>
-                <div style={{ display: "flex", gap: "2px", marginBottom: "14px", background: dm ? '#2a2a2a' : '#f2f2f8', padding: "3px", borderRadius: "10px", overflowX: "auto" }}>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "4px", marginBottom: "14px", background: dm ? '#2a2a2a' : '#f2f2f8', padding: "4px", borderRadius: "10px" }}>
                     {FILTER_GROUPS.filter(g => g.key !== 'lut').map(g => (
                         <button key={g.key} onClick={() => setFilterGroup(g.key)}
-                            style={{ flex: "1 0 auto", padding: "6px 8px", fontSize: "11px", fontWeight: 500, border: "none", cursor: "pointer", fontFamily: "inherit", background: filterGroup === g.key ? (dm ? '#444' : '#fff') : 'transparent', color: filterGroup === g.key ? "#6c63ff" : "#999", borderRadius: "8px", boxShadow: filterGroup === g.key ? "0 1px 4px rgba(0,0,0,.08)" : "none", transition: "all .18s", whiteSpace: "nowrap" }}>
+                            style={{ flex: "1 1 auto", padding: "6px 8px", fontSize: "11px", fontWeight: 500, border: "none", cursor: "pointer", fontFamily: "inherit", background: filterGroup === g.key ? (dm ? '#444' : '#fff') : 'transparent', color: filterGroup === g.key ? "#6c63ff" : "#999", borderRadius: "8px", boxShadow: filterGroup === g.key ? "0 1px 4px rgba(0,0,0,.08)" : "none", transition: "all .18s", whiteSpace: "nowrap" }}>
                             {g.label}
                         </button>
                     ))}
@@ -249,7 +249,6 @@ export function EditPanel({
                                     </div>
                                     <div style={{ display: "flex", gap: "7px" }}>
                                         <AB onClick={revertAi} color={dm ? '#252525' : '#f2f2f8'} textColor={dm ? '#ccc' : '#555'} style={{ flex: 1, padding: "9px", fontSize: "12px" }}>↺ Revert AI</AB>
-                                        <AB onClick={async () => saveFile(await (await fetch(aiUpscaleResult)).blob(), 'upscaled.jpg')} color="purple" textColor="#fff" style={{ flex: 1, padding: "9px", fontSize: "12px" }}>↓ Download</AB>
                                     </div>
                                 </div>
                             )}
@@ -292,25 +291,16 @@ export function EditPanel({
                                     <SmoothSlider min={0} max={10} step={1} value={aiBeautyGlow} defaultValue={3} onChange={setAiBeautyGlow} />
                                 </div>
                             </div>
-                            <AB onClick={runBrowserBeauty}
-                                disabled={aiBeautyStatus === 'loading'}
-                                color={aiBeautyStatus === 'done' ? '#f0fff4' : 'purple'}
-                                textColor={aiBeautyStatus === 'done' ? '#16a34a' : '#fff'}
-                                style={{ width: "100%", padding: "11px" }}>
-                                {aiBeautyStatus === 'loading' ? <Row><Spin />Processing…</Row>
-                                    : aiBeautyStatus === 'done' ? '✓ Done — Run Again'
-                                        : '✨ Apply Beauty Filter'}
-                            </AB>
-                            {aiBeautyLog && <p style={{ fontSize: "11px", color: aiBeautyStatus === 'error' ? '#ef4444' : '#a78bfa', lineHeight: 1.4 }}>{aiBeautyLog}</p>}
-                            {aiBeautyResult && (
-                                <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                                    <div style={{ borderRadius: "8px", overflow: "hidden", border: `1px solid ${cardBdr}` }}>
-                                        <img src={aiBeautyResult} alt="beauty" style={{ width: "100%", display: "block" }} />
-                                    </div>
-                                    <div style={{ display: "flex", gap: "7px" }}>
-                                        <AB onClick={revertAi} color={dm ? '#252525' : '#f2f2f8'} textColor={dm ? '#ccc' : '#555'} style={{ flex: 1, padding: "9px", fontSize: "12px" }}>↺ Revert AI</AB>
-                                        <AB onClick={async () => saveFile(await (await fetch(aiBeautyResult)).blob(), 'beauty.jpg')} color="purple" textColor="#fff" style={{ flex: 1, padding: "9px", fontSize: "12px" }}>↓ Download</AB>
-                                    </div>
+                            {(aiBeautySmooth > 0 || aiBeautyClarity > 0 || aiBeautyGlow > 0) && (
+                                <div style={{ display: "flex", gap: "7px", marginTop: "4px" }}>
+                                    <AB onClick={() => {
+                                        setAiBeautySmooth(0);
+                                        setAiBeautyClarity(0);
+                                        setAiBeautyGlow(0);
+                                        revertAi();
+                                    }} color={dm ? '#252525' : '#f2f2f8'} textColor={dm ? '#ccc' : '#555'} style={{ flex: 1, padding: "9px", fontSize: "12px" }}>
+                                        ↺ Revert AI
+                                    </AB>
                                 </div>
                             )}
                         </div>
@@ -340,7 +330,6 @@ export function EditPanel({
                                     </div>
                                     <div style={{ display: "flex", gap: "7px" }}>
                                         <AB onClick={revertAi} color={dm ? '#252525' : '#f2f2f8'} textColor={dm ? '#ccc' : '#555'} style={{ flex: 1, padding: "9px", fontSize: "12px" }}>↺ Revert AI</AB>
-                                        <AB onClick={async () => saveFile(await (await fetch(aiFaceRestoreResult)).blob(), 'restored.jpg')} color="purple" textColor="#fff" style={{ flex: 1, padding: "9px", fontSize: "12px" }}>↓ Download</AB>
                                     </div>
                                 </div>
                             )}

@@ -12,7 +12,7 @@ import { DEFAULT_FILTERS, FB_MODES, PRESETS } from "./constants";
 import {
   toCSSFilter, toTransformCSS, saveFile, canvasToBlob, loadImageFromSrc,
   renderFinal, getExportDims, applyUnsharpMask, applyNoiseReduction, applyAutoLevels, applyAutoContrast, calcBatchDims,
-  apply3DLut
+  apply3DLut, applyBeautyPipeline
 } from "./utils";
 import { createSkinMask } from "./faceMasking";
 import { restoreFaceLocal } from "./faceRestore";
@@ -550,6 +550,9 @@ export default function App() {
   const [aiBeautyResult, setAiBeautyResult] = useState(null);
   const [aiBeautyLog, setAiBeautyLog] = useState('');
   const [aiBeautyUseMask, setAiBeautyUseMask] = useState(true);
+  const [beautyPreviewUrl, setBeautyPreviewUrl] = useState(null);
+  const lowResCanvasRef = useRef(null);
+  const skinMaskRef = useRef(null);
 
   // AI Face Restore (fal.ai)
   const [aiFaceRestoreStatus, setAiFaceRestoreStatus] = useState('idle');
@@ -564,9 +567,9 @@ export default function App() {
   const [aiScale, setAiScale] = useState(4);
   const [aiUpscaleProgress, setAiUpscaleProgress] = useState(0);
   const [aiUpscaleResultSize, setAiUpscaleResultSize] = useState('');
-  const [aiBeautySmooth, setAiBeautySmooth] = useState(6);
-  const [aiBeautyClarity, setAiBeautyClarity] = useState(5);
-  const [aiBeautyGlow, setAiBeautyGlow] = useState(3);
+  const [aiBeautySmooth, setAiBeautySmooth] = useState(0);
+  const [aiBeautyClarity, setAiBeautyClarity] = useState(0);
+  const [aiBeautyGlow, setAiBeautyGlow] = useState(0);
   const [batchPreviewIdx, setBatchPreviewIdx] = useState(null);
   const [batchPreviewOrigUrl, setBatchPreviewOrigUrl] = useState(null);
   const [batchPreviewAfterUrl, setBatchPreviewAfterUrl] = useState(null);
@@ -587,6 +590,66 @@ export default function App() {
     localStorage.setItem('photolab-dm', darkMode);
     document.body.setAttribute('data-dark', darkMode ? 'true' : 'false');
   }, [darkMode]);
+
+  // Clear beauty cache and preview when base image changes
+  useEffect(() => {
+    lowResCanvasRef.current = null;
+    skinMaskRef.current = null;
+    setBeautyPreviewUrl(null);
+  }, [image]);
+
+  // Compute beauty preview dynamically when sliders change
+  useEffect(() => {
+    if (!image) {
+      setBeautyPreviewUrl(null);
+      return;
+    }
+    if (aiBeautySmooth === 0 && aiBeautyClarity === 0 && aiBeautyGlow === 0) {
+      setBeautyPreviewUrl(null);
+      return;
+    }
+
+    const updatePreview = async () => {
+      if (!lowResCanvasRef.current) {
+        const srcImg = await loadImageFromSrc(image);
+        const maxDim = 1000;
+        const scale = Math.min(1, maxDim / Math.max(srcImg.naturalWidth, srcImg.naturalHeight));
+        const W = Math.round(srcImg.naturalWidth * scale);
+        const H = Math.round(srcImg.naturalHeight * scale);
+
+        const canvas = document.createElement('canvas');
+        canvas.width = W; canvas.height = H;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(srcImg, 0, 0, W, H);
+        lowResCanvasRef.current = canvas;
+        skinMaskRef.current = null;
+      }
+
+      const canvas = lowResCanvasRef.current;
+      const W = canvas.width, H = canvas.height;
+
+      if (aiBeautyUseMask && !skinMaskRef.current) {
+        skinMaskRef.current = await createSkinMask(canvas);
+      }
+
+      const tempCanvas = document.createElement('canvas');
+      tempCanvas.width = W; tempCanvas.height = H;
+      const tempCtx = tempCanvas.getContext('2d');
+      tempCtx.drawImage(canvas, 0, 0);
+
+      const mask = aiBeautyUseMask ? skinMaskRef.current : null;
+      await applyBeautyPipeline(tempCanvas, tempCtx, W, H, aiBeautySmooth, aiBeautyClarity, aiBeautyGlow, mask);
+
+      const beautyUrl = tempCanvas.toDataURL('image/jpeg', 0.9);
+      setBeautyPreviewUrl(beautyUrl);
+    };
+
+    const timer = setTimeout(() => {
+      updatePreview().catch(err => console.error("Error updating beauty preview:", err));
+    }, 50);
+
+    return () => clearTimeout(timer);
+  }, [image, aiBeautySmooth, aiBeautyClarity, aiBeautyGlow, aiBeautyUseMask]);
 
   const fileInputRef = useRef(null);
   const imgRef = useRef(null);
@@ -827,7 +890,7 @@ export default function App() {
       const tmpImg = await loadImageFromSrc(src);
       const { W, H } = getExportDims(tmpImg.naturalWidth, tmpImg.naturalHeight, exportScale);
       setExportInfo(`Rendering ${W.toLocaleString()}×${H.toLocaleString()}px…`);
-      const { canvas, W: rW, H: rH } = await renderFinal(src, cssFilter, filters, rotation, flipH, flipV, texts, W, H, activeLutData?.data || null, activeLutData?.size || 33, lutIntensity, logo, logoScale, logoScalePortrait, logoOpacity, logoPos, logoMargin, logoX, logoY);
+      const { canvas, W: rW, H: rH } = await renderFinal(src, cssFilter, filters, rotation, flipH, flipV, texts, W, H, activeLutData?.data || null, activeLutData?.size || 33, lutIntensity, logo, logoScale, logoScalePortrait, logoOpacity, logoPos, logoMargin, logoX, logoY, aiBeautySmooth, aiBeautyClarity, aiBeautyGlow, aiBeautyUseMask);
       const fmts = { jpg: { mime: "image/jpeg", ext: "jpg" }, png: { mime: "image/png", ext: "png" }, webp: { mime: "image/webp", ext: "webp" } };
       const { mime, ext } = fmts[exportFmt];
       const q = exportFmt === "png" ? undefined : exportQ / 100;
@@ -852,7 +915,7 @@ export default function App() {
       const mode = FB_MODES.find(m => m.id === fbMode);
       let tW = mode.w, tH = mode.h;
       if (!tH) { const sc = Math.min(1, tW / Math.max(tmpImg.naturalWidth, tmpImg.naturalHeight)); tW = Math.round(tmpImg.naturalWidth * sc); tH = Math.round(tmpImg.naturalHeight * sc); }
-      const { canvas, W, H } = await renderFinal(src, cssFilter, filters, rotation, flipH, flipV, texts, tW, tH, activeLutData?.data || null, activeLutData?.size || 33, lutIntensity, logo, logoScale, logoScalePortrait, logoOpacity, logoPos, logoMargin, logoX, logoY);
+      const { canvas, W, H } = await renderFinal(src, cssFilter, filters, rotation, flipH, flipV, texts, tW, tH, activeLutData?.data || null, activeLutData?.size || 33, lutIntensity, logo, logoScale, logoScalePortrait, logoOpacity, logoPos, logoMargin, logoX, logoY, aiBeautySmooth, aiBeautyClarity, aiBeautyGlow, aiBeautyUseMask);
       const blob = await canvasToBlob(canvas, "image/jpeg", 0.82);
       if (!blob || blob.size === 0) throw new Error("Empty blob");
       const kb = Math.round(blob.size / 1024);
@@ -1927,38 +1990,6 @@ export default function App() {
     }
   }, [image, originalImage, aiScale, applyAiBaseImage]);
 
-  const runBrowserBeauty = useCallback(async () => {
-    if (!image) return;
-    setAiBeautyStatus('loading'); setAiBeautyResult(null); setAiBeautyLog('Processing…');
-    try {
-      const src = originalImage || image;
-      const srcImg = await loadImageFromSrc(src);
-      const W = srcImg.naturalWidth, H = srcImg.naturalHeight;
-      const canvas = document.createElement('canvas');
-      canvas.width = W; canvas.height = H;
-      const ctx = canvas.getContext('2d');
-
-      ctx.drawImage(srcImg, 0, 0, W, H);
-
-      let mask = null;
-      if (aiBeautyUseMask) {
-        setAiBeautyLog('Detecting faces...');
-        mask = await createSkinMask(canvas);
-      }
-
-      setAiBeautyLog('Applying beauty filters...');
-      await applyBeautyPipeline(canvas, ctx, W, H, aiBeautySmooth, aiBeautyClarity, aiBeautyGlow, mask);
-
-      const blob = await canvasToBlob(canvas, 'image/jpeg', 0.95);
-      const beautyUrl = URL.createObjectURL(blob);
-      setAiBeautyResult(beautyUrl);
-      setAiBeautyStatus('done'); setAiBeautyLog('');
-      applyAiBaseImage(beautyUrl);
-    } catch (e) {
-      console.error('Beauty error:', e);
-      setAiBeautyStatus('error'); setAiBeautyLog(e.message || 'Beauty filter failed');
-    }
-  }, [image, originalImage, aiBeautySmooth, aiBeautyClarity, aiBeautyGlow, aiBeautyUseMask, applyAiBaseImage]);
 
   const runFalFaceRestore = useCallback(async () => {
     if (!image) { alert('Upload a photo first.'); return; }
@@ -1999,7 +2030,7 @@ export default function App() {
         <OverlayPanel {...{ image, texts, selText, setSelText, addText, deleteText, updateText, dm, cardBg, cardBdr, inputSt }} />
       )}
       {activeTab === "edit" && (
-        <EditPanel {...{ filters, setFilters, filterGroup, setFilterGroup, isEdited, resetAll, revertAi, dm, cardBdr, cardBg, image, runBrowserUpscale, aiUpscaleStatus, aiUpscaleLog, aiUpscaleProgress, aiUpscaleResult, aiUpscaleResultSize, applyAiResult, runBrowserBeauty, aiBeautyStatus, aiBeautyLog, aiBeautyResult, saveFile, aiScale, setAiScale, aiBeautySmooth, setAiBeautySmooth, aiBeautyClarity, setAiBeautyClarity, aiBeautyGlow, setAiBeautyGlow, aiBeautyUseMask, setAiBeautyUseMask, runFalFaceRestore, aiFaceRestoreStatus, aiFaceRestoreLog, aiFaceRestoreResult, lutId, setLutId, lutIntensity, setLutIntensity, customLutData, setCustomLutData, customLutName, setCustomLutName, user, logo, setLogo, logoFile, setLogoFile, logoScale, setLogoScale, logoScalePortrait, setLogoScalePortrait, logoOpacity, setLogoOpacity, logoPos, setLogoPos, logoMargin, setLogoMargin, handleLogoUpload, logoX, setLogoX, logoY, setLogoY }} />
+        <EditPanel {...{ filters, setFilters, filterGroup, setFilterGroup, isEdited, resetAll, revertAi, dm, cardBdr, cardBg, image, runBrowserUpscale, aiUpscaleStatus, aiUpscaleLog, aiUpscaleProgress, aiUpscaleResult, aiUpscaleResultSize, applyAiResult, saveFile, aiScale, setAiScale, aiBeautySmooth, setAiBeautySmooth, aiBeautyClarity, setAiBeautyClarity, aiBeautyGlow, setAiBeautyGlow, aiBeautyUseMask, setAiBeautyUseMask, runFalFaceRestore, aiFaceRestoreStatus, aiFaceRestoreLog, aiFaceRestoreResult, lutId, setLutId, lutIntensity, setLutIntensity, customLutData, setCustomLutData, customLutName, setCustomLutName, user, logo, setLogo, logoFile, setLogoFile, logoScale, setLogoScale, logoScalePortrait, setLogoScalePortrait, logoOpacity, setLogoOpacity, logoPos, setLogoPos, logoMargin, setLogoMargin, handleLogoUpload, logoX, setLogoX, logoY, setLogoY }} />
       )}
       {activeTab === "batch" && (
         <div style={{ padding: "16px", color: dm ? '#aaa' : '#888', fontSize: "13px", textAlign: "center" }}>
@@ -2190,7 +2221,7 @@ export default function App() {
               {renderPanel()}
             </div>
             <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: "20px", position: "relative", overflow: "hidden" }}>
-              <Preview {...{ image, originalImage, dragging, setDragging, loadImage, fileInputRef, imgRef, splitRef, previewRef, activeTab, bgResult, bgMode, showBefore, setShowBefore, showSplit, splitPos, isDragSplit, setIsDragSplit, cssFilter, transformCSS, filters, texts, selText, setSelText, updateText, cropMode, cropBox, setCropBox, cropAspect, isEdited, setImage, setBgStatus, setBgSubUrl, setBgResult, isMobile, rotation, flipH, flipV, activeLutData, lutIntensity, lutId, dm, rawLoading, rawProgressMsg, logo, logoScale, logoScalePortrait, logoOpacity, logoPos, logoMargin, logoX, setLogoX, logoY, setLogoY, setLogoPos, filterGroup }} />
+              <Preview {...{ image: (aiBeautySmooth > 0 || aiBeautyClarity > 0 || aiBeautyGlow > 0) ? (beautyPreviewUrl || image) : image, originalImage, dragging, setDragging, loadImage, fileInputRef, imgRef, splitRef, previewRef, activeTab, bgResult, bgMode, showBefore, setShowBefore, showSplit, splitPos, isDragSplit, setIsDragSplit, cssFilter, transformCSS, filters, texts, selText, setSelText, updateText, cropMode, cropBox, setCropBox, cropAspect, isEdited, setImage, setBgStatus, setBgSubUrl, setBgResult, isMobile, rotation, flipH, flipV, activeLutData, lutIntensity, lutId, dm, rawLoading, rawProgressMsg, logo, logoScale, logoScalePortrait, logoOpacity, logoPos, logoMargin, logoX, setLogoX, logoY, setLogoY, setLogoPos, filterGroup }} />
             </div>
           </div>
         )
@@ -2216,7 +2247,7 @@ export default function App() {
         ) : (
           <div style={{ display: "flex", flexDirection: "column", height: "calc(100vh - 52px)", overflow: "hidden" }}>
             <div style={{ height: "42vh", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", position: "relative", borderBottom: `1px solid ${dm ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'}` }}>
-              <Preview {...{ image, originalImage, dragging, setDragging, loadImage, fileInputRef, imgRef, splitRef, previewRef, activeTab, bgResult, bgMode, showBefore, setShowBefore, showSplit, splitPos, isDragSplit, setIsDragSplit, cssFilter, transformCSS, filters, texts, selText, setSelText, updateText, cropMode, cropBox, setCropBox, cropAspect, isEdited, setImage, setBgStatus, setBgSubUrl, setBgResult, isMobile, rotation, flipH, flipV, activeLutData, lutIntensity, lutId, dm, rawLoading, rawProgressMsg, logo, logoScale, logoScalePortrait, logoOpacity, logoPos, logoMargin, logoX, setLogoX, logoY, setLogoY, setLogoPos, filterGroup }} />
+              <Preview {...{ image: (aiBeautySmooth > 0 || aiBeautyClarity > 0 || aiBeautyGlow > 0) ? (beautyPreviewUrl || image) : image, originalImage, dragging, setDragging, loadImage, fileInputRef, imgRef, splitRef, previewRef, activeTab, bgResult, bgMode, showBefore, setShowBefore, showSplit, splitPos, isDragSplit, setIsDragSplit, cssFilter, transformCSS, filters, texts, selText, setSelText, updateText, cropMode, cropBox, setCropBox, cropAspect, isEdited, setImage, setBgStatus, setBgSubUrl, setBgResult, isMobile, rotation, flipH, flipV, activeLutData, lutIntensity, lutId, dm, rawLoading, rawProgressMsg, logo, logoScale, logoScalePortrait, logoOpacity, logoPos, logoMargin, logoX, setLogoX, logoY, setLogoY, setLogoPos, filterGroup }} />
             </div>
             <div className="glass-panel" style={{ flex: 1, overflowY: "auto", WebkitOverflowScrolling: "touch", borderTop: `1px solid ${dm ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'}` }}>
               {renderPanel(true)}
