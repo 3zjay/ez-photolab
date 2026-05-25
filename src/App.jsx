@@ -2021,17 +2021,20 @@ export default function App() {
 
   const renderPanel = (inline = false) => (
     <div style={{ display: "flex", flexDirection: "column", gap: "16px", padding: inline ? "10px 14px 40px" : "14px", background: dm ? '#1e1e1e' : '#fff', color: dm ? '#ddd' : '#1a1a1a', transition: 'background .3s,color .3s' }}>
-      {activeTab === "tools" && (
-        <ToolsPanel {...{ image, handleRemoveBg, bgStatus, bgProgress, bgSubUrl, bgMode, setBgMode, cardBdr, cardBg, dm, bgColor, setBgColor, bgBlur, setBgBlur, bgResult, saveFile, falApiKey, saveFalKey, claidApiKey, saveClaidKey, aiRemoveBrush, setAiRemoveBrush, toCSSFilter, filters, initMaskCanvas, maskCanvasRef, maskDrawingRef, drawMask, aiMaskReady, handleAiRemove, aiRemoveStatus, aiRemoveLog, aiRemoveResult, applyAiResult }} />
-      )}
-      {activeTab === "adjust" && (
-        <AdjustPanel {...{ image, setRotation, setFlipH, setFlipV, rotation, flipH, flipV, cropMode, setCropMode, setCropBox, cropAspect, setCropAspect, applyCrop, dm, cardBg, cardBdr }} />
-      )}
-      {activeTab === "overlay" && (
-        <OverlayPanel {...{ image, texts, selText, setSelText, addText, deleteText, updateText, dm, cardBg, cardBdr, inputSt }} />
-      )}
       {activeTab === "edit" && (
-        <EditPanel {...{ filters, setFilters, filterGroup, setFilterGroup, isEdited, resetAll, revertAi, dm, cardBdr, cardBg, image, runBrowserUpscale, aiUpscaleStatus, aiUpscaleLog, aiUpscaleProgress, aiUpscaleResult, aiUpscaleResultSize, applyAiResult, saveFile, aiScale, setAiScale, aiBeautySmooth, setAiBeautySmooth, aiBeautyClarity, setAiBeautyClarity, aiBeautyGlow, setAiBeautyGlow, aiBeautyUseMask, setAiBeautyUseMask, runFalFaceRestore, aiFaceRestoreStatus, aiFaceRestoreLog, aiFaceRestoreResult, lutId, setLutId, lutIntensity, setLutIntensity, customLutData, setCustomLutData, customLutName, setCustomLutName, user, logo, setLogo, logoFile, setLogoFile, logoScale, setLogoScale, logoScalePortrait, setLogoScalePortrait, logoOpacity, setLogoOpacity, logoPos, setLogoPos, logoMargin, setLogoMargin, handleLogoUpload, logoX, setLogoX, logoY, setLogoY }} />
+        <EditPanel {...{
+          // Color & LUTs / Grading props
+          filters, setFilters, filterGroup, setFilterGroup, isEdited, resetAll, revertAi, dm, cardBdr, cardBg, image, runBrowserUpscale, aiUpscaleStatus, aiUpscaleLog, aiUpscaleProgress, aiUpscaleResult, aiUpscaleResultSize, applyAiResult, saveFile, aiScale, setAiScale, aiBeautySmooth, setAiBeautySmooth, aiBeautyClarity, setAiBeautyClarity, aiBeautyGlow, setAiBeautyGlow, aiBeautyUseMask, setAiBeautyUseMask, runFalFaceRestore, aiFaceRestoreStatus, aiFaceRestoreLog, aiFaceRestoreResult, lutId, setLutId, lutIntensity, setLutIntensity, customLutData, setCustomLutData, customLutName, setCustomLutName, user, logo, setLogo, logoFile, setLogoFile, logoScale, setLogoScale, logoScalePortrait, setLogoScalePortrait, logoOpacity, setLogoOpacity, logoPos, setLogoPos, logoMargin, setLogoMargin, handleLogoUpload, logoX, setLogoX, logoY, setLogoY,
+          
+          // Adjust / Crop props
+          setRotation, setFlipH, setFlipV, rotation, flipH, flipV, cropMode, setCropMode, setCropBox, cropAspect, setCropAspect, applyCrop,
+          
+          // Tools / AI Canvas props
+          handleRemoveBg, bgStatus, bgProgress, bgSubUrl, bgMode, setBgMode, bgColor, setBgColor, bgBlur, setBgBlur, bgResult, falApiKey, saveFalKey, claidApiKey, saveClaidKey, aiRemoveBrush, setAiRemoveBrush, toCSSFilter, initMaskCanvas, maskCanvasRef, maskDrawingRef, drawMask, aiMaskReady, handleAiRemove, aiRemoveStatus, aiRemoveLog, aiRemoveResult,
+          
+          // Overlay / Text props
+          texts, selText, setSelText, addText, deleteText, updateText, inputSt
+        }} />
       )}
       {activeTab === "batch" && (
         <div style={{ padding: "16px", color: dm ? '#aaa' : '#888', fontSize: "13px", textAlign: "center" }}>
@@ -2145,7 +2148,7 @@ export default function App() {
             )}
           </button>
           <div style={{ display: "flex", background: dm ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.04)', border: `1px solid ${dm ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'}`, backdropFilter: "blur(8px)", borderRadius: "12px", padding: "3px", gap: "3px", overflowX: "auto" }}>
-            {[["home", "Home"], ["edit", "Edit"], ["adjust", "Adjust"], ["overlay", "Overlay"], ["tools", "Tools"], ["cull", "Cull AI"], ["batch", "Batch"], ["account", user.tier === "pro" ? "⭐ Pro" : user.tier === "team" ? "💎 Team" : user.tier === "admin" ? "⚡ Admin" : "Account"]].map(([id, lb]) => {
+            {[["home", "Home"], ["edit", "Edit Studio"], ["cull", "Cull AI"], ["batch", "Batch"], ["account", user.tier === "pro" ? "⭐ Pro" : user.tier === "team" ? "💎 Team" : user.tier === "admin" ? "⚡ Admin" : "Account"]].map(([id, lb]) => {
               const isActive = activeTab === id;
               const isPremiumAccount = id === "account" && user.tier !== "free";
               const isAdmin = user.tier === "admin";
