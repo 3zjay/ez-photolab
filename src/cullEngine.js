@@ -246,12 +246,23 @@ export async function cullBatch(images, options = {}, onProgress) {
   for (let i = 0; i < total; i++) {
     const imgObj = images[i];
     let imageBitmap = null;
+    let previewUrl = imgObj.previewUrl || null;
 
     onProgress?.({ current: i + 1, total, name: imgObj.name });
 
     try {
       if (imgObj.file) {
-        imageBitmap = await createImageBitmap(imgObj.file);
+        if (imgObj.isRaw || imgObj.name.match(/\.(nef|cr2|cr3|arw|dng|orf|raf|rw2|pef|x3f)$/i)) {
+          const { decodeRaw } = await import("./rawProcessor");
+          const buffer = await imgObj.file.arrayBuffer();
+          const decoded = await decodeRaw(buffer, () => {});
+          const response = await fetch(decoded.url);
+          const blob = await response.blob();
+          imageBitmap = await createImageBitmap(blob);
+          previewUrl = decoded.url; // Use the extracted preview JPEG for UI display
+        } else {
+          imageBitmap = await createImageBitmap(imgObj.file);
+        }
       } else if (imgObj.previewUrl) {
         const response = await fetch(imgObj.previewUrl);
         const blob = await response.blob();
@@ -278,7 +289,7 @@ export async function cullBatch(images, options = {}, onProgress) {
       tempCtx.drawImage(imageBitmap, 0, 0, pW, pH);
 
       // Keep existing developed RAW previewUrl, otherwise null (generated on-demand in UI for JPEGs)
-      const previewUrl = imgObj.previewUrl || null;
+      const finalPreviewUrl = previewUrl || imgObj.previewUrl || null;
 
       // 2. Compute dHash using the pre-allocated dHashCanvas
       const dHash = computeDHash(tempCanvas, dHashCanvas, dHashCtx);
@@ -350,7 +361,7 @@ export async function cullBatch(images, options = {}, onProgress) {
 
       results.push({
         ...imgObj,
-        previewUrl,
+        previewUrl: finalPreviewUrl,
         thumbnailUrl, // Store downscaled 160px thumbnail
         dHash,
         sharpness,

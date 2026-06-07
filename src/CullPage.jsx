@@ -694,6 +694,11 @@ export default function CullPage({
         {groups.length > 0 && (
           <button
             onClick={() => {
+              cullResults.forEach(r => {
+                if (r.previewUrl && r.previewUrl.startsWith("blob:")) {
+                  URL.revokeObjectURL(r.previewUrl);
+                }
+              });
               setCullResults([]);
               setGroups([]);
             }}
@@ -783,7 +788,7 @@ export default function CullPage({
                 {activeInputFiles.length > 0 ? (
                   <strong style={{ color: "#22c55e" }}>✓ Loaded {activeInputFiles.length} photos ready for scan.</strong>
                 ) : (
-                  "Select the directory containing JPEG/PNG raw outputs."
+                  "Select the directory containing JPEG/PNG/RAW source files."
                 )}
               </span>
             </div>

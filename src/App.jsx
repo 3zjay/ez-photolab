@@ -960,10 +960,16 @@ export default function App() {
       const handle = await window.showDirectoryPicker();
       setCullSourceHandle(handle);
       const files = [];
+      const RAW_REGEX = /\.(nef|cr2|cr3|arw|dng|orf|raf|rw2|pef|x3f)$/i;
       for await (const entry of handle.values()) {
-        if (entry.kind === 'file' && entry.name.match(/\.(jpg|jpeg|png|webp)$/i)) {
-          const file = await entry.getFile();
-          files.push({ name: entry.name, file });
+        if (entry.kind === 'file') {
+          if (entry.name.match(/\.(jpg|jpeg|png|webp)$/i)) {
+            const file = await entry.getFile();
+            files.push({ name: entry.name, file });
+          } else if (entry.name.match(RAW_REGEX)) {
+            const file = await entry.getFile();
+            files.push({ name: entry.name, file, isRaw: true });
+          }
         }
       }
       setCullImages(files);
