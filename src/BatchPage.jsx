@@ -118,7 +118,8 @@ export function BatchPage({ dm, cardBg, cardBdr, inputSt, isMobile = false,
   batchConfirmFirst, setBatchConfirmFirst, batchConfirmData, batchCancelRequested, handleCancelBatch, continueBatchProcess, cancelBatchProcess,
   batchStats = { saved: 0, failed: 0 },
   batchLutId, setBatchLutId, batchLutIntensity, setBatchLutIntensity, batchCustomLutData, setBatchCustomLutData, batchCustomLutName, setBatchCustomLutName,
-  batchFbOptimize, setBatchFbOptimize, importOutputsToCull
+  batchFbOptimize, setBatchFbOptimize, importOutputsToCull,
+  batchCullFilter, setBatchCullFilter, batchCullSort, setBatchCullSort, cullResults
 }) {
 
   const bg = dm ? '#121212' : '#f0f1f5';
@@ -172,6 +173,32 @@ export function BatchPage({ dm, cardBg, cardBdr, inputSt, isMobile = false,
   const isRaw = batchSection === "raw";
   const currentFiles = isRaw ? batchRawFiles : batchImages;
 
+  const getBaseName = (filename) => {
+    if (!filename) return "";
+    const lastDot = filename.lastIndexOf('.');
+    return lastDot === -1 ? filename : filename.slice(0, lastDot);
+  };
+
+  const getFilteredFiles = (files) => {
+    if (!cullResults || cullResults.length === 0 || batchCullFilter === "all") {
+      return files;
+    }
+    return files.filter(f => {
+      const baseName = getBaseName(f.name);
+      const cullRecord = cullResults.find(r => getBaseName(r.name) === baseName);
+      const category = cullRecord ? (cullRecord.category || (cullRecord.isKeyPhoto ? "keeper" : "alternate")) : "alternate";
+      if (batchCullFilter === "keepers") {
+        return category === "keeper";
+      }
+      if (batchCullFilter === "keepers_alts") {
+        return category === "keeper" || category === "alternate";
+      }
+      return true;
+    });
+  };
+
+  const filteredCurrentFiles = getFilteredFiles(currentFiles);
+
   // Live CSS filter string — applied directly to the preview <img> at 60fps, no JPEG re-encode needed
   const batchCssFilter = toCSSFilter(filters);
   const batchTempAlpha = Math.abs(filters.temperature) / 300;
@@ -183,24 +210,29 @@ export function BatchPage({ dm, cardBg, cardBdr, inputSt, isMobile = false,
   }, [generateBatchPreview]);
 
   const memoizedPreviewBar = useMemo(() => {
-    return currentFiles.slice(0, 200).map((img, i) => (
-      <button key={i} onClick={() => previewCallbackRef.current(i, isRaw)}
-        style={{ flexShrink: 0, padding: "5px 12px", border: `1.5px solid ${batchPreviewIdx === i ? '#6c63ff' : cardBdr}`,
-          background: batchPreviewIdx === i ? (dm ? '#1e1a3a' : '#faf9ff') : dm ? '#252525' : '#fff',
-          borderRadius: "8px", fontSize: "11px", fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
-          color: batchPreviewIdx === i ? '#6c63ff' : dm ? '#ccc' : '#555',
-          maxWidth: "160px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-          transition: "all .15s" }}>
-        {img.name}
-      </button>
-    ));
-  }, [isRaw, currentFiles, batchPreviewIdx, dm, cardBdr]);
+    return filteredCurrentFiles.slice(0, 200).map((img, i) => {
+      const originalIndex = currentFiles.indexOf(img);
+      const isActive = batchPreviewIdx === originalIndex;
+      return (
+        <button key={i} onClick={() => previewCallbackRef.current(originalIndex, isRaw)}
+          style={{ flexShrink: 0, padding: "5px 12px", border: `1.5px solid ${isActive ? '#6c63ff' : cardBdr}`,
+            background: isActive ? (dm ? '#1e1a3a' : '#faf9ff') : dm ? '#252525' : '#fff',
+            borderRadius: "8px", fontSize: "11px", fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
+            color: isActive ? '#6c63ff' : dm ? '#ccc' : '#555',
+            maxWidth: "160px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+            transition: "all .15s" }}>
+          {img.name}
+        </button>
+      );
+    });
+  }, [isRaw, currentFiles, filteredCurrentFiles, batchPreviewIdx, dm, cardBdr]);
 
   const memoizedVerticalPreviewBar = useMemo(() => {
-    return currentFiles.slice(0, 200).map((img, i) => {
-      const isActive = batchPreviewIdx === i;
+    return filteredCurrentFiles.slice(0, 200).map((img, i) => {
+      const originalIndex = currentFiles.indexOf(img);
+      const isActive = batchPreviewIdx === originalIndex;
       return (
-        <button key={i} onClick={() => previewCallbackRef.current(i, isRaw)}
+        <button key={i} onClick={() => previewCallbackRef.current(originalIndex, isRaw)}
           style={{
             width: "100%",
             textAlign: "left",
@@ -227,8 +259,8 @@ export function BatchPage({ dm, cardBg, cardBdr, inputSt, isMobile = false,
         </button>
       );
     });
-  }, [isRaw, currentFiles, batchPreviewIdx, dm, cardBdr]);
-  const canProcess = !batchProcessing && sourceHandle && outputHandle && currentFiles.length > 0;
+  }, [isRaw, currentFiles, filteredCurrentFiles, batchPreviewIdx, dm, cardBdr]);
+  const canProcess = !batchProcessing && sourceHandle && outputHandle && filteredCurrentFiles.length > 0;
 
   const activeEnhancements = [
     batchResizeMode !== "none" && "📐 Resize",
@@ -379,6 +411,64 @@ export function BatchPage({ dm, cardBg, cardBdr, inputSt, isMobile = false,
           <div style={{ fontSize: "10px", color: "#888", display: "flex", alignItems: "center", gap: "4px" }}>
             <span>ℹ️</span>
             <span>Turn on to apply social media quality safeguards automatically.</span>
+          </div>
+        )}
+      </Card>
+    );
+  };
+
+  const renderCullAiIntegrationCard = () => {
+    const hasCullResults = cullResults && cullResults.length > 0;
+    return (
+      <Card style={{
+        background: hasCullResults ? (dm ? "rgba(108, 99, 255, 0.08)" : "rgba(108, 99, 255, 0.04)") : cardBg,
+        border: `1.5px solid ${hasCullResults ? "#6c63ff" : cardBdr}`,
+        transition: "all 0.25s ease-in-out"
+      }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+          <SecLabel icon="🤖">Cull AI Integration</SecLabel>
+        </div>
+
+        <p style={{ fontSize: "11px", color: dm ? "#aaa" : "#555", margin: "0 0 10px 0", lineHeight: 1.45 }}>
+          Integrate Cull AI ratings to filter the queue or sort outputs into keepers & alternates folders.
+        </p>
+
+        {!hasCullResults ? (
+          <div style={{ padding: "10px", background: dm ? "rgba(255,255,255,0.02)" : "rgba(0,0,0,0.02)", borderRadius: "8px", fontSize: "11px", color: dm ? "#999" : "#666" }}>
+            ⚠️ No Cull AI analysis data found. Go to the <strong>Cull AI</strong> tab to run culling first.
+          </div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+            <div>
+              <label style={{ display: "block", fontSize: "11px", fontWeight: 600, color: dm ? "#ccc" : "#444", marginBottom: "4px" }}>
+                Filter Queue:
+              </label>
+              <select
+                value={batchCullFilter}
+                onChange={e => setBatchCullFilter(e.target.value)}
+                style={{
+                  width: "100%",
+                  padding: "8px",
+                  borderRadius: "6px",
+                  border: `1px solid ${cardBdr}`,
+                  background: dm ? "#1a1a1a" : "#fff",
+                  color: dm ? "#fff" : "#000",
+                  fontFamily: "inherit",
+                  fontSize: "12px"
+                }}
+              >
+                <option value="all">Process All Files</option>
+                <option value="keepers_alts">Keepers & Alternates Only</option>
+                <option value="keepers">Keepers Only</option>
+              </select>
+            </div>
+
+            <Toggle
+              checked={batchCullSort}
+              onChange={e => setBatchCullSort(e.target.checked)}
+              label="Sort into Category Folders"
+              sub="Automatically write outputs into Keepers / Alternates subfolders"
+            />
           </div>
         )}
       </Card>
@@ -1106,7 +1196,8 @@ export function BatchPage({ dm, cardBg, cardBdr, inputSt, isMobile = false,
           <div>
             <div style={{ fontSize: "16px", fontWeight: 700, color: dm ? '#f0f0f0' : '#1a1a2e', marginBottom: "2px" }}>📦 {isRaw ? "RAW Batch Processor" : "Standard Batch Processor"}</div>
             <div style={{ fontSize: "12px", color: "#999" }}>
-              {currentFiles.length > 0 ? `${currentFiles.length} images queued` : "No source folder selected"}
+              {filteredCurrentFiles.length > 0 ? `${filteredCurrentFiles.length} images queued` : "No source folder selected"}
+              {filteredCurrentFiles.length !== currentFiles.length && ` (filtered from ${currentFiles.length})`}
               {Object.entries(filters).filter(([k, v]) => v !== DEFAULT_FILTERS[k]).length > 0 && ` · ✏️ ${Object.entries(filters).filter(([k, v]) => v !== DEFAULT_FILTERS[k]).length} adjustments`}
               {activeEnhancements.length > 0 && ` · ${activeEnhancements.join(" · ")}`}
             </div>
@@ -1132,13 +1223,13 @@ export function BatchPage({ dm, cardBg, cardBdr, inputSt, isMobile = false,
           </div>
         </div>
         <div style={{ display: "flex", gap: "8px", alignItems: "center", flexShrink: 0 }}>
-          {currentFiles.length > 1 && !batchProcessing && (
+          {filteredCurrentFiles.length > 1 && !batchProcessing && (
             <label style={{ display: "flex", alignItems: "center", gap: "6px", cursor: "pointer", fontSize: "13px", fontWeight: 600, color: dm ? "#ccc" : "#555", marginRight: "8px" }}>
               <input type="checkbox" id="verify-first-checkbox" checked={batchConfirmFirst} onChange={e => setBatchConfirmFirst(e.target.checked)} style={{ width: "16px", height: "16px", accentColor: accent, cursor: "pointer" }} />
               Verify first image
             </label>
           )}
-          {((!isRaw && batchImages.length > 0) || (isRaw && batchRawFiles.length > 0)) && (
+          {filteredCurrentFiles.length > 0 && (
             <button
               onClick={() => {
                 if (!batchPreviewOpen) {
@@ -1192,7 +1283,7 @@ export function BatchPage({ dm, cardBg, cardBdr, inputSt, isMobile = false,
             {batchProcessing
               ? <><Spin />Processing {batchProgress.current}/{batchProgress.total}…</>
               : batchDone ? "✅ Done — Run Again"
-                : canProcess ? `⚡ Process ${currentFiles.length} Image${currentFiles.length !== 1 ? "s" : ""}`
+                : canProcess ? `⚡ Process ${filteredCurrentFiles.length} Image${filteredCurrentFiles.length !== 1 ? "s" : ""}`
                   : !sourceHandle ? "Select source folder →"
                     : !outputHandle ? "Select output folder →"
                       : "Add images to source folder"}
@@ -1432,6 +1523,7 @@ export function BatchPage({ dm, cardBg, cardBdr, inputSt, isMobile = false,
             {renderRawBatchPanel()}
             {renderOutputFolderCard()}
             {renderFacebookOptimizerCard()}
+            {renderCullAiIntegrationCard()}
             {renderOutputFormatCard()}
             {renderFilenameTemplateCard()}
             {renderAdjustmentsCard()}
@@ -1445,7 +1537,7 @@ export function BatchPage({ dm, cardBg, cardBdr, inputSt, isMobile = false,
         </div>
       ) : (
         <>
-          {batchPreviewOpen && ((!isRaw && batchImages.length > 0) || (isRaw && batchRawFiles.length > 0)) && (
+          {batchPreviewOpen && filteredCurrentFiles.length > 0 && (
             <div style={{ borderBottom: `1px solid ${cardBdr}`, background: dm ? '#161616' : '#f8f8fd' }}>
 
               <div style={{ padding: "10px 24px 0", display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
@@ -1628,6 +1720,7 @@ export function BatchPage({ dm, cardBg, cardBdr, inputSt, isMobile = false,
               {renderRawBatchPanel()}
               {renderOutputFolderCard()}
               {renderFacebookOptimizerCard()}
+              {renderCullAiIntegrationCard()}
               {renderOutputFormatCard()}
               {renderFilenameTemplateCard()}
             </div>

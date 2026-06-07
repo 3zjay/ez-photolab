@@ -324,6 +324,12 @@ export default function App() {
   const [batchFbOptimize, setBatchFbOptimize] = useState(false);
   const [cullSourceHandle, setCullSourceHandle] = useState(null);
   const [cullImages, setCullImages] = useState([]);
+  const [cullResults, setCullResults] = useState([]);
+  const [groups, setGroups] = useState([]);
+  const [cullActiveGroupIndex, setCullActiveGroupIndex] = useState(0);
+  const [cullActiveAlternateIndex, setCullActiveAlternateIndex] = useState(0);
+  const [batchCullFilter, setBatchCullFilter] = useState("all");
+  const [batchCullSort, setBatchCullSort] = useState(false);
 
   // BATCH LUT STATE
   const [batchLutId, setBatchLutId] = useState('none');
@@ -1254,15 +1260,40 @@ export default function App() {
       alert("Write permission is required for the output folder to save processed files.");
       return;
     }
+
+    const getBaseName = (filename) => {
+      if (!filename) return "";
+      const lastDot = filename.lastIndexOf('.');
+      return lastDot === -1 ? filename : filename.slice(0, lastDot);
+    };
+
+    // Filter images according to Cull AI selection if applicable
+    let filesToProcess = batchImages;
+    if (cullResults && cullResults.length > 0 && batchCullFilter !== "all") {
+      filesToProcess = batchImages.filter(f => {
+        const base = getBaseName(f.name);
+        const record = cullResults.find(r => getBaseName(r.name) === base);
+        const category = record ? (record.category || (record.isKeyPhoto ? "keeper" : "alternate")) : "alternate";
+        if (batchCullFilter === "keepers") return category === "keeper";
+        if (batchCullFilter === "keepers_alts") return category === "keeper" || category === "alternate";
+        return true;
+      });
+    }
+
+    if (filesToProcess.length === 0) {
+      alert("No images match the selected Cull AI filter.");
+      return;
+    }
+
     if (startIndex === 0) {
-      addBatchLog(`🚀 Starting batch process for ${batchImages.length} images...`, "info");
+      addBatchLog(`🚀 Starting batch process for ${filesToProcess.length} images...`, "info");
       setBatchProcessing(true);
       setBatchDone(false);
       setBatchCancelRequested(false);
       batchCancelRef.current = false;
       setBatchStats({ saved: 0, failed: 0 });
     }
-    setBatchProgress({ current: startIndex, total: batchImages.length, currentFile: startIndex > 0 ? batchProgress.currentFile : "" });
+    setBatchProgress({ current: startIndex, total: filesToProcess.length, currentFile: startIndex > 0 ? batchProgress.currentFile : "" });
 
     const cssFilterStr = toCSSFilter(filters);
     const fmtMime = { jpeg: "image/jpeg", png: "image/png", webp: "image/webp" };
@@ -1282,7 +1313,7 @@ export default function App() {
     const ext = fmtExt[activeFmt];
     const quality = activeFmt === "png" ? undefined : activeQ / 100;
 
-    for (let i = startIndex; i < batchImages.length; i++) {
+    for (let i = startIndex; i < filesToProcess.length; i++) {
       if (batchCancelRef.current) {
         addBatchLog("🛑 Batch processing cancelled by user.", "warning");
         setBatchProcessing(false);
@@ -1290,8 +1321,8 @@ export default function App() {
         setBatchConfirmData(null);
         return;
       }
-      const { name, file } = batchImages[i];
-      setBatchProgress({ current: i + 1, total: batchImages.length, currentFile: name });
+      const { name, file } = filesToProcess[i];
+      setBatchProgress({ current: i + 1, total: filesToProcess.length, currentFile: name });
       try {
         const img = await new Promise((resolve, reject) => {
           const reader = new FileReader();
@@ -1337,7 +1368,6 @@ export default function App() {
           apply3DLut(imgData, batchLutData.data, batchLutData.size, batchLutIntensity);
           ctx.putImageData(imgData, 0, 0);
         }
-
 
         if (filters.temperature !== 0) {
           const a = Math.abs(filters.temperature) / 300;
@@ -1423,21 +1453,36 @@ export default function App() {
           setBatchStats(prev => ({ ...prev, failed: prev.failed + 1 }));
           continue;
         }
-        const newFile = await outputHandle.getFileHandle(outName, { create: true });
+
+        // Determine destination folder handle
+        let targetHandle = outputHandle;
+        if (batchCullSort && cullResults && cullResults.length > 0) {
+          const cullRecord = cullResults.find(r => getBaseName(r.name) === base);
+          const category = cullRecord ? (cullRecord.category || (cullRecord.isKeyPhoto ? "keeper" : "alternate")) : "alternate";
+          let folderName = "📘 Alternates";
+          if (category === "keeper") folderName = "📗 Keepers";
+          else if (category === "alternate") folderName = "📘 Alternates";
+          else if (category === "blurry") folderName = "📙 Blurry";
+          else if (category === "rejected") folderName = "📕 Rejected";
+          
+          targetHandle = await outputHandle.getDirectoryHandle(folderName, { create: true });
+        }
+
+        const newFile = await targetHandle.getFileHandle(outName, { create: true });
         const writable = await newFile.createWritable();
         await writable.write(blob);
         await writable.close();
         addBatchLog(`✅ Successfully saved: ${outName}`, "success");
         setBatchStats(prev => ({ ...prev, saved: prev.saved + 1 }));
 
-        if (i === 0 && batchConfirmFirst && batchImages.length > 1) {
+        if (i === 0 && batchConfirmFirst && filesToProcess.length > 1) {
           const previewUrl = canvas.toDataURL('image/jpeg', 0.92);
           setBatchConfirmData({
             name: outName,
             url: previewUrl,
             isRaw: false,
             nextIndex: 1,
-            total: batchImages.length
+            total: filesToProcess.length
           });
           addBatchLog(`🔍 First image processed. Awaiting user confirmation to continue...`, "info");
           return;
@@ -1447,7 +1492,7 @@ export default function App() {
         console.error(`Failed processing ${name}`, err);
         if (err.name === 'NotAllowedError' || err.name === 'SecurityError') {
           addBatchLog(`🛑 Batch process aborted: Directory write permission lost or revoked.`, "error");
-          const remaining = batchImages.length - i;
+          const remaining = filesToProcess.length - i;
           setBatchStats(prev => ({ ...prev, failed: prev.failed + remaining }));
           setBatchProcessing(false);
           setBatchDone(true);
@@ -1479,15 +1524,39 @@ export default function App() {
       return;
     }
     
+    const getBaseName = (filename) => {
+      if (!filename) return "";
+      const lastDot = filename.lastIndexOf('.');
+      return lastDot === -1 ? filename : filename.slice(0, lastDot);
+    };
+
+    // Filter files according to Cull AI selection if applicable
+    let filesToProcess = batchRawFiles;
+    if (cullResults && cullResults.length > 0 && batchCullFilter !== "all") {
+      filesToProcess = batchRawFiles.filter(f => {
+        const base = getBaseName(f.name);
+        const record = cullResults.find(r => getBaseName(r.name) === base);
+        const category = record ? (record.category || (record.isKeyPhoto ? "keeper" : "alternate")) : "alternate";
+        if (batchCullFilter === "keepers") return category === "keeper";
+        if (batchCullFilter === "keepers_alts") return category === "keeper" || category === "alternate";
+        return true;
+      });
+    }
+
+    if (filesToProcess.length === 0) {
+      alert("No RAW files match the selected Cull AI filter.");
+      return;
+    }
+    
     if (startIndex === 0) {
-      addBatchLog(`🚀 Starting RAW batch process for ${batchRawFiles.length} files...`, "info");
+      addBatchLog(`🚀 Starting RAW batch process for ${filesToProcess.length} files...`, "info");
       setBatchProcessing(true);
       setBatchDone(false);
       setBatchCancelRequested(false);
       batchCancelRef.current = false;
       setBatchStats({ saved: 0, failed: 0 });
     }
-    setBatchProgress({ current: startIndex, total: batchRawFiles.length, currentFile: startIndex > 0 ? batchProgress.currentFile : "" });
+    setBatchProgress({ current: startIndex, total: filesToProcess.length, currentFile: startIndex > 0 ? batchProgress.currentFile : "" });
 
     const cssFilterStr = toCSSFilter(filters);
     const fmtMime = { jpeg: "image/jpeg", png: "image/png", webp: "image/webp" };
@@ -1508,7 +1577,7 @@ export default function App() {
     const ext = fmtExt[activeFmt];
     const quality = activeFmt === "png" ? undefined : activeQ / 100;
 
-    for (let i = startIndex; i < batchRawFiles.length; i++) {
+    for (let i = startIndex; i < filesToProcess.length; i++) {
       if (batchCancelRef.current) {
         addBatchLog("🛑 RAW Batch processing cancelled by user.", "warning");
         setBatchProcessing(false);
@@ -1516,26 +1585,26 @@ export default function App() {
         setBatchConfirmData(null);
         return;
       }
-      const { name, previewUrl } = batchRawFiles[i];
-      setBatchProgress({ current: i + 1, total: batchRawFiles.length, currentFile: name });
+      const { name, previewUrl } = filesToProcess[i];
+      setBatchProgress({ current: i + 1, total: filesToProcess.length, currentFile: name });
       
       try {
-        addBatchLog(`[${i+1}/${batchRawFiles.length}] Processing ${name}...`, "info");
+        addBatchLog(`[${i+1}/${filesToProcess.length}] Processing ${name}...`, "info");
         
         let sourceImg = null;
         let orientation = 1;
         
-        if (batchRawFiles[i].canvas) {
+        if (filesToProcess[i].canvas) {
           addBatchLog(`  -> Using pre-rendered canvas for ${name}`, "info");
-          sourceImg = batchRawFiles[i].canvas;
+          sourceImg = filesToProcess[i].canvas;
         } else if (previewUrl) {
           addBatchLog(`  -> Loading preview image for ${name}...`, "info");
           sourceImg = await loadImageFromSrc(previewUrl);
-          orientation = batchRawFiles[i].metadata?.orientation || 1;
+          orientation = filesToProcess[i].metadata?.orientation || 1;
           addBatchLog(`  -> Preview loaded: ${sourceImg.naturalWidth}x${sourceImg.naturalHeight} (Orient: ${orientation})`, "info");
-        } else if (batchRawFiles[i].file) {
+        } else if (filesToProcess[i].file) {
           addBatchLog(`  -> JIT Decoding ${name}...`, "info");
-          const buffer = await batchRawFiles[i].file.arrayBuffer();
+          const buffer = await filesToProcess[i].file.arrayBuffer();
           const result = await decodeRaw(buffer, (msg) => addBatchLog(`[${name}] ${msg}`, "info"));
           orientation = result.orientation || 1;
           addBatchLog(`  -> JIT Decode finished. Loading buffer image (Orient: ${orientation})...`, "info");
@@ -1620,7 +1689,6 @@ export default function App() {
           apply3DLut(imgData, batchLutData.data, batchLutData.size, batchLutIntensity);
           ctx.putImageData(imgData, 0, 0);
         }
-
 
         // Apply Temperature/Tint/Fade/Vignette/etc.
         if (filters.temperature !== 0) {
@@ -1719,21 +1787,36 @@ export default function App() {
         const blob = await canvasToBlob(canvas, mime, quality);
         if (blob) {
           addBatchLog(`  -> Blob created (${Math.round(blob.size/1024)} KB). Writing to disk...`, "info");
-          const newFile = await outputHandle.getFileHandle(outName, { create: true });
+
+          // Determine destination folder handle
+          let targetHandle = outputHandle;
+          if (batchCullSort && cullResults && cullResults.length > 0) {
+            const cullRecord = cullResults.find(r => getBaseName(r.name) === base);
+            const category = cullRecord ? (cullRecord.category || (cullRecord.isKeyPhoto ? "keeper" : "alternate")) : "alternate";
+            let folderName = "📘 Alternates";
+            if (category === "keeper") folderName = "📗 Keepers";
+            else if (category === "alternate") folderName = "📘 Alternates";
+            else if (category === "blurry") folderName = "📙 Blurry";
+            else if (category === "rejected") folderName = "📕 Rejected";
+            
+            targetHandle = await outputHandle.getDirectoryHandle(folderName, { create: true });
+          }
+
+          const newFile = await targetHandle.getFileHandle(outName, { create: true });
           const writable = await newFile.createWritable();
           await writable.write(blob);
           await writable.close();
           addBatchLog(`✅ Successfully saved: ${outName}`, "success");
           setBatchStats(prev => ({ ...prev, saved: prev.saved + 1 }));
 
-          if (i === 0 && batchConfirmFirst && batchRawFiles.length > 1) {
+          if (i === 0 && batchConfirmFirst && filesToProcess.length > 1) {
             const previewUrl = canvas.toDataURL('image/jpeg', 0.92);
             setBatchConfirmData({
               name: outName,
               url: previewUrl,
               isRaw: true,
               nextIndex: 1,
-              total: batchRawFiles.length
+              total: filesToProcess.length
             });
             addBatchLog(`🔍 First RAW image processed. Awaiting user confirmation to continue...`, "info");
             return;
@@ -1747,7 +1830,7 @@ export default function App() {
         console.error(`Failed processing ${name}`, err); 
         if (err.name === 'NotAllowedError' || err.name === 'SecurityError') {
           addBatchLog(`🛑 RAW Batch process aborted: Directory write permission lost or revoked.`, "error");
-          const remaining = batchRawFiles.length - i;
+          const remaining = filesToProcess.length - i;
           setBatchStats(prev => ({ ...prev, failed: prev.failed + remaining }));
           setBatchProcessing(false);
           setBatchDone(true);
@@ -2300,10 +2383,10 @@ export default function App() {
         activeTab === "home" ? (
           <LandingPage {...{ dm, loadImage, setActiveTab, handleInstallClick, deferredPrompt, isIOS, isInstalled }} onSelectPlan={(plan) => setCheckoutPlan(plan)} />
         ) : activeTab === "batch" ? (
-          <BatchPage {...{ dm, cardBg, cardBdr, inputSt, user, setActiveTab, sourceHandle, outputHandle, batchImages, selectSourceFolder, selectRawSourceFolder, selectOutputFolder, batchResizeMode, setBatchResizeMode, batchResizePreset, setBatchResizePreset, batchCustomW, setBatchCustomW, batchCustomH, setBatchCustomH, batchKeepAspect, setBatchKeepAspect, batchLongEdgePx, setBatchLongEdgePx, batchAutoLevels, setBatchAutoLevels, batchAutoContrast, setBatchAutoContrast, batchSharpen, setBatchSharpen, batchSharpenAmt, setBatchSharpenAmt, batchSharpenRad, setBatchSharpenRad, batchDenoise, setBatchDenoise, batchDenoiseAmt, setBatchDenoiseAmt, batchLogo, setBatchLogo, batchLogoFile, setBatchLogoFile, handleBatchLogoUpload, batchLogoScale, setBatchLogoScale, batchLogoScalePortrait, setBatchLogoScalePortrait, batchLogoOpacity, setBatchLogoOpacity, batchLogoPos, setBatchLogoPos, batchLogoMargin, setBatchLogoMargin, batchOutputFmt, setBatchOutputFmt, batchOutputQ, setBatchOutputQ, batchPrefix, setBatchPrefix, batchSuffix, setBatchSuffix, batchProcessing, batchProgress, batchDone, handleBatchProcess, batchPreviewIdx, batchPreviewOrigUrl, batchPreviewAfterUrl, batchPreviewLoading, batchPreviewSplit, setBatchPreviewSplit, batchPreviewDragging, setBatchPreviewDragging, batchPreviewOpen, setBatchPreviewOpen, generateBatchPreview, filters, setFilters, resetAll, batchFilterGroup, setBatchFilterGroup, calcBatchDims, batchAiUpscale, setBatchAiUpscale, batchAiBeauty, setBatchAiBeauty, batchAiScale, setBatchAiScale, batchAiBeautySmooth, setBatchAiBeautySmooth, batchAiBeautyClarity, setBatchAiBeautyClarity, batchAiBeautyGlow, setBatchAiBeautyGlow, batchAiFaceRestore, setBatchAiFaceRestore, batchAiBeautyUseMask, setBatchAiBeautyUseMask, batchSection, setBatchSection, batchRawFiles, setBatchRawFiles, handleRawBatchProcess, batchLogs, addBatchLog, batchConfirmFirst, setBatchConfirmFirst, batchConfirmData, batchCancelRequested, handleCancelBatch, continueBatchProcess, cancelBatchProcess, batchStats, batchLutId, setBatchLutId, batchLutIntensity, setBatchLutIntensity, batchCustomLutData, setBatchCustomLutData, batchCustomLutName, setBatchCustomLutName, batchFbOptimize, setBatchFbOptimize, importOutputsToCull }} />
+          <BatchPage {...{ dm, cardBg, cardBdr, inputSt, user, setActiveTab, sourceHandle, outputHandle, batchImages, selectSourceFolder, selectRawSourceFolder, selectOutputFolder, batchResizeMode, setBatchResizeMode, batchResizePreset, setBatchResizePreset, batchCustomW, setBatchCustomW, batchCustomH, setBatchCustomH, batchKeepAspect, setBatchKeepAspect, batchLongEdgePx, setBatchLongEdgePx, batchAutoLevels, setBatchAutoLevels, batchAutoContrast, setBatchAutoContrast, batchSharpen, setBatchSharpen, batchSharpenAmt, setBatchSharpenAmt, batchSharpenRad, setBatchSharpenRad, batchDenoise, setBatchDenoise, batchDenoiseAmt, setBatchDenoiseAmt, batchLogo, setBatchLogo, batchLogoFile, setBatchLogoFile, handleBatchLogoUpload, batchLogoScale, setBatchLogoScale, batchLogoScalePortrait, setBatchLogoScalePortrait, batchLogoOpacity, setBatchLogoOpacity, batchLogoPos, setBatchLogoPos, batchLogoMargin, setBatchLogoMargin, batchOutputFmt, setBatchOutputFmt, batchOutputQ, setBatchOutputQ, batchPrefix, setBatchPrefix, batchSuffix, setBatchSuffix, batchProcessing, batchProgress, batchDone, handleBatchProcess, batchPreviewIdx, batchPreviewOrigUrl, batchPreviewAfterUrl, batchPreviewLoading, batchPreviewSplit, setBatchPreviewSplit, batchPreviewDragging, setBatchPreviewDragging, batchPreviewOpen, setBatchPreviewOpen, generateBatchPreview, filters, setFilters, resetAll, batchFilterGroup, setBatchFilterGroup, calcBatchDims, batchAiUpscale, setBatchAiUpscale, batchAiBeauty, setBatchAiBeauty, batchAiScale, setBatchAiScale, batchAiBeautySmooth, setBatchAiBeautySmooth, batchAiBeautyClarity, setBatchAiBeautyClarity, batchAiBeautyGlow, setBatchAiBeautyGlow, batchAiFaceRestore, setBatchAiFaceRestore, batchAiBeautyUseMask, setBatchAiBeautyUseMask, batchSection, setBatchSection, batchRawFiles, setBatchRawFiles, handleRawBatchProcess, batchLogs, addBatchLog, batchConfirmFirst, setBatchConfirmFirst, batchConfirmData, batchCancelRequested, handleCancelBatch, continueBatchProcess, cancelBatchProcess, batchStats, batchLutId, setBatchLutId, batchLutIntensity, setBatchLutIntensity, batchCustomLutData, setBatchCustomLutData, batchCustomLutName, setBatchCustomLutName, batchFbOptimize, setBatchFbOptimize, importOutputsToCull, batchCullFilter, setBatchCullFilter, batchCullSort, setBatchCullSort, cullResults }} />
 
         ) : activeTab === "cull" ? (
-          <CullPage {...{ dm, cardBg, cardBdr, inputSt, sourceHandle: cullSourceHandle, outputHandle, batchImages: cullImages, selectSourceFolder: selectCullSourceFolder, selectRawSourceFolder, selectOutputFolder, batchLogs, addBatchLog, batchSection, setBatchSection, isMobile, user, setActiveTab }} />
+          <CullPage {...{ dm, cardBg, cardBdr, inputSt, sourceHandle: cullSourceHandle, outputHandle, batchImages: cullImages, selectSourceFolder: selectCullSourceFolder, selectRawSourceFolder, selectOutputFolder, batchLogs, addBatchLog, batchSection, setBatchSection, isMobile, user, setActiveTab, cullResults, setCullResults, groups, setGroups, activeGroupIndex: cullActiveGroupIndex, setActiveGroupIndex: setCullActiveGroupIndex, activeAlternateIndex: cullActiveAlternateIndex, setActiveAlternateIndex: setCullActiveAlternateIndex }} />
         ) : activeTab === "account" ? (
           <div style={{ display: "flex", justifyContent: "center", minHeight: "calc(100vh - 52px)", overflowY: "auto", background: dm ? "#0a0e17" : "#f3f4f6" }}>
             <AccountDashboard user={user} onLogin={handleLogin} onLogout={handleLogout} onCancelSubscription={handleCancelSubscription} onChangeBillingPeriod={handleChangeBillingPeriod} onChangeTier={handleChangeTier} onRenewLease={handleRenewLease} dm={dm} />
@@ -2329,11 +2412,11 @@ export default function App() {
           </div>
         ) : activeTab === "batch" ? (
           <div style={{ height: "calc(100vh - 52px)", overflowY: "auto" }}>
-            <BatchPage {...{ dm, cardBg, cardBdr, inputSt, isMobile: true, user, setActiveTab, sourceHandle, outputHandle, batchImages, selectSourceFolder, selectRawSourceFolder, selectOutputFolder, batchResizeMode, setBatchResizeMode, batchResizePreset, setBatchResizePreset, batchCustomW, setBatchCustomW, batchCustomH, setBatchCustomH, batchKeepAspect, setBatchKeepAspect, batchLongEdgePx, setBatchLongEdgePx, batchAutoLevels, setBatchAutoLevels, batchAutoContrast, setBatchAutoContrast, batchSharpen, setBatchSharpen, batchSharpenAmt, setBatchSharpenAmt, batchSharpenRad, setBatchSharpenRad, batchDenoise, setBatchDenoise, batchDenoiseAmt, setBatchDenoiseAmt, batchLogo, setBatchLogo, batchLogoFile, setBatchLogoFile, handleBatchLogoUpload, batchLogoScale, setBatchLogoScale, batchLogoScalePortrait, setBatchLogoScalePortrait, batchLogoOpacity, setBatchLogoOpacity, batchLogoPos, setBatchLogoPos, batchLogoMargin, setBatchLogoMargin, batchOutputFmt, setBatchOutputFmt, batchOutputQ, setBatchOutputQ, batchPrefix, setBatchPrefix, batchSuffix, setBatchSuffix, batchProcessing, batchProgress, batchDone, handleBatchProcess, batchPreviewIdx, batchPreviewOrigUrl, batchPreviewAfterUrl, batchPreviewLoading, batchPreviewSplit, setBatchPreviewSplit, batchPreviewDragging, setBatchPreviewDragging, batchPreviewOpen, setBatchPreviewOpen, generateBatchPreview, filters, setFilters, resetAll, batchFilterGroup, setBatchFilterGroup, calcBatchDims, batchAiUpscale, setBatchAiUpscale, batchAiBeauty, setBatchAiBeauty, batchAiScale, setBatchAiScale, batchAiBeautySmooth, setBatchAiBeautySmooth, batchAiBeautyClarity, setBatchAiBeautyClarity, batchAiBeautyGlow, setBatchAiBeautyGlow, batchAiFaceRestore, setBatchAiFaceRestore, batchAiBeautyUseMask, setBatchAiBeautyUseMask, batchSection, setBatchSection, batchRawFiles, setBatchRawFiles, handleRawBatchProcess, batchLogs, addBatchLog, batchConfirmFirst, setBatchConfirmFirst, batchConfirmData, batchCancelRequested, handleCancelBatch, continueBatchProcess, cancelBatchProcess, batchStats, batchLutId, setBatchLutId, batchLutIntensity, setBatchLutIntensity, batchCustomLutData, setBatchCustomLutData, batchCustomLutName, setBatchCustomLutName, batchFbOptimize, setBatchFbOptimize, importOutputsToCull }} />
+            <BatchPage {...{ dm, cardBg, cardBdr, inputSt, isMobile: true, user, setActiveTab, sourceHandle, outputHandle, batchImages, selectSourceFolder, selectRawSourceFolder, selectOutputFolder, batchResizeMode, setBatchResizeMode, batchResizePreset, setBatchResizePreset, batchCustomW, setBatchCustomW, batchCustomH, setBatchCustomH, batchKeepAspect, setBatchKeepAspect, batchLongEdgePx, setBatchLongEdgePx, batchAutoLevels, setBatchAutoLevels, batchAutoContrast, setBatchAutoContrast, batchSharpen, setBatchSharpen, batchSharpenAmt, setBatchSharpenAmt, batchSharpenRad, setBatchSharpenRad, batchDenoise, setBatchDenoise, batchDenoiseAmt, setBatchDenoiseAmt, batchLogo, setBatchLogo, batchLogoFile, setBatchLogoFile, handleBatchLogoUpload, batchLogoScale, setBatchLogoScale, batchLogoScalePortrait, setBatchLogoScalePortrait, batchLogoOpacity, setBatchLogoOpacity, batchLogoPos, setBatchLogoPos, batchLogoMargin, setBatchLogoMargin, batchOutputFmt, setBatchOutputFmt, batchOutputQ, setBatchOutputQ, batchPrefix, setBatchPrefix, batchSuffix, setBatchSuffix, batchProcessing, batchProgress, batchDone, handleBatchProcess, batchPreviewIdx, batchPreviewOrigUrl, batchPreviewAfterUrl, batchPreviewLoading, batchPreviewSplit, setBatchPreviewSplit, batchPreviewDragging, setBatchPreviewDragging, batchPreviewOpen, setBatchPreviewOpen, generateBatchPreview, filters, setFilters, resetAll, batchFilterGroup, setBatchFilterGroup, calcBatchDims, batchAiUpscale, setBatchAiUpscale, batchAiBeauty, setBatchAiBeauty, batchAiScale, setBatchAiScale, batchAiBeautySmooth, setBatchAiBeautySmooth, batchAiBeautyClarity, setBatchAiBeautyClarity, batchAiBeautyGlow, setBatchAiBeautyGlow, batchAiFaceRestore, setBatchAiFaceRestore, batchAiBeautyUseMask, setBatchAiBeautyUseMask, batchSection, setBatchSection, batchRawFiles, setBatchRawFiles, handleRawBatchProcess, batchLogs, addBatchLog, batchConfirmFirst, setBatchConfirmFirst, batchConfirmData, batchCancelRequested, handleCancelBatch, continueBatchProcess, cancelBatchProcess, batchStats, batchLutId, setBatchLutId, batchLutIntensity, setBatchLutIntensity, batchCustomLutData, setBatchCustomLutData, batchCustomLutName, setBatchCustomLutName, batchFbOptimize, setBatchFbOptimize, importOutputsToCull, batchCullFilter, setBatchCullFilter, batchCullSort, setBatchCullSort, cullResults }} />
           </div>
         ) : activeTab === "cull" ? (
           <div style={{ height: "calc(100vh - 52px)", overflowY: "auto", padding: "16px" }}>
-            <CullPage {...{ dm, cardBg, cardBdr, inputSt, sourceHandle: cullSourceHandle, outputHandle, batchImages: cullImages, selectSourceFolder: selectCullSourceFolder, selectRawSourceFolder, selectOutputFolder, batchLogs, addBatchLog, batchSection, setBatchSection, isMobile: true, user, setActiveTab }} />
+            <CullPage {...{ dm, cardBg, cardBdr, inputSt, sourceHandle: cullSourceHandle, outputHandle, batchImages: cullImages, selectSourceFolder: selectCullSourceFolder, selectRawSourceFolder, selectOutputFolder, batchLogs, addBatchLog, batchSection, setBatchSection, isMobile: true, user, setActiveTab, cullResults, setCullResults, groups, setGroups, activeGroupIndex: cullActiveGroupIndex, setActiveGroupIndex: setCullActiveGroupIndex, activeAlternateIndex: cullActiveAlternateIndex, setActiveAlternateIndex: setCullActiveAlternateIndex }} />
           </div>
         ) : activeTab === "account" ? (
           <div style={{ display: "flex", justifyContent: "center", minHeight: "calc(100vh - 52px)", overflowY: "auto", background: dm ? "#0a0e17" : "#f3f4f6" }}>

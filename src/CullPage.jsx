@@ -130,7 +130,15 @@ export default function CullPage({
   setBatchSection,
   isMobile = false,
   user,
-  setActiveTab
+  setActiveTab,
+  cullResults,
+  setCullResults,
+  groups,
+  setGroups,
+  activeGroupIndex,
+  setActiveGroupIndex,
+  activeAlternateIndex,
+  setActiveAlternateIndex
 }) {
   // Option Parameters
   const [sensitivity, setSensitivity] = useState(12);
@@ -140,15 +148,9 @@ export default function CullPage({
   // Runtime State
   const [isProcessing, setIsProcessing] = useState(false);
   const [progress, setProgress] = useState({ current: 0, total: 0, currentFile: "" });
-  const [cullResults, setCullResults] = useState([]);
-  const [activeGroupIndex, setActiveGroupIndex] = useState(0);
-  const [activeAlternateIndex, setActiveAlternateIndex] = useState(0);
   const [showFaceBoxes, setShowFaceBoxes] = useState(true);
   const [showShortcutsHelp, setShowShortcutsHelp] = useState(true);
   const [activePhotoUrl, setActivePhotoUrl] = useState(null);
-
-  // Grouped references
-  const [groups, setGroups] = useState([]);
 
   // Physical Export & Layout Configuration States
   const [isExporting, setIsExporting] = useState(false);
@@ -240,10 +242,12 @@ export default function CullPage({
         x.isKeyPhoto = true;
         x.rating = 5;
         x.label = "green";
+        x.category = "keeper";
       } else if (x.isKeyPhoto) {
         x.isKeyPhoto = false;
         x.rating = 3;
         x.label = "blue";
+        x.category = "alternate";
       }
     });
 
@@ -253,6 +257,7 @@ export default function CullPage({
     const updatedGroups = [...groups];
     updatedGroups[activeGroupIndex] = groupItems;
     setGroups(updatedGroups);
+    setCullResults(updatedGroups.flat());
     setActiveAlternateIndex(0); // Reset selected alternate preview
 
     showToast(`Promoted ${item.name} to Key Photo!`);
@@ -269,8 +274,20 @@ export default function CullPage({
     activePhoto.rating = ratingValue !== undefined ? ratingValue : activePhoto.rating;
     activePhoto.label = labelValue !== undefined ? labelValue : activePhoto.label;
 
+    // Map new rating/label back to category
+    if (activePhoto.rating === 5 || activePhoto.label === "green") {
+      activePhoto.category = "keeper";
+    } else if (activePhoto.rating === 1 || activePhoto.label === "red") {
+      activePhoto.category = "rejected";
+    } else if (activePhoto.rating === 2 || activePhoto.label === "yellow") {
+      activePhoto.category = "blurry";
+    } else {
+      activePhoto.category = "alternate";
+    }
+
     const updatedGroups = [...groups];
     setGroups(updatedGroups);
+    setCullResults(updatedGroups.flat());
   };
 
   // 5. Exporter to write XMP Sidecar files
