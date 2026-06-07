@@ -117,7 +117,8 @@ export function BatchPage({ dm, cardBg, cardBdr, inputSt, isMobile = false,
   batchSection, setBatchSection, batchRawFiles, setBatchRawFiles, handleRawBatchProcess, batchLogs, addBatchLog,
   batchConfirmFirst, setBatchConfirmFirst, batchConfirmData, batchCancelRequested, handleCancelBatch, continueBatchProcess, cancelBatchProcess,
   batchStats = { saved: 0, failed: 0 },
-  batchLutId, setBatchLutId, batchLutIntensity, setBatchLutIntensity, batchCustomLutData, setBatchCustomLutData, batchCustomLutName, setBatchCustomLutName
+  batchLutId, setBatchLutId, batchLutIntensity, setBatchLutIntensity, batchCustomLutData, setBatchCustomLutData, batchCustomLutName, setBatchCustomLutName,
+  batchFbOptimize, setBatchFbOptimize, importOutputsToCull
 }) {
 
   const bg = dm ? '#121212' : '#f0f1f5';
@@ -308,6 +309,76 @@ export function BatchPage({ dm, cardBg, cardBdr, inputSt, isMobile = false,
                 </button>
               ))}
             </div>
+          </div>
+        )}
+      </Card>
+    );
+  };
+
+  const renderFacebookOptimizerCard = () => {
+    return (
+      <Card style={{
+        background: batchFbOptimize ? (dm ? "rgba(24, 119, 242, 0.08)" : "rgba(24, 119, 242, 0.04)") : cardBg,
+        border: `1.5px solid ${batchFbOptimize ? "#1877f2" : cardBdr}`,
+        transition: "all 0.25s ease-in-out"
+      }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+          <SecLabel icon="📘" style={{ margin: 0 }}>Facebook Optimizer</SecLabel>
+          <div style={{ display: "flex", alignItems: "center" }}>
+            <label className="switch" style={{ position: "relative", display: "inline-block", width: "42px", height: "22px" }}>
+              <input type="checkbox" checked={batchFbOptimize} onChange={e => setBatchFbOptimize(e.target.checked)}
+                style={{ opacity: 0, width: 0, height: 0 }} />
+              <span style={{
+                position: "absolute", cursor: "pointer", top: 0, left: 0, right: 0, bottom: 0,
+                backgroundColor: batchFbOptimize ? "#1877f2" : "#ccc", borderRadius: "34px",
+                transition: ".3s"
+              }}>
+                <span style={{
+                  position: "absolute", content: "''", height: "16px", width: "16px", left: batchFbOptimize ? "23px" : "3px", bottom: "3px",
+                  backgroundColor: "white", borderRadius: "50%", transition: ".3s"
+                }} />
+              </span>
+            </label>
+          </div>
+        </div>
+
+        <p style={{ fontSize: "11px", color: dm ? "#aaa" : "#555", margin: "0 0 10px 0", lineHeight: 1.45 }}>
+          Auto-tunes batch configuration to bypass Facebook's aggressive re-compression engine.
+        </p>
+
+        {batchFbOptimize ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: "6px", padding: "10px", background: dm ? "rgba(0,0,0,0.2)" : "rgba(255,255,255,0.8)", borderRadius: "8px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "11px" }}>
+              <span style={{ color: "#1877f2" }}>📐</span>
+              <span style={{ fontWeight: 600, color: dm ? "#eee" : "#333" }}>Max Long Edge: 2048px</span>
+              <span style={{ color: "#888", fontSize: "10px" }}>(Automatic Capping)</span>
+            </div>
+            
+            <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "11px" }}>
+              <span style={{ color: "#1877f2" }}>💾</span>
+              {batchLogo ? (
+                <>
+                  <span style={{ fontWeight: 600, color: "#22c55e" }}>Format: PNG</span>
+                  <span style={{ color: "#888", fontSize: "10px" }}>(Logo overlays detected)</span>
+                </>
+              ) : (
+                <>
+                  <span style={{ fontWeight: 600, color: dm ? "#eee" : "#333" }}>Format: JPEG @ 85%</span>
+                  <span style={{ color: "#888", fontSize: "10px" }}>(Optimized compression)</span>
+                </>
+              )}
+            </div>
+
+            <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "11px" }}>
+              <span style={{ color: "#1877f2" }}>🎨</span>
+              <span style={{ fontWeight: 600, color: dm ? "#eee" : "#333" }}>Color Profile: sRGB</span>
+              <span style={{ color: "#888", fontSize: "10px" }}>(True sRGB colors)</span>
+            </div>
+          </div>
+        ) : (
+          <div style={{ fontSize: "10px", color: "#888", display: "flex", alignItems: "center", gap: "4px" }}>
+            <span>ℹ️</span>
+            <span>Turn on to apply social media quality safeguards automatically.</span>
           </div>
         )}
       </Card>
@@ -1133,14 +1204,50 @@ export function BatchPage({ dm, cardBg, cardBdr, inputSt, isMobile = false,
         const { saved = 0, failed = 0 } = batchStats || {};
         if (saved > 0 && failed === 0) {
           return (
-            <div style={{ background: "#f0fff4", borderBottom: "1px solid #86efac", padding: "10px 24px", fontSize: "13px", fontWeight: 600, color: "#16a34a", textAlign: "center" }}>
-              ✅ Done! All {saved} images processed and saved successfully.
+            <div style={{ background: "#f0fff4", borderBottom: "1px solid #86efac", padding: "10px 24px", fontSize: "13px", fontWeight: 600, color: "#16a34a", textAlign: "center", display: "flex", alignItems: "center", justifyContent: "center", gap: "15px", flexWrap: "wrap" }}>
+              <span>✅ Done! All {saved} images processed and saved successfully.</span>
+              <button onClick={importOutputsToCull}
+                style={{
+                  background: "linear-gradient(135deg, #06b6d4 0%, #6c63ff 100%)",
+                  color: "#ffffff",
+                  border: "none",
+                  borderRadius: "6px",
+                  padding: "5px 12px",
+                  fontSize: "11px",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  boxShadow: "0 2px 6px rgba(108,99,255,0.25)",
+                  fontFamily: "inherit",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "4px"
+                }}>
+                🔍 Import to Cull AI
+              </button>
             </div>
           );
         } else if (saved > 0 && failed > 0) {
           return (
-            <div style={{ background: "#fffbeb", borderBottom: "1px solid #fcd34d", padding: "10px 24px", fontSize: "13px", fontWeight: 600, color: "#b45309", textAlign: "center" }}>
-              ⚠️ Done with warnings. Processed {saved + failed} files: saved {saved} successfully, {failed} failed.
+            <div style={{ background: "#fffbeb", borderBottom: "1px solid #fcd34d", padding: "10px 24px", fontSize: "13px", fontWeight: 600, color: "#b45309", textAlign: "center", display: "flex", alignItems: "center", justifyContent: "center", gap: "15px", flexWrap: "wrap" }}>
+              <span>⚠️ Done with warnings. Processed {saved + failed} files: saved {saved} successfully, {failed} failed.</span>
+              <button onClick={importOutputsToCull}
+                style={{
+                  background: "linear-gradient(135deg, #06b6d4 0%, #6c63ff 100%)",
+                  color: "#ffffff",
+                  border: "none",
+                  borderRadius: "6px",
+                  padding: "5px 12px",
+                  fontSize: "11px",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  boxShadow: "0 2px 6px rgba(108,99,255,0.25)",
+                  fontFamily: "inherit",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "4px"
+                }}>
+                🔍 Import to Cull AI
+              </button>
             </div>
           );
         } else if (saved === 0 && failed > 0) {
@@ -1324,6 +1431,7 @@ export function BatchPage({ dm, cardBg, cardBdr, inputSt, isMobile = false,
             {renderSourceFolderCard()}
             {renderRawBatchPanel()}
             {renderOutputFolderCard()}
+            {renderFacebookOptimizerCard()}
             {renderOutputFormatCard()}
             {renderFilenameTemplateCard()}
             {renderAdjustmentsCard()}
@@ -1519,6 +1627,7 @@ export function BatchPage({ dm, cardBg, cardBdr, inputSt, isMobile = false,
               {renderSourceFolderCard()}
               {renderRawBatchPanel()}
               {renderOutputFolderCard()}
+              {renderFacebookOptimizerCard()}
               {renderOutputFormatCard()}
               {renderFilenameTemplateCard()}
             </div>
