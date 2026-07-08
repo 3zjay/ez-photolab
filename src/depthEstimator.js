@@ -21,8 +21,10 @@ export async function estimateDepth(imageElement, onProgress) {
   const depthPipe = await getDepthPipeline();
 
   onProgress?.('Analyzing depth geometry...');
-  // Run depth estimation model
-  const result = await depthPipe(imageElement.src || imageElement);
+  const input = (imageElement instanceof HTMLCanvasElement || typeof imageElement.toDataURL === 'function')
+    ? imageElement.toDataURL('image/jpeg', 0.9)
+    : (imageElement.src || imageElement);
+  const result = await depthPipe(input);
 
   // The output is a raw grayscale representation of depth
   const { depth, width, height } = result;

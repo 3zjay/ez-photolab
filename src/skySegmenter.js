@@ -21,8 +21,10 @@ export async function segmentSky(imageElement, onProgress) {
   const segmenter = await getSegmenter();
 
   onProgress?.('Analyzing landscape lines...');
-  // Run segmentation model on image
-  const results = await segmenter(imageElement.src || imageElement);
+  const input = (imageElement instanceof HTMLCanvasElement || typeof imageElement.toDataURL === 'function')
+    ? imageElement.toDataURL('image/jpeg', 0.9)
+    : (imageElement.src || imageElement);
+  const results = await segmenter(input);
 
   // ADE20K dataset label for sky is 'sky'
   const skySegment = results.find(seg => seg.label.toLowerCase() === 'sky');
