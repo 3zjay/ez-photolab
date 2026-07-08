@@ -59,66 +59,47 @@ export function analyzeImage(imgElement) {
 
   // --- Compute Adjustments ---
 
-  // A. Exposure (Target average luminance around 125-135)
-  // Low avgLum -> positive exposure boost, High -> slight exposure reduction
-  let recommendedExposure = 0;
-  if (avgLum < 115) {
-    recommendedExposure = Math.min(45, (125 - avgLum) * 0.6);
-  } else if (avgLum > 155) {
-    recommendedExposure = Math.max(-25, (145 - avgLum) * 0.4);
+  // A. Exposure (Target average luminance around 130, add subtle default pop)
+  let recommendedExposure = 8;
+  if (avgLum < 120) {
+    recommendedExposure = Math.min(35, (135 - avgLum) * 0.7);
+  } else if (avgLum > 150) {
+    recommendedExposure = Math.max(-20, (145 - avgLum) * 0.4);
   }
 
-  // B. Contrast (Lower std dev -> needs more contrast)
-  // Default stdDev for balanced photos is roughly 50-65.
-  let recommendedContrast = 100; // default is 100%
+  // B. Contrast (Boost by default for punchier visual pop)
+  let recommendedContrast = 112; // default +12%
   if (stdDevLum < 45) {
-    recommendedContrast = 100 + Math.min(30, (45 - stdDevLum) * 1.5);
+    recommendedContrast = 112 + Math.min(25, (45 - stdDevLum) * 1.2);
   } else if (stdDevLum > 75) {
-    recommendedContrast = 100 - Math.min(15, (stdDevLum - 75) * 0.5);
+    recommendedContrast = 105;
   }
 
-  // C. Shadows & Highlights
-  // High shadowCount -> boost shadows to recover details
-  let recommendedShadows = 0;
+  // C. Shadows & Highlights (Always perform subtle shadow recovery and highlight protection)
+  let recommendedShadows = 15;
   const shadowRatio = shadowCount / numPixels;
   if (shadowRatio > 0.15) {
-    recommendedShadows = Math.min(50, shadowRatio * 75);
+    recommendedShadows = Math.min(55, 15 + shadowRatio * 60);
   }
 
-  // High highlightCount -> pull back highlights to control clipping
-  let recommendedHighlights = 0;
+  let recommendedHighlights = -10;
   const highlightRatio = highlightCount / numPixels;
   if (highlightRatio > 0.1) {
-    recommendedHighlights = Math.max(-40, -highlightRatio * 60);
+    recommendedHighlights = Math.max(-45, -10 - highlightRatio * 50);
   }
 
-  // D. Saturation & Vibrance (Compute average saturation in HSV space)
-  let totalSat = 0;
-  for (let i = 0; i < data.length; i += 4) {
-    const r = data[i] / 255;
-    const g = data[i+1] / 255;
-    const b = data[i+2] / 255;
-    const max = Math.max(r, g, b);
-    const min = Math.min(r, g, b);
-    const d = max - min;
-    const s = max === 0 ? 0 : d / max;
-    totalSat += s;
-  }
-  const avgSat = totalSat / numPixels;
-
-  let recommendedSaturation = 100; // default is 100%
-  let recommendedVibrance = 100; // default is 100%
+  // D. Saturation & Vibrance (Add default vibrance pop for court/jersey colors)
+  let recommendedSaturation = 104;
+  let recommendedVibrance = 110;
   if (avgSat < 0.25) {
-    // Very dull image: boost saturation and vibrance
-    recommendedSaturation = 100 + Math.min(25, (0.25 - avgSat) * 75);
-    recommendedVibrance = 100 + Math.min(30, (0.25 - avgSat) * 90);
-  } else if (avgSat > 0.6) {
-    // Overly saturated: pull back slightly
-    recommendedSaturation = 100 - Math.min(15, (avgSat - 0.6) * 40);
+    recommendedSaturation = 112 + Math.min(20, (0.25 - avgSat) * 60);
+    recommendedVibrance = 118 + Math.min(25, (0.25 - avgSat) * 80);
+  } else if (avgSat > 0.5) {
+    recommendedSaturation = 98;
+    recommendedVibrance = 102;
   }
 
-  // E. Temperature / Warmth (Simple Auto White Balance check)
-  // Compare Red to Blue channels. If Red >> Blue, shift cool; if Blue >> Red, shift warm.
+  // E. Temperature / Warmth (Auto White Balance check)
   let recommendedTemp = 0;
   const rbRatio = avgR / (avgB || 1);
   if (rbRatio > 1.15) {

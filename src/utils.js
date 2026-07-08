@@ -512,8 +512,8 @@ export async function applyStructureAi(canvas, ctx, W, H, structureAmt, faceMask
   const tempCtx = tempCanvas.getContext('2d');
   tempCtx.drawImage(canvas, 0, 0);
   
-  // Apply a combination of unsharp mask and contrast boost for structure
-  applyUnsharpMask(tempCanvas, tempCtx, W, H, structureAmt * 0.12, 1.4);
+  // Apply a combination of unsharp mask and contrast boost for structure (using a safe 0.015 multiplier to avoid noise)
+  applyUnsharpMask(tempCanvas, tempCtx, W, H, structureAmt * 0.015, 1.4);
   
   if (faceMaskCanvas) {
     tempCtx.globalCompositeOperation = 'destination-out';
@@ -568,6 +568,19 @@ function drawSkyPattern(skyId, W, H) {
 
 export async function applySkyReplacement(canvas, ctx, W, H, skyId, skyMaskCanvas, customSkyUrl = null, opacity = 1.0, matchIntensity = 0.5) {
   if (skyId === 'none' || !skyMaskCanvas) return;
+
+  // Calculate the percentage of sky pixels in the mask to avoid replacing ceilings/court lights in indoor photos
+  const maskCtx = skyMaskCanvas.getContext('2d');
+  const maskData = maskCtx.getImageData(0, 0, skyMaskCanvas.width, skyMaskCanvas.height).data;
+  let skyPixels = 0;
+  for (let i = 3; i < maskData.length; i += 4) {
+    if (maskData[i] > 15) skyPixels++;
+  }
+  const skyRatio = skyPixels / (skyMaskCanvas.width * skyMaskCanvas.height);
+  if (skyRatio < 0.045) {
+    // Less than 4.5% of the image is sky - skip replacement to protect gym/indoor pictures
+    return;
+  }
 
   // Create a feathered version of the sky mask to smooth horizon replacement boundaries
   const featheredMask = document.createElement('canvas');
