@@ -39,18 +39,29 @@ export async function initFaceLandmarker() {
 function drawConnections(ctx, landmarks, connections, width, height) {
   if (!landmarks || !connections || connections.length === 0) return;
   
-  ctx.beginPath();
-  let lastEnd = -1;
-  connections.forEach(({start, end}) => {
-    const ptStart = landmarks[start];
-    const ptEnd = landmarks[end];
-    if (!ptStart || !ptEnd) return;
-    if (start !== lastEnd) {
-      ctx.moveTo(ptStart.x * width, ptStart.y * height);
-    }
-    ctx.lineTo(ptEnd.x * width, ptEnd.y * height);
-    lastEnd = end;
+  const indices = new Set();
+  connections.forEach(conn => {
+    indices.add(conn.start);
+    indices.add(conn.end);
   });
+
+  const pts = Array.from(indices).map(idx => landmarks[idx]).filter(Boolean);
+  if (pts.length < 3) return;
+
+  // Compute centroid
+  let cx = 0, cy = 0;
+  pts.forEach(p => { cx += p.x; cy += p.y; });
+  cx /= pts.length;
+  cy /= pts.length;
+
+  // Sort points by polar angle around centroid to form a continuous polygon boundary
+  pts.sort((a, b) => Math.atan2(a.y - cy, a.x - cx) - Math.atan2(b.y - cy, b.x - cx));
+
+  ctx.beginPath();
+  ctx.moveTo(pts[0].x * width, pts[0].y * height);
+  for (let i = 1; i < pts.length; i++) {
+    ctx.lineTo(pts[i].x * width, pts[i].y * height);
+  }
   ctx.closePath();
   ctx.fill();
 }

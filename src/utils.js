@@ -569,6 +569,15 @@ function drawSkyPattern(skyId, W, H) {
 export async function applySkyReplacement(canvas, ctx, W, H, skyId, skyMaskCanvas, customSkyUrl = null, opacity = 1.0, matchIntensity = 0.5) {
   if (skyId === 'none' || !skyMaskCanvas) return;
 
+  // Create a feathered version of the sky mask to smooth horizon replacement boundaries
+  const featheredMask = document.createElement('canvas');
+  featheredMask.width = W; featheredMask.height = H;
+  const fCtx = featheredMask.getContext('2d');
+  const horizonBlur = Math.max(1, Math.round(W * 0.003));
+  fCtx.filter = `blur(${horizonBlur}px)`;
+  fCtx.drawImage(skyMaskCanvas, 0, 0, W, H);
+  fCtx.filter = 'none';
+
   const skyBg = document.createElement('canvas');
   skyBg.width = W; skyBg.height = H;
   const skyCtx = skyBg.getContext('2d');
@@ -587,13 +596,13 @@ export async function applySkyReplacement(canvas, ctx, W, H, skyId, skyMaskCanva
     skyCtx.drawImage(pattern, 0, 0, W, H);
   }
 
-  // Mask the sky background with the sky mask (applying opacity)
+  // Mask the sky background with the feathered sky mask (applying opacity)
   const maskedSkyBg = document.createElement('canvas');
   maskedSkyBg.width = W; maskedSkyBg.height = H;
   const maskedSkyCtx = maskedSkyBg.getContext('2d');
   maskedSkyCtx.drawImage(skyBg, 0, 0);
   maskedSkyCtx.globalCompositeOperation = 'destination-in';
-  maskedSkyCtx.drawImage(skyMaskCanvas, 0, 0, W, H);
+  maskedSkyCtx.drawImage(featheredMask, 0, 0, W, H);
   maskedSkyCtx.globalCompositeOperation = 'source-over';
 
   const fgCanvas = document.createElement('canvas');
@@ -601,9 +610,9 @@ export async function applySkyReplacement(canvas, ctx, W, H, skyId, skyMaskCanva
   const fgCtx = fgCanvas.getContext('2d');
   fgCtx.drawImage(canvas, 0, 0);
 
-  // Punch a hole in the foreground where the sky mask is
+  // Punch a feathered hole in the foreground where the sky mask is
   fgCtx.globalCompositeOperation = 'destination-out';
-  fgCtx.drawImage(skyMaskCanvas, 0, 0, W, H);
+  fgCtx.drawImage(featheredMask, 0, 0, W, H);
   fgCtx.globalCompositeOperation = 'source-over';
 
   // Apply light matching tint
@@ -639,7 +648,12 @@ export function applyRelight(canvas, ctx, W, H, depthMapCanvas, nearVal, farVal)
   const dCanvas = document.createElement('canvas');
   dCanvas.width = W; dCanvas.height = H;
   const dCtx = dCanvas.getContext('2d');
+  
+  // Apply a soft blur to turn the depth map into a smooth relighting volume gradient
+  const blurRad = Math.max(10, Math.round(Math.min(W, H) * 0.035));
+  dCtx.filter = `blur(${blurRad}px)`;
   dCtx.drawImage(depthMapCanvas, 0, 0, W, H);
+  dCtx.filter = 'none';
 
   const imgData = ctx.getImageData(0, 0, W, H);
   const depthData = dCtx.getImageData(0, 0, W, H);
