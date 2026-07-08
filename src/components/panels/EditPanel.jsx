@@ -25,7 +25,14 @@ export function EditPanel({
     handleRemoveBg, bgStatus, bgProgress, bgSubUrl, bgMode, setBgMode, bgColor, setBgColor, bgBlur, setBgBlur, bgResult, falApiKey, saveFalKey, claidApiKey, saveClaidKey, aiRemoveBrush, setAiRemoveBrush, toCSSFilter, initMaskCanvas, maskCanvasRef, maskDrawingRef, drawMask, aiMaskReady, handleAiRemove, aiRemoveStatus, aiRemoveLog, aiRemoveResult,
     
     // Overlay props
-    texts, selText, setSelText, addText, deleteText, updateText, inputSt
+    texts, selText, setSelText, addText, deleteText, updateText, inputSt,
+
+    // Luminar AI props
+    accentAi, setAccentAi, accentOffsets,
+    structureAi, setStructureAi,
+    skyMode, setSkyMode, skyOpacity, setSkyOpacity, skyLightMatch, setSkyLightMatch, customSkyUrl, setCustomSkyUrl, skyMaskStatus, skyMaskLog,
+    relightNear, setRelightNear, relightFar, setRelightFar, depthMapStatus, depthMapLog,
+    setActiveTab
 }) {
     const [subTab, setSubTab] = useState("grade");
     const [styleType, setStyleType] = useState(lutId !== 'none' ? 'lut' : 'preset');
@@ -349,6 +356,78 @@ export function EditPanel({
                             ))}
                         </div>
 
+                        {/* Premium Luminar AI sliders (Accent AI, Structure AI) */}
+                        {filterGroup === "enhance" && (
+                            <>
+                                {/* Accent AI */}
+                                <div style={{ marginBottom: "16px", position: "relative" }}>
+                                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "5px", alignItems: "center" }}>
+                                        <span style={{ fontSize: "13px", fontWeight: 700, color: accentAi > 0 ? "#6c63ff" : dm ? '#f3f4f6' : '#1f2937', display: "flex", alignItems: "center", gap: "6px" }}>
+                                            <span>✨ Accent AI</span>
+                                            <span style={{ fontSize: "8px", fontWeight: 800, padding: "2px 5px", background: "linear-gradient(135deg, #06b6d4 0%, #6c63ff 100%)", color: "#fff", borderRadius: "5px", textTransform: "uppercase" }}>💎 PRO</span>
+                                            {image && !accentOffsets && (
+                                                <span style={{ fontSize: "10px", color: "#aaa", fontWeight: 400, fontStyle: "italic" }}>(Analyzing...)</span>
+                                            )}
+                                        </span>
+                                        <span style={{ fontSize: "12px", color: "#bbb", fontVariantNumeric: "tabular-nums" }}>{accentAi}%</span>
+                                    </div>
+                                    <div style={{ position: "relative" }}>
+                                        <SmoothSlider 
+                                            min={0} max={100} step={1} 
+                                            value={accentAi} defaultValue={0}
+                                            onChange={v => {
+                                                const isPremium = user && (user.tier === 'premium' || user.tier === 'team' || user.tier === 'admin');
+                                                if (!isPremium) {
+                                                    alert("Upgrade to Premium to unlock Accent AI!");
+                                                    setActiveTab('account');
+                                                    return;
+                                                }
+                                                setAccentAi(v);
+                                            }} 
+                                        />
+                                        {!(user && (user.tier === 'premium' || user.tier === 'team' || user.tier === 'admin')) && (
+                                            <div style={{ position: "absolute", inset: 0, cursor: "pointer", zIndex: 10 }} onClick={() => {
+                                                alert("Upgrade to Premium to unlock Accent AI!");
+                                                setActiveTab('account');
+                                            }} />
+                                        )}
+                                    </div>
+                                </div>
+
+                                {/* Structure AI */}
+                                <div style={{ marginBottom: "16px", position: "relative" }}>
+                                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "5px", alignItems: "center" }}>
+                                        <span style={{ fontSize: "13px", fontWeight: 700, color: structureAi > 0 ? "#6c63ff" : dm ? '#f3f4f6' : '#1f2937', display: "flex", alignItems: "center", gap: "6px" }}>
+                                            <span>📐 Structure AI</span>
+                                            <span style={{ fontSize: "8px", fontWeight: 800, padding: "2px 5px", background: "linear-gradient(135deg, #06b6d4 0%, #6c63ff 100%)", color: "#fff", borderRadius: "5px", textTransform: "uppercase" }}>💎 PRO</span>
+                                        </span>
+                                        <span style={{ fontSize: "12px", color: "#bbb", fontVariantNumeric: "tabular-nums" }}>{structureAi}%</span>
+                                    </div>
+                                    <div style={{ position: "relative" }}>
+                                        <SmoothSlider 
+                                            min={0} max={100} step={1} 
+                                            value={structureAi} defaultValue={0}
+                                            onChange={v => {
+                                                const isPremium = user && (user.tier === 'premium' || user.tier === 'team' || user.tier === 'admin');
+                                                if (!isPremium) {
+                                                    alert("Upgrade to Premium to unlock Structure AI!");
+                                                    setActiveTab('account');
+                                                    return;
+                                                }
+                                                setStructureAi(v);
+                                            }} 
+                                        />
+                                        {!(user && (user.tier === 'premium' || user.tier === 'team' || user.tier === 'admin')) && (
+                                            <div style={{ position: "absolute", inset: 0, cursor: "pointer", zIndex: 10 }} onClick={() => {
+                                                alert("Upgrade to Premium to unlock Structure AI!");
+                                                setActiveTab('account');
+                                            }} />
+                                        )}
+                                    </div>
+                                </div>
+                            </>
+                        )}
+
                         {/* Render sliders */}
                         {COLOR_FILTERS.filter(f => f.group === filterGroup).map(f => {
                             const val = filters[f.key]; const changed = val !== f.default;
@@ -509,6 +588,138 @@ export function EditPanel({
                                             <AB onClick={revertAi} color={dm ? '#252525' : '#f2f2f8'} textColor={dm ? '#ccc' : '#555'} style={{ flex: 1, padding: "9px", fontSize: "12px" }}>↺ Revert AI</AB>
                                         </div>
                                     </div>
+                                    
+                                )}
+                            </div>
+
+                            <div style={{ borderTop: `1px solid ${cardBdr}`, paddingTop: "16px", marginTop: "4px" }}>
+                                <SL>AI Landscape & Relight Tools</SL>
+                            </div>
+
+                            {/* ── SKY REPLACEMENT AI [PRO] ── */}
+                            <div style={{ padding: "14px", background: cardBg, border: `1.5px solid ${cardBdr}`, borderRadius: "12px", display: "flex", flexDirection: "column", gap: "10px", position: "relative" }}>
+                                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                                    <span style={{ fontSize: "13px", fontWeight: 700, color: dm ? '#f3f4f6' : '#1f2937' }}>Sky Replacement AI</span>
+                                    <span style={{ fontSize: "8px", fontWeight: 800, padding: "2px 5px", background: "linear-gradient(135deg, #06b6d4 0%, #6c63ff 100%)", color: "#fff", borderRadius: "5px", textTransform: "uppercase" }}>💎 PRO</span>
+                                </div>
+                                <p style={{ fontSize: "11px", color: "#aaa", lineHeight: 1.5, margin: 0 }}>Automatically segments the horizon and overlays dynamic sunset, blue sky, or custom sky backdrops.</p>
+                                
+                                {!(user && (user.tier === 'premium' || user.tier === 'team' || user.tier === 'admin')) ? (
+                                    <div style={{ padding: "12px", background: dm ? "rgba(108, 99, 255, 0.08)" : "#f5f3ff", border: "1px solid rgba(108, 99, 255, 0.2)", borderRadius: "8px", display: "flex", flexDirection: "column", gap: "8px", alignItems: "center", textAlign: "center" }}>
+                                        <div style={{ fontSize: "12px", fontWeight: 600, color: "#6c63ff" }}>🔒 Gated Feature</div>
+                                        <div style={{ fontSize: "11px", color: dm ? "#aaa" : "#555", marginBottom: "4px" }}>Upgrade to PHOTOlab Premium to use client-side Sky Replacement.</div>
+                                        <button onClick={() => setActiveTab('account')} style={{ width: "100%", padding: "7px 10px", background: "#6c63ff", color: "#fff", border: "none", borderRadius: "6px", fontSize: "11.5px", fontWeight: 700, cursor: "pointer" }}>Upgrade Now</button>
+                                    </div>
+                                ) : (
+                                    <>
+                                        {/* Selector */}
+                                        <div>
+                                            <div style={{ fontSize: "11px", fontWeight: 600, color: "#aaa", textTransform: "uppercase", letterSpacing: ".05em", marginBottom: "5px" }}>Select Replacement Sky</div>
+                                            <select 
+                                                value={skyMode} 
+                                                onChange={e => setSkyMode(e.target.value)}
+                                                style={{ width: "100%", padding: "8px 10px", border: `1.5px solid ${cardBdr}`, borderRadius: "8px", fontSize: "12.5px", background: dm ? '#1e1e1e' : '#fff', color: dm ? '#ccc' : '#333', outline: "none", fontFamily: "inherit" }}
+                                            >
+                                                <option value="none">⊘ Keep Original Sky</option>
+                                                <option value="sunset">🌅 Dramatic Sunset</option>
+                                                <option value="blue">☀️ Sunny Blue Sky</option>
+                                                <option value="stormy">⛈️ Stormy Slate</option>
+                                                <option value="galaxy">🌌 Starry Galaxy Night</option>
+                                                <option value="custom">📂 Custom Sky Upload...</option>
+                                            </select>
+                                        </div>
+
+                                        {/* Custom sky upload file input */}
+                                        {skyMode === 'custom' && (
+                                            <div style={{ animation: "fadein .2s" }}>
+                                                <div style={{ fontSize: "11px", fontWeight: 600, color: "#aaa", textTransform: "uppercase", letterSpacing: ".05em", marginBottom: "5px" }}>Upload Custom Sky JPEG/PNG</div>
+                                                <input 
+                                                    type="file" 
+                                                    accept="image/*"
+                                                    onChange={e => {
+                                                        const file = e.target.files?.[0];
+                                                        if (file) {
+                                                            const r = new FileReader();
+                                                            r.onload = ev => setCustomSkyUrl(ev.target.result);
+                                                            r.readAsDataURL(file);
+                                                        }
+                                                    }}
+                                                    style={{ width: "100%", fontSize: "11px", color: dm ? "#aaa" : "#555" }}
+                                                />
+                                            </div>
+                                        )}
+
+                                        {/* Sky segmentation feedback */}
+                                        {skyMaskLog && (
+                                            <div style={{ padding: "8px 10px", background: dm ? '#2a2215' : '#fff8eb', border: "1px solid #d97706", borderRadius: "8px", fontSize: "11px", color: dm ? '#fbbf24' : '#b45309', display: "flex", alignItems: "center", gap: "6px" }}>
+                                                <Spin />
+                                                <span>{skyMaskLog}</span>
+                                            </div>
+                                        )}
+
+                                        {skyMode !== 'none' && skyMaskStatus === 'done' && (
+                                            <div style={{ display: "flex", flexDirection: "column", gap: "10px", animation: "fadein .2s" }}>
+                                                <div>
+                                                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
+                                                        <span style={{ fontSize: "11.5px", color: dm ? '#ccc' : '#555' }}>Sky Opacity</span>
+                                                        <span style={{ fontSize: "11.5px", fontWeight: 700, color: "#6c63ff" }}>{skyOpacity}%</span>
+                                                    </div>
+                                                    <SmoothSlider min={10} max={100} step={5} value={skyOpacity} defaultValue={100} onChange={setSkyOpacity} />
+                                                </div>
+                                                <div>
+                                                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
+                                                        <span style={{ fontSize: "11.5px", color: dm ? '#ccc' : '#555' }}>Sky Light Match</span>
+                                                        <span style={{ fontSize: "11.5px", fontWeight: 700, color: "#6c63ff" }}>{skyLightMatch}%</span>
+                                                    </div>
+                                                    <SmoothSlider min={0} max={100} step={5} value={skyLightMatch} defaultValue={50} onChange={setSkyLightMatch} />
+                                                </div>
+                                            </div>
+                                        )}
+                                    </>
+                                )}
+                            </div>
+
+                            {/* ── RELIGHT AI [PRO] ── */}
+                            <div style={{ padding: "14px", background: cardBg, border: `1.5px solid ${cardBdr}`, borderRadius: "12px", display: "flex", flexDirection: "column", gap: "10px", position: "relative" }}>
+                                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                                    <span style={{ fontSize: "13px", fontWeight: 700, color: dm ? '#f3f4f6' : '#1f2937' }}>Relight AI</span>
+                                    <span style={{ fontSize: "8px", fontWeight: 800, padding: "2px 5px", background: "linear-gradient(135deg, #06b6d4 0%, #6c63ff 100%)", color: "#fff", borderRadius: "5px", textTransform: "uppercase" }}>💎 PRO</span>
+                                </div>
+                                <p style={{ fontSize: "11px", color: "#aaa", lineHeight: 1.5, margin: 0 }}>Independently adjusts lighting on foreground subjects and background landscapes using 3D depth-map calculations.</p>
+                                
+                                {!(user && (user.tier === 'premium' || user.tier === 'team' || user.tier === 'admin')) ? (
+                                    <div style={{ padding: "12px", background: dm ? "rgba(108, 99, 255, 0.08)" : "#f5f3ff", border: "1px solid rgba(108, 99, 255, 0.2)", borderRadius: "8px", display: "flex", flexDirection: "column", gap: "8px", alignItems: "center", textAlign: "center" }}>
+                                        <div style={{ fontSize: "12px", fontWeight: 600, color: "#6c63ff" }}>🔒 Gated Feature</div>
+                                        <div style={{ fontSize: "11px", color: dm ? "#aaa" : "#555", marginBottom: "4px" }}>Upgrade to PHOTOlab Premium to use depth-guided Relight AI.</div>
+                                        <button onClick={() => setActiveTab('account')} style={{ width: "100%", padding: "7px 10px", background: "#6c63ff", color: "#fff", border: "none", borderRadius: "6px", fontSize: "11.5px", fontWeight: 700, cursor: "pointer" }}>Upgrade Now</button>
+                                    </div>
+                                ) : (
+                                    <>
+                                        {/* Relight feedback */}
+                                        {depthMapLog && (
+                                            <div style={{ padding: "8px 10px", background: dm ? '#2a2215' : '#fff8eb', border: "1px solid #d97706", borderRadius: "8px", fontSize: "11px", color: dm ? '#fbbf24' : '#b45309', display: "flex", alignItems: "center", gap: "6px" }}>
+                                                <Spin />
+                                                <span>{depthMapLog}</span>
+                                            </div>
+                                        )}
+
+                                        <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                                            <div>
+                                                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
+                                                    <span style={{ fontSize: "11.5px", color: dm ? '#ccc' : '#555' }}>Brighten Near (Foreground)</span>
+                                                    <span style={{ fontSize: "11.5px", fontWeight: 700, color: "#6c63ff" }}>{relightNear > 0 ? "+" : ""}{relightNear}%</span>
+                                                </div>
+                                                <SmoothSlider min={-100} max={100} step={5} value={relightNear} defaultValue={0} onChange={setRelightNear} />
+                                            </div>
+                                            <div>
+                                                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
+                                                    <span style={{ fontSize: "11.5px", color: dm ? '#ccc' : '#555' }}>Brighten Far (Background)</span>
+                                                    <span style={{ fontSize: "11.5px", fontWeight: 700, color: "#6c63ff" }}>{relightFar > 0 ? "+" : ""}{relightFar}%</span>
+                                                </div>
+                                                <SmoothSlider min={-100} max={100} step={5} value={relightFar} defaultValue={0} onChange={setRelightFar} />
+                                            </div>
+                                        </div>
+                                    </>
                                 )}
                             </div>
                         </>

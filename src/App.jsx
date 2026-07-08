@@ -12,12 +12,15 @@ import { DEFAULT_FILTERS, FB_MODES, PRESETS } from "./constants";
 import {
   toCSSFilter, toTransformCSS, saveFile, canvasToBlob, loadImageFromSrc,
   renderFinal, getExportDims, applyUnsharpMask, applyNoiseReduction, applyAutoLevels, applyAutoContrast, calcBatchDims,
-  apply3DLut, applyBeautyPipeline
+  apply3DLut, applyBeautyPipeline, applyStructureAi, applySkyReplacement, applyRelight
 } from "./utils";
-import { createSkinMask } from "./faceMasking";
+import { createSkinMask, createFaceOvalMask } from "./faceMasking";
 import { restoreFaceLocal } from "./faceRestore";
 import { decodeRaw, RAW_EXTENSIONS, RAW_REGEX } from "./rawProcessor";
 import { generateBuiltInLut, parseCubeLut } from "./lutParser";
+import { analyzeImage } from "./accentEngine";
+import { segmentSky } from "./skySegmenter";
+import { estimateDepth } from "./depthEstimator";
 import { LandingPage } from "./LandingPage";
 import { StripeCheckout } from "./components/ui/StripeCheckout";
 import { AccountDashboard } from "./components/panels/AccountDashboard";
@@ -563,6 +566,30 @@ export default function App() {
   const lowResCanvasRef = useRef(null);
   const skinMaskRef = useRef(null);
 
+  // Luminar AI states
+  const [accentAi, setAccentAi] = useState(0);
+  const [accentOffsets, setAccentOffsets] = useState(null);
+  
+  const [structureAi, setStructureAi] = useState(0);
+  const faceOvalMaskRef = useRef(null);
+  
+  const [skyMode, setSkyMode] = useState('none');
+  const [skyOpacity, setSkyOpacity] = useState(100);
+  const [skyBlend, setSkyBlend] = useState(50);
+  const [skyLightMatch, setSkyLightMatch] = useState(50);
+  const [customSkyUrl, setCustomSkyUrl] = useState(null);
+  const [skyMaskStatus, setSkyMaskStatus] = useState('idle');
+  const [skyMaskLog, setSkyMaskLog] = useState('');
+  const skyMaskRef = useRef(null);
+  
+  const [relightNear, setRelightNear] = useState(0);
+  const [relightFar, setRelightFar] = useState(0);
+  const [depthMapStatus, setDepthMapStatus] = useState('idle');
+  const [depthMapLog, setDepthMapLog] = useState('');
+  const depthMapRef = useRef(null);
+  
+  const [aiPreviewUrl, setAiPreviewUrl] = useState(null);
+
   // AI Face Restore (fal.ai)
   const [aiFaceRestoreStatus, setAiFaceRestoreStatus] = useState('idle');
   const [aiFaceRestoreLog, setAiFaceRestoreLog] = useState('');
@@ -600,21 +627,53 @@ export default function App() {
     document.body.setAttribute('data-dark', darkMode ? 'true' : 'false');
   }, [darkMode]);
 
-  // Clear beauty cache and preview when base image changes
+  // Clear AI cache and preview when base image changes
   useEffect(() => {
     lowResCanvasRef.current = null;
     skinMaskRef.current = null;
+    faceOvalMaskRef.current = null;
+    skyMaskRef.current = null;
+    depthMapRef.current = null;
     setBeautyPreviewUrl(null);
+    setAiPreviewUrl(null);
+    setAccentOffsets(null);
+    setAccentAi(0);
+    setStructureAi(0);
+    setSkyMode('none');
+    setRelightNear(0);
+    setRelightFar(0);
+    setSkyMaskStatus('idle');
+    setSkyMaskLog('');
+    setDepthMapStatus('idle');
+    setDepthMapLog('');
+
+    if (image) {
+      const img = new Image();
+      img.onload = () => {
+        try {
+          const offsets = analyzeImage(img);
+          setAccentOffsets(offsets);
+        } catch (e) {
+          console.error("Accent AI analysis failed:", e);
+        }
+      };
+      img.src = image;
+    }
   }, [image]);
 
-  // Compute beauty preview dynamically when sliders change
+  // Compute AI preview dynamically when sliders change
   useEffect(() => {
     if (!image) {
       setBeautyPreviewUrl(null);
+      setAiPreviewUrl(null);
       return;
     }
-    if (aiBeautySmooth === 0 && aiBeautyClarity === 0 && aiBeautyGlow === 0) {
+    const isBeautyActive = aiBeautySmooth > 0 || aiBeautyClarity > 0 || aiBeautyGlow > 0;
+    const isLuminarActive = structureAi > 0 || skyMode !== 'none' || relightNear !== 0 || relightFar !== 0;
+
+    if (!isBeautyActive && !isLuminarActive) {
       setBeautyPreviewUrl(null);
+      setAiPreviewUrl(null);
       return;
     }
 
@@ -632,33 +691,104 @@ export default function App() {
         ctx.drawImage(srcImg, 0, 0, W, H);
         lowResCanvasRef.current = canvas;
         skinMaskRef.current = null;
+        faceOvalMaskRef.current = null;
+        skyMaskRef.current = null;
+        depthMapRef.current = null;
       }
 
       const canvas = lowResCanvasRef.current;
       const W = canvas.width, H = canvas.height;
 
-      if (aiBeautyUseMask && !skinMaskRef.current) {
+      // 1. Generate masks if active and missing
+      if (aiBeautyUseMask && !skinMaskRef.current && isBeautyActive) {
         skinMaskRef.current = await createSkinMask(canvas);
       }
 
+      if (structureAi > 0 && !faceOvalMaskRef.current) {
+        try {
+          faceOvalMaskRef.current = await createFaceOvalMask(canvas);
+        } catch (e) {
+          console.error("Structure AI face mask failed:", e);
+        }
+      }
+
+      if (skyMode !== 'none' && !skyMaskRef.current && skyMaskStatus === 'idle') {
+        setSkyMaskStatus('loading');
+        setSkyMaskLog('Detecting sky boundaries...');
+        try {
+          const mask = await segmentSky(canvas, msg => setSkyMaskLog(msg));
+          skyMaskRef.current = mask;
+          setSkyMaskStatus('done');
+          setSkyMaskLog('');
+        } catch (e) {
+          console.error("Sky segmentation failed:", e);
+          setSkyMaskStatus('error');
+          setSkyMaskLog('Sky detection failed: ' + e.message);
+        }
+      }
+
+      if ((relightNear !== 0 || relightFar !== 0) && !depthMapRef.current && depthMapStatus === 'idle') {
+        setDepthMapStatus('loading');
+        setDepthMapLog('Analyzing depth coordinates...');
+        try {
+          const map = await estimateDepth(canvas, msg => setDepthMapLog(msg));
+          depthMapRef.current = map;
+          setDepthMapStatus('done');
+          setDepthMapLog('');
+        } catch (e) {
+          console.error("Depth estimation failed:", e);
+          setDepthMapStatus('error');
+          setDepthMapLog('Depth estimation failed: ' + e.message);
+        }
+      }
+
+      // 2. Perform pipeline blending on a temp canvas
       const tempCanvas = document.createElement('canvas');
       tempCanvas.width = W; tempCanvas.height = H;
       const tempCtx = tempCanvas.getContext('2d');
       tempCtx.drawImage(canvas, 0, 0);
 
-      const mask = aiBeautyUseMask ? skinMaskRef.current : null;
-      await applyBeautyPipeline(tempCanvas, tempCtx, W, H, aiBeautySmooth, aiBeautyClarity, aiBeautyGlow, mask);
+      // A. Run Beauty Pipeline
+      if (isBeautyActive) {
+        const mask = aiBeautyUseMask ? skinMaskRef.current : null;
+        await applyBeautyPipeline(tempCanvas, tempCtx, W, H, aiBeautySmooth, aiBeautyClarity, aiBeautyGlow, mask);
+      }
 
-      const beautyUrl = tempCanvas.toDataURL('image/jpeg', 0.9);
-      setBeautyPreviewUrl(beautyUrl);
+      // B. Run Structure AI
+      if (structureAi > 0) {
+        await applyStructureAi(tempCanvas, tempCtx, W, H, structureAi, faceOvalMaskRef.current);
+      }
+
+      // C. Run Sky Replacement AI
+      if (skyMode !== 'none' && skyMaskRef.current) {
+        await applySkyReplacement(tempCanvas, tempCtx, W, H, skyMode, skyMaskRef.current, customSkyUrl, skyOpacity / 100, skyLightMatch / 100);
+      }
+
+      // D. Run Relight AI
+      if ((relightNear !== 0 || relightFar !== 0) && depthMapRef.current) {
+        applyRelight(tempCanvas, tempCtx, W, H, depthMapRef.current, relightNear, relightFar);
+      }
+
+      const previewUrl = tempCanvas.toDataURL('image/jpeg', 0.9);
+      if (isBeautyActive && !isLuminarActive) {
+        setBeautyPreviewUrl(previewUrl);
+        setAiPreviewUrl(null);
+      } else {
+        setAiPreviewUrl(previewUrl);
+        setBeautyPreviewUrl(null);
+      }
     };
 
     const timer = setTimeout(() => {
-      updatePreview().catch(err => console.error("Error updating beauty preview:", err));
-    }, 50);
+      updatePreview().catch(err => console.error("Error updating AI preview:", err));
+    }, 120);
 
     return () => clearTimeout(timer);
-  }, [image, aiBeautySmooth, aiBeautyClarity, aiBeautyGlow, aiBeautyUseMask]);
+  }, [
+    image, aiBeautySmooth, aiBeautyClarity, aiBeautyGlow, aiBeautyUseMask,
+    structureAi, skyMode, skyOpacity, skyBlend, skyLightMatch, customSkyUrl,
+    relightNear, relightFar, skyMaskStatus, depthMapStatus
+  ]);
 
   const fileInputRef = useRef(null);
   const imgRef = useRef(null);
@@ -812,6 +942,19 @@ export default function App() {
     setLutIntensity(1.0);
     setCustomLutData(null);
     setCustomLutName('');
+    setAccentAi(0);
+    setStructureAi(0);
+    setSkyMode('none');
+    setSkyOpacity(100);
+    setSkyLightMatch(50);
+    setCustomSkyUrl(null);
+    setRelightNear(0);
+    setRelightFar(0);
+    setSkyMaskStatus('idle');
+    setSkyMaskLog('');
+    setDepthMapStatus('idle');
+    setDepthMapLog('');
+    setAiPreviewUrl(null);
     if (originalImage) {
       setImage(originalImage);
     }
@@ -872,7 +1015,25 @@ export default function App() {
     setBgResult(c.toDataURL("image/png"));
   };
 
-  const cssFilter = toCSSFilter(filters);
+  const combinedFilters = useMemo(() => {
+    if (accentAi === 0 || !accentOffsets) return filters;
+    const ratio = accentAi / 100;
+    const combined = { ...filters };
+    for (const key in accentOffsets) {
+      if (key === 'contrast' || key === 'saturation' || key === 'vibrance') {
+        const def = DEFAULT_FILTERS[key] || 100;
+        const diff = accentOffsets[key] - def;
+        combined[key] = Math.min(200, Math.max(0, filters[key] + diff * ratio));
+      } else {
+        const def = DEFAULT_FILTERS[key] || 0;
+        const diff = accentOffsets[key] - def;
+        combined[key] = Math.min(100, Math.max(-100, (filters[key] || 0) + diff * ratio));
+      }
+    }
+    return combined;
+  }, [filters, accentAi, accentOffsets]);
+
+  const cssFilter = toCSSFilter(combinedFilters);
   const natW = imgRef.current?.naturalWidth || 0, natH = imgRef.current?.naturalHeight || 0;
   const { W: expW, H: expH } = natW ? getExportDims(natW, natH, exportScale) : { W: 0, H: 0 };
 
@@ -899,7 +1060,15 @@ export default function App() {
       const tmpImg = await loadImageFromSrc(src);
       const { W, H } = getExportDims(tmpImg.naturalWidth, tmpImg.naturalHeight, exportScale);
       setExportInfo(`Rendering ${W.toLocaleString()}×${H.toLocaleString()}px…`);
-      const { canvas, W: rW, H: rH } = await renderFinal(src, cssFilter, filters, rotation, flipH, flipV, texts, W, H, activeLutData?.data || null, activeLutData?.size || 33, lutIntensity, logo, logoScale, logoScalePortrait, logoOpacity, logoPos, logoMargin, logoX, logoY, aiBeautySmooth, aiBeautyClarity, aiBeautyGlow, aiBeautyUseMask);
+      const { canvas, W: rW, H: rH } = await renderFinal(
+        src, cssFilter, combinedFilters, rotation, flipH, flipV, texts, W, H,
+        activeLutData?.data || null, activeLutData?.size || 33, lutIntensity,
+        logo, logoScale, logoScalePortrait, logoOpacity, logoPos, logoMargin, logoX, logoY,
+        aiBeautySmooth, aiBeautyClarity, aiBeautyGlow, aiBeautyUseMask,
+        structureAi, skyMode, skyOpacity, skyLightMatch, customSkyUrl,
+        relightNear, relightFar,
+        faceOvalMaskRef.current, skyMaskRef.current, depthMapRef.current
+      );
       const fmts = { jpg: { mime: "image/jpeg", ext: "jpg" }, png: { mime: "image/png", ext: "png" }, webp: { mime: "image/webp", ext: "webp" } };
       const { mime, ext } = fmts[exportFmt];
       const q = exportFmt === "png" ? undefined : exportQ / 100;
@@ -924,7 +1093,15 @@ export default function App() {
       const mode = FB_MODES.find(m => m.id === fbMode);
       let tW = mode.w, tH = mode.h;
       if (!tH) { const sc = Math.min(1, tW / Math.max(tmpImg.naturalWidth, tmpImg.naturalHeight)); tW = Math.round(tmpImg.naturalWidth * sc); tH = Math.round(tmpImg.naturalHeight * sc); }
-      const { canvas, W, H } = await renderFinal(src, cssFilter, filters, rotation, flipH, flipV, texts, tW, tH, activeLutData?.data || null, activeLutData?.size || 33, lutIntensity, logo, logoScale, logoScalePortrait, logoOpacity, logoPos, logoMargin, logoX, logoY, aiBeautySmooth, aiBeautyClarity, aiBeautyGlow, aiBeautyUseMask);
+      const { canvas, W, H } = await renderFinal(
+        src, cssFilter, combinedFilters, rotation, flipH, flipV, texts, tW, tH,
+        activeLutData?.data || null, activeLutData?.size || 33, lutIntensity,
+        logo, logoScale, logoScalePortrait, logoOpacity, logoPos, logoMargin, logoX, logoY,
+        aiBeautySmooth, aiBeautyClarity, aiBeautyGlow, aiBeautyUseMask,
+        structureAi, skyMode, skyOpacity, skyLightMatch, customSkyUrl,
+        relightNear, relightFar,
+        faceOvalMaskRef.current, skyMaskRef.current, depthMapRef.current
+      );
       const blob = await canvasToBlob(canvas, "image/jpeg", 0.82);
       if (!blob || blob.size === 0) throw new Error("Empty blob");
       const kb = Math.round(blob.size / 1024);
@@ -935,7 +1112,7 @@ export default function App() {
     setFbExporting(false);
   };
 
-  const isEdited = Object.entries(filters).some(([k, v]) => v !== DEFAULT_FILTERS[k]) || rotation !== 0 || flipH || flipV || texts.length > 0 || lutId !== 'none';
+  const isEdited = Object.entries(filters).some(([k, v]) => v !== DEFAULT_FILTERS[k]) || rotation !== 0 || flipH || flipV || texts.length > 0 || lutId !== 'none' || accentAi !== 0 || structureAi !== 0 || skyMode !== 'none' || relightNear !== 0 || relightFar !== 0;
   const showSplit = isEdited && activeTab === "edit" && !cropMode;
   const transformCSS = toTransformCSS(rotation, flipH, flipV);
 
@@ -2211,7 +2388,14 @@ export default function App() {
           handleRemoveBg, bgStatus, bgProgress, bgSubUrl, bgMode, setBgMode, bgColor, setBgColor, bgBlur, setBgBlur, bgResult, falApiKey, saveFalKey, claidApiKey, saveClaidKey, aiRemoveBrush, setAiRemoveBrush, toCSSFilter, initMaskCanvas, maskCanvasRef, maskDrawingRef, drawMask, aiMaskReady, handleAiRemove, aiRemoveStatus, aiRemoveLog, aiRemoveResult,
           
           // Overlay / Text props
-          texts, selText, setSelText, addText, deleteText, updateText, inputSt
+          texts, selText, setSelText, addText, deleteText, updateText, inputSt,
+
+          // Luminar AI props
+          accentAi, setAccentAi, accentOffsets,
+          structureAi, setStructureAi,
+          skyMode, setSkyMode, skyOpacity, setSkyOpacity, skyLightMatch, setSkyLightMatch, customSkyUrl, setCustomSkyUrl, skyMaskStatus, skyMaskLog,
+          relightNear, setRelightNear, relightFar, setRelightFar, depthMapStatus, depthMapLog,
+          setActiveTab
         }} />
       )}
       {activeTab === "batch" && (
@@ -2405,7 +2589,7 @@ export default function App() {
               </div>
             )}
             <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: "20px", position: "relative", overflow: "hidden" }}>
-              <Preview {...{ image: (aiBeautySmooth > 0 || aiBeautyClarity > 0 || aiBeautyGlow > 0) ? (beautyPreviewUrl || image) : image, originalImage, dragging, setDragging, loadImage, fileInputRef, imgRef, splitRef, previewRef, activeTab, bgResult, bgMode, showBefore, setShowBefore, showSplit, splitPos, isDragSplit, setIsDragSplit, cssFilter, transformCSS, filters, texts, selText, setSelText, updateText, cropMode, cropBox, setCropBox, cropAspect, isEdited, setImage, setBgStatus, setBgSubUrl, setBgResult, isMobile, rotation, flipH, flipV, activeLutData, lutIntensity, lutId, dm, rawLoading, rawProgressMsg, logo, logoScale, logoScalePortrait, logoOpacity, logoPos, logoMargin, logoX, setLogoX, logoY, setLogoY, setLogoPos, filterGroup }} highResImage={image} />
+              <Preview {...{ image: (aiPreviewUrl || beautyPreviewUrl || image), originalImage, dragging, setDragging, loadImage, fileInputRef, imgRef, splitRef, previewRef, activeTab, bgResult, bgMode, showBefore, setShowBefore, showSplit, splitPos, isDragSplit, setIsDragSplit, cssFilter, transformCSS, filters, texts, selText, setSelText, updateText, cropMode, cropBox, setCropBox, cropAspect, isEdited, setImage, setBgStatus, setBgSubUrl, setBgResult, isMobile, rotation, flipH, flipV, activeLutData, lutIntensity, lutId, dm, rawLoading, rawProgressMsg, logo, logoScale, logoScalePortrait, logoOpacity, logoPos, logoMargin, logoX, setLogoX, logoY, setLogoY, setLogoPos, filterGroup }} highResImage={image} />
             </div>
           </div>
         )
@@ -2433,7 +2617,7 @@ export default function App() {
             {image ? (
               <>
                 <div style={{ height: "42vh", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", position: "relative", borderBottom: `1px solid ${dm ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'}` }}>
-                  <Preview {...{ image: (aiBeautySmooth > 0 || aiBeautyClarity > 0 || aiBeautyGlow > 0) ? (beautyPreviewUrl || image) : image, originalImage, dragging, setDragging, loadImage, fileInputRef, imgRef, splitRef, previewRef, activeTab, bgResult, bgMode, showBefore, setShowBefore, showSplit, splitPos, isDragSplit, setIsDragSplit, cssFilter, transformCSS, filters, texts, selText, setSelText, updateText, cropMode, cropBox, setCropBox, cropAspect, isEdited, setImage, setBgStatus, setBgSubUrl, setBgResult, isMobile, rotation, flipH, flipV, activeLutData, lutIntensity, lutId, dm, rawLoading, rawProgressMsg, logo, logoScale, logoScalePortrait, logoOpacity, logoPos, logoMargin, logoX, setLogoX, logoY, setLogoY, setLogoPos, filterGroup }} highResImage={image} />
+                  <Preview {...{ image: (aiPreviewUrl || beautyPreviewUrl || image), originalImage, dragging, setDragging, loadImage, fileInputRef, imgRef, splitRef, previewRef, activeTab, bgResult, bgMode, showBefore, setShowBefore, showSplit, splitPos, isDragSplit, setIsDragSplit, cssFilter, transformCSS, filters, texts, selText, setSelText, updateText, cropMode, cropBox, setCropBox, cropAspect, isEdited, setImage, setBgStatus, setBgSubUrl, setBgResult, isMobile, rotation, flipH, flipV, activeLutData, lutIntensity, lutId, dm, rawLoading, rawProgressMsg, logo, logoScale, logoScalePortrait, logoOpacity, logoPos, logoMargin, logoX, setLogoX, logoY, setLogoY, setLogoPos, filterGroup }} highResImage={image} />
                 </div>
                 <div className="glass-panel" style={{ flex: 1, overflowY: "auto", WebkitOverflowScrolling: "touch", borderTop: `1px solid ${dm ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'}` }}>
                   {renderPanel(true)}
@@ -2441,7 +2625,7 @@ export default function App() {
               </>
             ) : (
               <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: "16px", position: "relative", overflow: "hidden" }}>
-                <Preview {...{ image: (aiBeautySmooth > 0 || aiBeautyClarity > 0 || aiBeautyGlow > 0) ? (beautyPreviewUrl || image) : image, originalImage, dragging, setDragging, loadImage, fileInputRef, imgRef, splitRef, previewRef, activeTab, bgResult, bgMode, showBefore, setShowBefore, showSplit, splitPos, isDragSplit, setIsDragSplit, cssFilter, transformCSS, filters, texts, selText, setSelText, updateText, cropMode, cropBox, setCropBox, cropAspect, isEdited, setImage, setBgStatus, setBgSubUrl, setBgResult, isMobile, rotation, flipH, flipV, activeLutData, lutIntensity, lutId, dm, rawLoading, rawProgressMsg, logo, logoScale, logoScalePortrait, logoOpacity, logoPos, logoMargin, logoX, setLogoX, logoY, setLogoY, setLogoPos, filterGroup }} highResImage={image} />
+                <Preview {...{ image: (aiPreviewUrl || beautyPreviewUrl || image), originalImage, dragging, setDragging, loadImage, fileInputRef, imgRef, splitRef, previewRef, activeTab, bgResult, bgMode, showBefore, setShowBefore, showSplit, splitPos, isDragSplit, setIsDragSplit, cssFilter, transformCSS, filters, texts, selText, setSelText, updateText, cropMode, cropBox, setCropBox, cropAspect, isEdited, setImage, setBgStatus, setBgSubUrl, setBgResult, isMobile, rotation, flipH, flipV, activeLutData, lutIntensity, lutId, dm, rawLoading, rawProgressMsg, logo, logoScale, logoScalePortrait, logoOpacity, logoPos, logoMargin, logoX, setLogoX, logoY, setLogoY, setLogoPos, filterGroup }} highResImage={image} />
               </div>
             )}
           </div>

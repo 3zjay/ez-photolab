@@ -122,12 +122,12 @@ export function toTransformCSS(rotation, flipH, flipV) {
 }
 
 export async function saveFile(blob, name) {
-  // Try File System Access API for "Save As" dialog on desktop (Chrome, Edge, Opera, etc.)
+  // 1. Try File System Access API for "Save As" dialog on desktop (Chrome, Edge, Opera, etc.)
   if (typeof window !== 'undefined' && typeof window.showSaveFilePicker === 'function') {
     try {
-      const ext = name.split('.').pop() || 'jpg';
-      const mime = blob.type || 'image/jpeg';
-      const opts = {
+      const ext = name.split('.').pop().toLowerCase() || 'jpg';
+      const mime = blob.type || (ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/jpeg');
+      const handle = await window.showSaveFilePicker({
         suggestedName: name,
         types: [{
           description: 'Image Files',
@@ -135,22 +135,33 @@ export async function saveFile(blob, name) {
             [mime]: [`.${ext}`]
           }
         }]
-      };
-      const handle = await window.showSaveFilePicker(opts);
+      });
       const writable = await handle.createWritable();
       await writable.write(blob);
       await writable.close();
       return;
     } catch (e) {
-      if (e.name === 'AbortError') {
-        console.log("Save cancelled by user.");
-        return; // User cancelled the save dialog, stop here
-      }
-      console.warn("showSaveFilePicker failed or was rejected, falling back to download anchor:", e);
+      if (e.name === 'AbortError') return; // User cancelled, do nothing
+      console.warn("showSaveFilePicker failed or was rejected, falling back to download:", e);
     }
   }
 
-  // Fallback to direct anchor download for other browsers (Firefox, Safari, mobile, etc.)
+  // 2. Mobile share sheet fallback (only on mobile browsers where file downloads are tricky)
+  const isMobile = typeof navigator !== 'undefined' && /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+  if (isMobile && navigator.canShare?.({ files: [new File([blob], name, { type: blob.type })] })) {
+    try {
+      await navigator.share({
+        files: [new File([blob], name, { type: blob.type })],
+        title: "PHOTOlab Image"
+      });
+      return;
+    } catch (e) {
+      if (e.name === "AbortError") return;
+      console.warn('navigator.share failed, falling back:', e);
+    }
+  }
+
+  // 3. Desktop fallback / standard browser download (<a download>)
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
@@ -158,7 +169,7 @@ export async function saveFile(blob, name) {
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
-  setTimeout(() => URL.revokeObjectURL(url), 5000);
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
 }
 export function canvasToBlob(c,mime,q){ return new Promise(r=>{ if(c.toBlob){c.toBlob(r,mime,q);return;} const d=c.toDataURL(mime,q),a=d.split(","),b=atob(a[1]);let n=b.length;const u=new Uint8Array(n);while(n--)u[n]=b.charCodeAt(n);r(new Blob([u],{type:mime}));});}
 
@@ -262,7 +273,15 @@ export function apply3DLut(imgData, lutData, size, intensity = 1.0) {
   }
 }
 
-export async function renderFinal(imageSrc, cssFilterStr, filters, rotation, flipH, flipV, texts, targetW, targetH, lutData = null, lutSize = 33, lutIntensity = 1.0, logo = null, logoScale = 0.15, logoScalePortrait = 0.30, logoOpacity = 0.7, logoPos = "bottom-right", logoMargin = 20, logoX = null, logoY = null, beautySmooth = 0, beautyClarity = 0, beautyGlow = 0, beautyUseMask = false) {
+export async function renderFinal(
+  imageSrc, cssFilterStr, filters, rotation, flipH, flipV, texts, targetW, targetH,
+  lutData = null, lutSize = 33, lutIntensity = 1.0,
+  logo = null, logoScale = 0.15, logoScalePortrait = 0.30, logoOpacity = 0.7, logoPos = "bottom-right", logoMargin = 20, logoX = null, logoY = null,
+  beautySmooth = 0, beautyClarity = 0, beautyGlow = 0, beautyUseMask = false,
+  structureAmt = 0, skyId = 'none', skyOpacity = 100, skyLightMatch = 50, customSkyUrl = null,
+  nearVal = 0, farVal = 0,
+  faceOvalMask = null, skyMask = null, depthMap = null
+) {
   // Always load a fresh Image to avoid canvas taint and stale DOM refs
   const imgEl = await loadImageFromSrc(imageSrc);
   const natW = imgEl.naturalWidth;
@@ -313,6 +332,39 @@ export async function renderFinal(imageSrc, cssFilterStr, filters, rotation, fli
   ctx.drawImage(sourceEl, -W / 2, -H / 2, W, H);
   ctx.restore();
   ctx.filter = 'none';
+
+  // Apply Structure AI [PRO]
+  if (structureAmt > 0) {
+    let faceMaskScaled = null;
+    if (faceOvalMask) {
+      faceMaskScaled = document.createElement('canvas');
+      faceMaskScaled.width = W; faceMaskScaled.height = H;
+      faceMaskScaled.getContext('2d').drawImage(faceOvalMask, 0, 0, W, H);
+    }
+    await applyStructureAi(canvas, ctx, W, H, structureAmt, faceMaskScaled);
+  }
+
+  // Apply Sky Replacement AI [PRO]
+  if (skyId !== 'none') {
+    let skyMaskScaled = null;
+    if (skyMask) {
+      skyMaskScaled = document.createElement('canvas');
+      skyMaskScaled.width = W; skyMaskScaled.height = H;
+      skyMaskScaled.getContext('2d').drawImage(skyMask, 0, 0, W, H);
+    }
+    await applySkyReplacement(canvas, ctx, W, H, skyId, skyMaskScaled, customSkyUrl, skyOpacity / 100, skyLightMatch / 100);
+  }
+
+  // Apply Relight AI [PRO]
+  if (nearVal !== 0 || farVal !== 0) {
+    let depthMapScaled = null;
+    if (depthMap) {
+      depthMapScaled = document.createElement('canvas');
+      depthMapScaled.width = W; depthMapScaled.height = H;
+      depthMapScaled.getContext('2d').drawImage(depthMap, 0, 0, W, H);
+    }
+    applyRelight(canvas, ctx, W, H, depthMapScaled, nearVal, farVal);
+  }
 
   // Apply 3D LUT
   if (lutData) {
@@ -450,3 +502,164 @@ export async function applyBeautyPipeline(canvas, ctx, W, H, smooth, clarity, gl
     ctx.drawImage(targetCanvas, 0, 0);
   }
 }
+
+export async function applyStructureAi(canvas, ctx, W, H, structureAmt, faceMaskCanvas = null) {
+  if (structureAmt <= 0) return;
+  
+  const tempCanvas = document.createElement('canvas');
+  tempCanvas.width = W;
+  tempCanvas.height = H;
+  const tempCtx = tempCanvas.getContext('2d');
+  tempCtx.drawImage(canvas, 0, 0);
+  
+  // Apply a combination of unsharp mask and contrast boost for structure
+  applyUnsharpMask(tempCanvas, tempCtx, W, H, structureAmt * 0.12, 1.4);
+  
+  if (faceMaskCanvas) {
+    tempCtx.globalCompositeOperation = 'destination-out';
+    tempCtx.drawImage(faceMaskCanvas, 0, 0);
+    tempCtx.globalCompositeOperation = 'source-over';
+  }
+  
+  ctx.drawImage(tempCanvas, 0, 0);
+}
+
+function drawSkyPattern(skyId, W, H) {
+  const c = document.createElement('canvas');
+  c.width = W; c.height = H;
+  const ctx = c.getContext('2d');
+  if (skyId === 'sunset') {
+    const g = ctx.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, '#2e0854'); // Dark purple
+    g.addColorStop(0.4, '#d85b7b'); // Pink
+    g.addColorStop(0.8, '#ff7e5f'); // Orange
+    g.addColorStop(1, '#feb47b'); // Pale yellow
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, W, H);
+  } else if (skyId === 'blue') {
+    const g = ctx.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, '#1a75ff'); // Deep blue
+    g.addColorStop(0.7, '#66a3ff'); // Sky blue
+    g.addColorStop(1, '#e6f0ff'); // Horizon white
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, W, H);
+  } else if (skyId === 'stormy') {
+    const g = ctx.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, '#1c2833'); // Charcoal
+    g.addColorStop(0.6, '#34495e'); // Slate
+    g.addColorStop(1, '#566573'); // Light grey
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, W, H);
+  } else if (skyId === 'galaxy') {
+    ctx.fillStyle = '#06061a';
+    ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = '#ffffff';
+    for (let i = 0; i < 80; i++) {
+      const x = Math.random() * W;
+      const y = Math.random() * H;
+      const r = Math.random() * 1.5;
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  return c;
+}
+
+export async function applySkyReplacement(canvas, ctx, W, H, skyId, skyMaskCanvas, customSkyUrl = null, opacity = 1.0, matchIntensity = 0.5) {
+  if (skyId === 'none' || !skyMaskCanvas) return;
+
+  const skyBg = document.createElement('canvas');
+  skyBg.width = W; skyBg.height = H;
+  const skyCtx = skyBg.getContext('2d');
+
+  if (skyId === 'custom' && customSkyUrl) {
+    try {
+      const customSky = await loadImageFromSrc(customSkyUrl);
+      skyCtx.drawImage(customSky, 0, 0, W, H);
+    } catch (e) {
+      console.error("Failed to load custom sky:", e);
+      const pattern = drawSkyPattern('sunset', W, H);
+      skyCtx.drawImage(pattern, 0, 0, W, H);
+    }
+  } else {
+    const pattern = drawSkyPattern(skyId, W, H);
+    skyCtx.drawImage(pattern, 0, 0, W, H);
+  }
+
+  // Mask the sky background with the sky mask (applying opacity)
+  const maskedSkyBg = document.createElement('canvas');
+  maskedSkyBg.width = W; maskedSkyBg.height = H;
+  const maskedSkyCtx = maskedSkyBg.getContext('2d');
+  maskedSkyCtx.drawImage(skyBg, 0, 0);
+  maskedSkyCtx.globalCompositeOperation = 'destination-in';
+  maskedSkyCtx.drawImage(skyMaskCanvas, 0, 0, W, H);
+  maskedSkyCtx.globalCompositeOperation = 'source-over';
+
+  const fgCanvas = document.createElement('canvas');
+  fgCanvas.width = W; fgCanvas.height = H;
+  const fgCtx = fgCanvas.getContext('2d');
+  fgCtx.drawImage(canvas, 0, 0);
+
+  // Punch a hole in the foreground where the sky mask is
+  fgCtx.globalCompositeOperation = 'destination-out';
+  fgCtx.drawImage(skyMaskCanvas, 0, 0, W, H);
+  fgCtx.globalCompositeOperation = 'source-over';
+
+  // Apply light matching tint
+  if (matchIntensity > 0) {
+    const tiny = document.createElement('canvas');
+    tiny.width = 1; tiny.height = 1;
+    const tinyCtx = tiny.getContext('2d');
+    tinyCtx.drawImage(skyBg, 0, 0, 1, 1);
+    const p = tinyCtx.getImageData(0, 0, 1, 1).data;
+    
+    fgCtx.globalCompositeOperation = 'source-atop';
+    fgCtx.fillStyle = `rgba(${p[0]}, ${p[1]}, ${p[2]}, ${matchIntensity * 0.12})`;
+    fgCtx.fillRect(0, 0, W, H);
+    fgCtx.globalCompositeOperation = 'source-over';
+  }
+
+  // Combine background & foreground
+  ctx.clearRect(0, 0, W, H);
+  ctx.drawImage(canvas, 0, 0); // Keep original details as fallback
+
+  ctx.save();
+  ctx.globalAlpha = opacity;
+  ctx.drawImage(maskedSkyBg, 0, 0);
+  ctx.restore();
+
+  ctx.drawImage(fgCanvas, 0, 0);
+}
+
+export function applyRelight(canvas, ctx, W, H, depthMapCanvas, nearVal, farVal) {
+  if (nearVal === 0 && farVal === 0) return;
+  if (!depthMapCanvas) return;
+
+  const dCanvas = document.createElement('canvas');
+  dCanvas.width = W; dCanvas.height = H;
+  const dCtx = dCanvas.getContext('2d');
+  dCtx.drawImage(depthMapCanvas, 0, 0, W, H);
+
+  const imgData = ctx.getImageData(0, 0, W, H);
+  const depthData = dCtx.getImageData(0, 0, W, H);
+  const d = imgData.data;
+  const dd = depthData.data;
+
+  const nearFactor = nearVal / 100;
+  const farFactor = farVal / 100;
+
+  for (let i = 0; i < d.length; i += 4) {
+    const z = dd[i] / 255; // 0 is far, 1 is near
+    const factor = z * nearFactor + (1 - z) * farFactor;
+    const mult = 1 + factor;
+
+    d[i] = Math.min(255, Math.max(0, d[i] * mult));
+    d[i+1] = Math.min(255, Math.max(0, d[i+1] * mult));
+    d[i+2] = Math.min(255, Math.max(0, d[i+2] * mult));
+  }
+
+  ctx.putImageData(imgData, 0, 0);
+}
+
+

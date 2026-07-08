@@ -11,6 +11,16 @@ Built with React + Vite — runs entirely in your browser with zero server costs
 
 ---
 
+## 🚀 What's New in v2.9.0 (Luminar-Style AI Features & Premium Release)
+
+- **✨ Accent AI [PRO]**: A single-slider smart auto-enhancer that dynamically analyzes the image histogram in the background to calculate and blend optimal exposure, contrast, shadows, highlights, saturation, temperature, and vibrance parameters.
+- **📐 Structure AI [PRO]**: A content-aware clarity boost slider that uses local MediaPipe Face Landmarker masks to automatically sharpen detail and textures in the background while protecting human portrait faces from harsh skin sharpening.
+- **🌌 Sky Replacement AI [PRO]**: An in-browser semantic sky segmentation engine powered by SegFormer-b0 (via Transformers.js) that isolates the horizon and allows swapping the sky with presets (Dramatic Sunset, Sunny Blue, Stormy, Starry Galaxy) or custom user uploads, complete with Horizon Blend feathering and Sky Light Match ambient tinting.
+- **💡 Relight AI [PRO]**: A depth-aware relighting engine that estimates depth maps using the DepthAnything small model client-side to adjust foreground (Near) and background (Far) light levels independently.
+- **🔒 Premium Paid Gating**: Integrates access control with Stripe checkouts and user tiers (`premium`/`team`/`admin`), presenting lock states and upgrade redirects for non-paid users trying out the new Luminar AI suite.
+
+---
+
 ## 🚀 What's New in v2.8.0 (Sports LUT Packs & Guided Workflow Release)
 
 - **🎨 Curated Top 30 Sports LUTs & 5 Packs**: Added 30 custom Looks modeled after trending sports media creators (e.g. Beyond the Game, Peter Sarellas, Luxe Lens). Categorized into 🏟️ Arena, 🏈 Action, 🎬 Cinematic, 🎽 Colors, and 🎞️ Vintage packs.

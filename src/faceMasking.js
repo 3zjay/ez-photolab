@@ -101,3 +101,40 @@ export async function createSkinMask(sourceCanvas) {
   
   return blurredCanvas;
 }
+
+export async function createFaceOvalMask(sourceCanvas) {
+  if (!faceLandmarker) await initFaceLandmarker();
+  
+  const results = faceLandmarker.detect(sourceCanvas);
+  if (!results.faceLandmarks || results.faceLandmarks.length === 0) {
+    return null; // No face found
+  }
+  
+  const maskCanvas = document.createElement('canvas');
+  maskCanvas.width = sourceCanvas.width;
+  maskCanvas.height = sourceCanvas.height;
+  const ctx = maskCanvas.getContext('2d');
+  
+  // Fill transparent (no mask)
+  ctx.clearRect(0, 0, maskCanvas.width, maskCanvas.height);
+  
+  // Draw each face oval
+  results.faceLandmarks.forEach(landmarks => {
+    ctx.fillStyle = "white";
+    drawConnections(ctx, landmarks, FaceLandmarker.FACE_LANDMARKS_FACE_OVAL, maskCanvas.width, maskCanvas.height);
+  });
+  
+  // Apply a blur to soften the mask edges so the transition looks natural
+  const blurredCanvas = document.createElement('canvas');
+  blurredCanvas.width = maskCanvas.width;
+  blurredCanvas.height = maskCanvas.height;
+  const bCtx = blurredCanvas.getContext('2d');
+  
+  const blurRadius = Math.max(4, Math.round(maskCanvas.width * 0.025));
+  bCtx.filter = `blur(${blurRadius}px)`;
+  bCtx.drawImage(maskCanvas, 0, 0);
+  bCtx.filter = 'none';
+  
+  return blurredCanvas;
+}
+
