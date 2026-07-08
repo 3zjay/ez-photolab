@@ -526,12 +526,12 @@ export function EditPanel({
                 </div>
             )}
 
-            {/* 3. AI Studio (Luminar AI Enhancer Suite [PRO]) */}
+            {/* 3. AI Studio (PhotoLab AI Enhancer Suite [PRO]) */}
             {subTab === "luminar" && (
                 <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
                     <div style={{ padding: "14px", background: dm ? '#1e1b30' : '#f9f8ff', border: `1.5px solid ${dm ? '#4c1d95' : '#c084fc'}`, borderRadius: "12px", display: "flex", flexDirection: "column", gap: "6px" }}>
                         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                            <span style={{ fontSize: "14px", fontWeight: 900, background: "linear-gradient(135deg, #06b6d4, #6c63ff, #ec4899)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", fontFamily: "'Outfit', sans-serif" }}>✨ LUMINAR AI STUDIO</span>
+                            <span style={{ fontSize: "14px", fontWeight: 900, background: "linear-gradient(135deg, #06b6d4, #6c63ff, #ec4899)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", fontFamily: "'Outfit', sans-serif" }}>✨ PHOTOLAB AI STUDIO</span>
                             <span style={{ fontSize: "9px", fontWeight: 800, padding: "2px 6px", background: "linear-gradient(135deg, #a855f7 0%, #6366f1 100%)", color: "#fff", borderRadius: "6px", textTransform: "uppercase" }}>PRO SUITE</span>
                         </div>
                         <p style={{ fontSize: "11px", color: dm ? '#c084fc' : '#6b21a8', lineHeight: 1.5, margin: 0, opacity: 0.85 }}>

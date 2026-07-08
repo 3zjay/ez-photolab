@@ -566,7 +566,7 @@ export default function App() {
   const lowResCanvasRef = useRef(null);
   const skinMaskRef = useRef(null);
 
-  // Luminar AI states
+  // PhotoLab AI Studio states
   const [accentAi, setAccentAi] = useState(0);
   const [accentOffsets, setAccentOffsets] = useState(null);
   
@@ -669,9 +669,9 @@ export default function App() {
       return;
     }
     const isBeautyActive = aiBeautySmooth > 0 || aiBeautyClarity > 0 || aiBeautyGlow > 0;
-    const isLuminarActive = structureAi > 0 || skyMode !== 'none' || relightNear !== 0 || relightFar !== 0;
+    const isPhotoLabAiActive = structureAi > 0 || skyMode !== 'none' || relightNear !== 0 || relightFar !== 0;
 
-    if (!isBeautyActive && !isLuminarActive) {
+    if (!isBeautyActive && !isPhotoLabAiActive) {
       setBeautyPreviewUrl(null);
       setAiPreviewUrl(null);
       return;
@@ -770,7 +770,7 @@ export default function App() {
       }
 
       const previewUrl = tempCanvas.toDataURL('image/jpeg', 0.9);
-      if (isBeautyActive && !isLuminarActive) {
+      if (isBeautyActive && !isPhotoLabAiActive) {
         setBeautyPreviewUrl(previewUrl);
         setAiPreviewUrl(null);
       } else {
@@ -2390,7 +2390,7 @@ export default function App() {
           // Overlay / Text props
           texts, selText, setSelText, addText, deleteText, updateText, inputSt,
 
-          // Luminar AI props
+          // PhotoLab AI props
           accentAi, setAccentAi, accentOffsets,
           structureAi, setStructureAi,
           skyMode, setSkyMode, skyOpacity, setSkyOpacity, skyLightMatch, setSkyLightMatch, customSkyUrl, setCustomSkyUrl, skyMaskStatus, skyMaskLog,
