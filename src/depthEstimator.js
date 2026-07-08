@@ -26,8 +26,9 @@ export async function estimateDepth(imageElement, onProgress) {
     : (imageElement.src || imageElement);
   const result = await depthPipe(input);
 
-  // The output is a raw grayscale representation of depth
-  const { depth, width, height } = result;
+  // The output contains a visualizable RawImage depth map
+  const { depth } = result;
+  const { width, height, data } = depth;
 
   const maskCanvas = document.createElement('canvas');
   maskCanvas.width = width;
@@ -35,20 +36,8 @@ export async function estimateDepth(imageElement, onProgress) {
   const ctx = maskCanvas.getContext('2d');
   
   const imgData = ctx.createImageData(width, height);
-  const data = depth.data; // Float32Array containing values (0.0 to 1.0 or pixel levels depending on scaling)
-  
-  // Find min and max values to normalize to 0-255
-  let min = Infinity, max = -Infinity;
-  for (let i = 0; i < data.length; ++i) {
-    if (data[i] < min) min = data[i];
-    if (data[i] > max) max = data[i];
-  }
-
-  const range = max - min || 1;
-
-  for (let i = 0; i < data.length; ++i) {
-    // Scale value to 0-255
-    const val = Math.round(((data[i] - min) / range) * 255);
+  for (let i = 0; i < width * height; ++i) {
+    const val = data[i];
     const idx = i * 4;
     imgData.data[idx] = val;     // R
     imgData.data[idx + 1] = val; // G
