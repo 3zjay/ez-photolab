@@ -177,6 +177,9 @@ export function canvasToBlob(c,mime,q){ return new Promise(r=>{ if(c.toBlob){c.t
 export function loadImageFromSrc(src) {
   return new Promise((resolve, reject) => {
     const img = new Image();
+    if (src && !src.startsWith('data:') && !src.startsWith('blob:')) {
+      img.crossOrigin = 'anonymous';
+    }
     const timer = setTimeout(() => {
       img.onload = null; img.onerror = null;
       reject(new Error('Image load timeout (10s)'));

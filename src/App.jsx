@@ -648,16 +648,16 @@ export default function App() {
     setDepthMapLog('');
 
     if (image) {
-      const img = new Image();
-      img.onload = () => {
+      loadImageFromSrc(image).then(img => {
         try {
           const offsets = analyzeImage(img);
           setAccentOffsets(offsets);
         } catch (e) {
           console.error("Accent AI analysis failed:", e);
         }
-      };
-      img.src = image;
+      }).catch(e => {
+        console.error("Accent AI image load failed:", e);
+      });
     }
   }, [image]);
 
