@@ -202,43 +202,82 @@ export function analyzeFaceMetrics(landmarks) {
 }
 
 /**
- * Analyzes exposure, average luminance, and shadow/highlight clipping.
+ * Analyzes exposure, average luminance, median luminance, and shadow/highlight distribution.
  * Returns perceived brightness (0-100), shadow clipping %, highlight clipping %,
  * and flags for dark / underexposed images.
  */
-export function computeExposure(imageElementOrCanvas, canvas, ctx, darkThreshold = 28) {
+export function computeExposure(imageElementOrCanvas, canvas, ctx, darkThreshold = 42) {
   const w = 160;
   const h = 120;
+  
+  if (canvas) {
+    if (canvas.width !== w) canvas.width = w;
+    if (canvas.height !== h) canvas.height = h;
+  }
+
   ctx.drawImage(imageElementOrCanvas, 0, 0, w, h);
   const imgData = ctx.getImageData(0, 0, w, h);
   const data = imgData.data;
   const totalPixels = w * h;
 
+  const hist = new Uint32Array(256);
   let totalLuminance = 0;
-  let shadowPixels = 0;   // crushed deep shadows (lum < 22)
-  let highlightPixels = 0; // blown highlights (lum > 240)
+  let shadowPixels = 0;       // shadows & low midtones (lum < 75, ~29%)
+  let deepShadowPixels = 0;   // crushed deep shadows (lum < 35, ~14%)
+  let highlightPixels = 0;    // blown highlights (lum > 220, ~86%)
 
   for (let i = 0; i < totalPixels; i++) {
     const r = data[i * 4];
     const g = data[i * 4 + 1];
     const b = data[i * 4 + 2];
     // Perceived luminance formula (ITU-R BT.601)
-    const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+    const lum = Math.min(255, Math.max(0, Math.round(0.299 * r + 0.587 * g + 0.114 * b)));
+    hist[lum]++;
     totalLuminance += lum;
 
-    if (lum < 22) shadowPixels++;
-    else if (lum > 240) highlightPixels++;
+    if (lum < 75) shadowPixels++;
+    if (lum < 35) deepShadowPixels++;
+    if (lum > 220) highlightPixels++;
+  }
+
+  // Calculate Median Luminance
+  let accumulated = 0;
+  let medianLum = 128;
+  const half = totalPixels / 2;
+  for (let l = 0; l < 256; l++) {
+    accumulated += hist[l];
+    if (accumulated >= half) {
+      medianLum = l;
+      break;
+    }
   }
 
   const avgLum255 = totalLuminance / totalPixels;
-  const brightness = Math.round((avgLum255 / 255) * 100);
+  const meanBrightness = Math.round((avgLum255 / 255) * 100);
+  const medianBrightness = Math.round((medianLum / 255) * 100);
+
   const shadowPercent = Math.round((shadowPixels / totalPixels) * 100);
+  const deepShadowPercent = Math.round((deepShadowPixels / totalPixels) * 100);
   const highlightPercent = Math.round((highlightPixels / totalPixels) * 100);
 
-  // A photo is marked dark if average brightness is below the threshold,
-  // or if over 60% of the frame consists of crushed black pixels.
-  const isDark = brightness < darkThreshold || shadowPercent > 60;
-  const isOverexposed = brightness > 82 && highlightPercent > 35;
+  // Weighted overall exposure score (mix of median, mean, and shadow distribution)
+  const exposureScore = Math.round(meanBrightness * 0.4 + medianBrightness * 0.4 + Math.max(0, 100 - shadowPercent) * 0.2);
+  const brightness = Math.round(meanBrightness * 0.5 + medianBrightness * 0.5);
+
+  // A photo is marked dark if:
+  // 1. Mean or median brightness is under darkThreshold (default 42%)
+  // 2. Weighted exposure score is under darkThreshold
+  // 3. More than 48% of the frame is in heavy shadows (lum < 75) and mean < (darkThreshold + 8)
+  // 4. More than 28% of the frame is crushed deep shadows (lum < 35)
+  const isDark = (
+    meanBrightness < darkThreshold ||
+    medianBrightness < darkThreshold ||
+    exposureScore < darkThreshold ||
+    (shadowPercent > 48 && meanBrightness < (darkThreshold + 8)) ||
+    deepShadowPercent > 28
+  );
+
+  const isOverexposed = meanBrightness > 80 && highlightPercent > 30;
 
   let exposureCategory = "normal";
   if (isDark) exposureCategory = "dark";
@@ -246,12 +285,58 @@ export function computeExposure(imageElementOrCanvas, canvas, ctx, darkThreshold
 
   return {
     brightness,
-    shadowClipping: shadowPercent,
+    meanBrightness,
+    medianBrightness,
+    exposureScore,
+    shadowClipping: deepShadowPercent,
+    shadowPercent,
+    deepShadowPercent,
     highlightClipping: highlightPercent,
     isDark,
     isOverexposed,
     exposureCategory
   };
+}
+
+/**
+ * Rapid standalone exposure analyzer for single files or on-the-fly export verification.
+ */
+export async function analyzePhotoExposure(imgObj, darkThreshold = 42) {
+  let imageBitmap = null;
+  try {
+    if (imgObj.file) {
+      if (imgObj.isRaw || imgObj.name?.match(/\.(nef|cr2|cr3|arw|dng|orf|raf|rw2|pef|x3f)$/i)) {
+        const { decodeRaw } = await import("./rawProcessor");
+        const buffer = await imgObj.file.arrayBuffer();
+        const decoded = await decodeRaw(buffer, () => {});
+        const response = await fetch(decoded.url);
+        const blob = await response.blob();
+        imageBitmap = await createImageBitmap(blob);
+      } else {
+        imageBitmap = await createImageBitmap(imgObj.file);
+      }
+    } else if (imgObj.previewUrl) {
+      const response = await fetch(imgObj.previewUrl);
+      const blob = await response.blob();
+      imageBitmap = await createImageBitmap(blob);
+    }
+
+    if (!imageBitmap) return null;
+
+    const canvas = document.createElement("canvas");
+    canvas.width = 160;
+    canvas.height = 120;
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+    const exp = computeExposure(imageBitmap, canvas, ctx, darkThreshold);
+    return exp;
+  } catch (err) {
+    console.warn(`Failed standalone exposure analysis for ${imgObj?.name}:`, err);
+    return null;
+  } finally {
+    if (imageBitmap) {
+      imageBitmap.close();
+    }
+  }
 }
 
 /**
@@ -268,7 +353,7 @@ export async function cullBatch(images, options = {}, onProgress) {
     groupingSensitivity = 12, // Hamming distance threshold (default ~12)
     blurStrictness = 50,       // Sharpness cutoff (default 50)
     enableFaceLandmarks = true, // Run MediaPipe vision resolver
-    darkThreshold = 28,        // Brightness threshold below which photo is dark (0-100)
+    darkThreshold = 42,        // Brightness threshold below which photo is dark (0-100)
     enableExposureAnalysis = true
   } = options;
 

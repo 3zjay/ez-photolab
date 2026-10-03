@@ -1,6 +1,35 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { cullBatch } from "./cullEngine";
+import { cullBatch, analyzePhotoExposure } from "./cullEngine";
 import { exportXmpSidecars } from "./xmpExporter";
+
+/**
+ * Universal evaluator for whether a photo is classified as dark or underexposed.
+ * Factors in manual user override, exposure histogram metrics, median, shadows, and threshold.
+ */
+export function getPhotoIsDark(item, threshold = 42) {
+  if (!item) return false;
+  // Manual override if set by user toggle
+  if (item.manualDarkOverride !== undefined) {
+    return item.manualDarkOverride;
+  }
+  if (item.exposure) {
+    const exp = item.exposure;
+    if (exp.meanBrightness !== undefined && exp.meanBrightness < threshold) return true;
+    if (exp.medianBrightness !== undefined && exp.medianBrightness < threshold) return true;
+    if (exp.exposureScore !== undefined && exp.exposureScore < threshold) return true;
+    if (exp.shadowPercent !== undefined && exp.shadowPercent > 48 && (exp.meanBrightness || 0) < (threshold + 8)) return true;
+    if (exp.deepShadowPercent !== undefined && exp.deepShadowPercent > 28) return true;
+    if (exp.brightness !== undefined && exp.brightness < threshold) return true;
+    return Boolean(exp.isDark);
+  }
+  if (item.brightness !== undefined) {
+    return item.brightness < threshold;
+  }
+  if (item.isDark !== undefined) {
+    return Boolean(item.isDark);
+  }
+  return false;
+}
 
 function StarRating({ rating, onChange, size = 18 }) {
   return (
@@ -26,7 +55,7 @@ function StarRating({ rating, onChange, size = 18 }) {
   );
 }
 
-const TimelineItem = React.memo(({ grp, idx, isCurrent, onClick, accent }) => {
+const TimelineItem = React.memo(({ grp, idx, isCurrent, onClick, accent, darkThreshold = 42 }) => {
   const rep = grp[0];
   const elementRef = useRef(null);
 
@@ -49,7 +78,7 @@ const TimelineItem = React.memo(({ grp, idx, isCurrent, onClick, accent }) => {
   const gKeepers   = grp.filter(x => (x.category || "alternate") === "keeper").length;
   const gBlurry    = grp.filter(x => x.category === "blurry").length;
   const gRejected  = grp.filter(x => x.category === "rejected").length;
-  const gDark      = grp.filter(x => x.isDark).length;
+  const gDark      = grp.filter(x => getPhotoIsDark(x, darkThreshold)).length;
 
   return (
     <div
@@ -146,8 +175,33 @@ export default function CullPage({
   const [sensitivity, setSensitivity] = useState(12);
   const [blurCutoff, setBlurCutoff] = useState(50);
   const [useFaceLandmarks, setUseFaceLandmarks] = useState(true);
-  const [darkThreshold, setDarkThreshold] = useState(28);
+  const [darkThreshold, setDarkThreshold] = useState(42);
   const [enableExposureCheck, setEnableExposureCheck] = useState(true);
+
+  // Dynamic slider handler: immediately re-evaluates all photos in real-time
+  const handleDarkThresholdChange = (val) => {
+    setDarkThreshold(val);
+    if (groups && groups.length > 0) {
+      groups.forEach(grp => {
+        grp.forEach(item => {
+          item.isDark = getPhotoIsDark(item, val);
+        });
+      });
+      setGroups([...groups]);
+      setCullResults(groups.flat());
+    }
+  };
+
+  // Manual dark / well-lit override handler
+  const handleTogglePhotoDark = (item) => {
+    if (!item) return;
+    const currentIsDark = getPhotoIsDark(item, darkThreshold);
+    item.manualDarkOverride = !currentIsDark;
+    item.isDark = !currentIsDark;
+    setGroups([...groups]);
+    setCullResults(groups.flat());
+    showToast(`Marked ${item.name} as ${!currentIsDark ? "🌙 Dark" : "☀️ Well-Lit"}`);
+  };
 
   // Runtime State
   const [isProcessing, setIsProcessing] = useState(false);
@@ -327,15 +381,34 @@ export default function CullPage({
     try {
       const allImages = groups.flat();
 
+      // If separating dark photos, ensure every file has exposure data
+      if (mode === "dark_separated" || mode === "dark_only") {
+        setExportProgress({ current: 0, total: allImages.length, currentFile: "Checking exposure metrics..." });
+        for (let i = 0; i < allImages.length; i++) {
+          const itm = allImages[i];
+          if (itm.brightness === undefined && itm.exposure === undefined && itm.manualDarkOverride === undefined) {
+            setExportProgress({ current: i + 1, total: allImages.length, currentFile: `Analyzing exposure: ${itm.name}...` });
+            const exp = await analyzePhotoExposure(itm, darkThreshold);
+            if (exp) {
+              itm.exposure = exp;
+              itm.brightness = exp.brightness;
+              itm.isDark = exp.isDark;
+            }
+          }
+        }
+      }
+
       // Determine what files will actually be copied
       const filesToCopy = mode === "keepers_only"
         ? allImages.filter(item => item.isKeyPhoto || item.category === "keeper")
         : mode === "dark_only"
-        ? allImages.filter(item => item.isDark)
+        ? allImages.filter(item => getPhotoIsDark(item, darkThreshold))
         : allImages;
 
       if (filesToCopy.length === 0) {
-        throw new Error("No files matched the current export criteria.");
+        throw new Error(mode === "dark_only"
+          ? `No dark photos found under ${darkThreshold}% cutoff. You can adjust the Dark Cutoff slider in Cull AI settings.`
+          : "No files matched the current export criteria.");
       }
 
       // Pre-create directories as needed
@@ -364,6 +437,8 @@ export default function CullPage({
       }
 
       let copiedCount = 0;
+      let darkCount = 0;
+      let wellLitCount = 0;
       const total = filesToCopy.length;
 
       for (let i = 0; i < total; i++) {
@@ -383,9 +458,13 @@ export default function CullPage({
             else if (cat === "blurry")    targetDir = blurryDir;
             else                          targetDir = rejectedDir; // rejected
           } else if (mode === "dark_separated") {
-            targetDir = item.isDark ? darkDir : wellLitDir;
+            const isDark = getPhotoIsDark(item, darkThreshold);
+            targetDir = isDark ? darkDir : wellLitDir;
+            if (isDark) darkCount++;
+            else wellLitCount++;
           } else if (mode === "dark_only") {
             targetDir = darkDir;
+            darkCount++;
           } else if (mode === "keepers_rejects") {
             targetDir = item.isKeyPhoto ? keepersDir : alternatesDir;
           } else if (mode === "keepers_only") {
@@ -406,8 +485,16 @@ export default function CullPage({
         }
       }
 
-      addBatchLog?.(`✅ Successfully organized and saved ${copiedCount} files into subdirectories.`, "success");
-      showToast(`Saved ${copiedCount} files to folders successfully!`);
+      if (mode === "dark_separated") {
+        addBatchLog?.(`📁 Separated ${copiedCount} files: ${wellLitCount} into "☀️ Well-Lit Photos", ${darkCount} into "🌙 Dark & Underexposed".`, "success");
+        showToast(`Exported: ${wellLitCount} Well-Lit, ${darkCount} Dark photos`);
+        if (darkCount === 0) {
+          addBatchLog?.(`ℹ️ All photos were categorized as well-lit at ${darkThreshold}% cutoff. You can raise the Dark Cutoff slider in settings or click 'Mark as Dark' on photos.`, "warning");
+        }
+      } else {
+        addBatchLog?.(`✅ Successfully organized and saved ${copiedCount} files into subdirectories.`, "success");
+        showToast(`Saved ${copiedCount} files to folders successfully!`);
+      }
     } catch (e) {
       addBatchLog?.(`❌ Folder Export Failed: ${e.message}`, "error");
       console.error(e);
@@ -420,13 +507,13 @@ export default function CullPage({
   // Filter duplicate groups based on exposure status if requested
   const displayedGroups = React.useMemo(() => {
     if (exposureFilter === "dark") {
-      return groups.filter(grp => grp.some(item => item.isDark));
+      return groups.filter(grp => grp.some(item => getPhotoIsDark(item, darkThreshold)));
     }
     if (exposureFilter === "well_lit") {
-      return groups.filter(grp => grp.some(item => !item.isDark));
+      return groups.filter(grp => grp.some(item => !getPhotoIsDark(item, darkThreshold)));
     }
     return groups;
-  }, [groups, exposureFilter]);
+  }, [groups, exposureFilter, darkThreshold]);
 
   const safeGroupIndex = Math.min(activeGroupIndex, Math.max(0, displayedGroups.length - 1));
   const activeGroup = displayedGroups[safeGroupIndex] || [];
@@ -934,20 +1021,46 @@ export default function CullPage({
 
               {/* Dark Photo Exposure Cutoff */}
               <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                <div style={{ display: "flex", justifyContent: "space-between" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <label style={{ fontSize: "13px", fontWeight: 700 }}>Dark Photo Exposure Cutoff</label>
                   <span style={{ fontSize: "13px", color: "#a855f7", fontWeight: 800 }}>Under {darkThreshold}%</span>
                 </div>
                 <input
                   type="range"
-                  min="10"
-                  max="45"
+                  min="20"
+                  max="75"
                   value={darkThreshold}
-                  onChange={(e) => setDarkThreshold(parseInt(e.target.value))}
+                  onChange={(e) => handleDarkThresholdChange(parseInt(e.target.value))}
                   style={{ accentColor: "#a855f7", cursor: "pointer", width: "100%" }}
                 />
+                <div style={{ display: "flex", gap: "6px" }}>
+                  {[
+                    { label: "Strict (30%)", val: 30, desc: "Only very dark" },
+                    { label: "Balanced (42%)", val: 42, desc: "Recommended" },
+                    { label: "Aggressive (55%)", val: 55, desc: "Catches any dim shot" }
+                  ].map(p => (
+                    <button
+                      key={p.val}
+                      type="button"
+                      onClick={() => handleDarkThresholdChange(p.val)}
+                      style={{
+                        flex: 1,
+                        padding: "3px 6px",
+                        fontSize: "10px",
+                        fontWeight: darkThreshold === p.val ? 800 : 600,
+                        background: darkThreshold === p.val ? "#a855f7" : (dm ? "#27272a" : "#f4f4f5"),
+                        color: darkThreshold === p.val ? "#fff" : (dm ? "#a1a1aa" : "#52525b"),
+                        border: `1px solid ${darkThreshold === p.val ? "#a855f7" : (dm ? "#3f3f46" : "#e4e4e7")}`,
+                        borderRadius: "6px",
+                        cursor: "pointer"
+                      }}
+                    >
+                      {p.label}
+                    </button>
+                  ))}
+                </div>
                 <span style={{ fontSize: "11px", color: dm ? "#a1a1aa" : "#71717a", lineHeight: "1.4" }}>
-                  Threshold below which images are classified as dark/underexposed and separated.
+                  Images with perceived brightness or median tone under this cutoff are classified as dark and placed into <strong>🌙 Dark & Underexposed</strong>.
                 </span>
               </div>
             </div>
@@ -1062,8 +1175,8 @@ export default function CullPage({
         const alternates = all.filter(x => x.category === "alternate" || (!x.isKeyPhoto && !x.category && x.rating === 3)).length;
         const blurry    = all.filter(x => x.category === "blurry").length;
         const rejected  = all.filter(x => x.category === "rejected"  || (x.rating === 1 && !x.category)).length;
-        const darkCount = all.filter(x => x.isDark).length;
-        const wellLitCount = all.filter(x => !x.isDark).length;
+        const darkCount = all.filter(x => getPhotoIsDark(x, darkThreshold)).length;
+        const wellLitCount = all.filter(x => !getPhotoIsDark(x, darkThreshold)).length;
         return (
           <div className="glass-panel" style={{
             borderRadius: "18px",
@@ -1342,11 +1455,29 @@ export default function CullPage({
 
                 <div style={{ width: "1px", background: "rgba(255, 255, 255, 0.15)" }} />
 
-                <div>
-                  <span style={{ color: "#aaa" }}>Exposure:</span>{" "}
-                  <strong style={{ color: activePhoto.isDark ? "#c084fc" : "#22c55e" }}>
-                    {activePhoto.isDark ? `🌙 Dark (${activePhoto.brightness || 0}%)` : `☀️ Well-Lit (${activePhoto.brightness || 0}%)`}
-                  </strong>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <div>
+                    <span style={{ color: "#aaa" }}>Exposure:</span>{" "}
+                    <strong style={{ color: getPhotoIsDark(activePhoto, darkThreshold) ? "#c084fc" : "#22c55e" }}>
+                      {getPhotoIsDark(activePhoto, darkThreshold) ? `🌙 Dark (${activePhoto.brightness || 0}%)` : `☀️ Well-Lit (${activePhoto.brightness || 0}%)`}
+                    </strong>
+                  </div>
+                  <button
+                    onClick={() => handleTogglePhotoDark(activePhoto)}
+                    style={{
+                      background: getPhotoIsDark(activePhoto, darkThreshold) ? "rgba(234, 179, 8, 0.22)" : "rgba(168, 85, 247, 0.22)",
+                      border: `1px solid ${getPhotoIsDark(activePhoto, darkThreshold) ? "#eab308" : "#a855f7"}`,
+                      color: getPhotoIsDark(activePhoto, darkThreshold) ? "#facc15" : "#c084fc",
+                      borderRadius: "6px",
+                      padding: "2px 7px",
+                      fontSize: "10px",
+                      fontWeight: 700,
+                      cursor: "pointer"
+                    }}
+                    title={getPhotoIsDark(activePhoto, darkThreshold) ? "Switch this photo to Well-Lit" : "Switch this photo to Dark"}
+                  >
+                    {getPhotoIsDark(activePhoto, darkThreshold) ? "Mark ☀️ Well-Lit" : "Mark 🌙 Dark"}
+                  </button>
                 </div>
 
                 {activePhoto.faces?.length > 0 && (
@@ -1512,8 +1643,8 @@ export default function CullPage({
                   {/* Exposure Analysis Card */}
                   <div
                     style={{
-                      background: activePhoto.isDark ? "rgba(168, 85, 247, 0.08)" : (dm ? "rgba(255,255,255,0.01)" : "rgba(0,0,0,0.01)"),
-                      border: `1px solid ${activePhoto.isDark ? "rgba(168, 85, 247, 0.3)" : (dm ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.04)")}`,
+                      background: getPhotoIsDark(activePhoto, darkThreshold) ? "rgba(168, 85, 247, 0.08)" : (dm ? "rgba(255,255,255,0.01)" : "rgba(0,0,0,0.01)"),
+                      border: `1px solid ${getPhotoIsDark(activePhoto, darkThreshold) ? "rgba(168, 85, 247, 0.3)" : (dm ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.04)")}`,
                       padding: "10px",
                       borderRadius: "10px",
                       display: "flex",
@@ -1523,17 +1654,17 @@ export default function CullPage({
                   >
                     <div style={{ display: "flex", justifyContent: "space-between", fontSize: "11px", fontWeight: 800 }}>
                       <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-                        <span>{activePhoto.isDark ? "🌙" : "☀️"}</span> Exposure & Luminance
+                        <span>{getPhotoIsDark(activePhoto, darkThreshold) ? "🌙" : "☀️"}</span> Exposure & Luminance
                       </span>
-                      <span style={{ color: activePhoto.isDark ? "#c084fc" : "#22c55e" }}>
-                        {activePhoto.isDark ? "🌙 Dark / Underexposed" : "☀️ Well-Lit / Balanced"}
+                      <span style={{ color: getPhotoIsDark(activePhoto, darkThreshold) ? "#c084fc" : "#22c55e" }}>
+                        {getPhotoIsDark(activePhoto, darkThreshold) ? "🌙 Dark / Underexposed" : "☀️ Well-Lit / Balanced"}
                       </span>
                     </div>
 
                     <div style={{ display: "flex", flexDirection: "column", gap: "4px", fontSize: "10px", color: dm ? "#aaa" : "#555" }}>
                       <div style={{ display: "flex", justifyContent: "space-between" }}>
                         <span>Luminance / Brightness:</span>
-                        <strong style={{ color: activePhoto.isDark ? "#c084fc" : (dm ? "#fff" : "#111") }}>
+                        <strong style={{ color: getPhotoIsDark(activePhoto, darkThreshold) ? "#c084fc" : (dm ? "#fff" : "#111") }}>
                           {activePhoto.brightness !== undefined ? `${activePhoto.brightness}%` : "N/A"}
                         </strong>
                       </div>
@@ -1542,7 +1673,7 @@ export default function CullPage({
                           style={{
                             height: "100%",
                             width: `${Math.min(100, Math.max(3, activePhoto.brightness || 0))}%`,
-                            background: activePhoto.isDark ? "linear-gradient(90deg, #3b0764, #9333ea)" : "linear-gradient(90deg, #f59e0b, #22c55e)"
+                            background: getPhotoIsDark(activePhoto, darkThreshold) ? "linear-gradient(90deg, #3b0764, #9333ea)" : "linear-gradient(90deg, #f59e0b, #22c55e)"
                           }}
                         />
                       </div>
@@ -1707,7 +1838,7 @@ export default function CullPage({
                         </span>
                         <div style={{ display: "flex", gap: "8px", fontSize: "10px", color: dm ? "#a1a1aa" : "#71717a", flexWrap: "wrap", alignItems: "center" }}>
                           <span>Focus: {item.sharpness}%</span>
-                          {item.isDark ? (
+                          {getPhotoIsDark(item, darkThreshold) ? (
                             <span style={{ color: "#c084fc", fontWeight: 700 }}>🌙 Dark ({item.brightness}%)</span>
                           ) : (
                             <span style={{ color: "#eab308" }}>☀️ {item.brightness}%</span>
@@ -1959,6 +2090,7 @@ export default function CullPage({
                   isCurrent={idx === safeGroupIndex}
                   onClick={handleTimelineItemClick}
                   accent={accent}
+                  darkThreshold={darkThreshold}
                 />
               ))
             )}
