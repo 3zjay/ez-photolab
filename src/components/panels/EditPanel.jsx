@@ -1,14 +1,16 @@
 import { useCallback, useState, useEffect } from "react";
 import { SL, Row, Spin, PBar, AB, SmoothSlider, ModernImageUploadIcon } from "../ui/common";
-import { PRESETS, COLOR_FILTERS, DEFAULT_FILTERS, LUT_PRESETS } from "../../constants";
+import { PRESETS, COLOR_FILTERS, DEFAULT_FILTERS, LUT_PRESETS, PREQUEL_PRESETS, LIGHT_LEAK_OPTIONS, VIBE_AUDIO_OPTIONS } from "../../constants";
 import { parseCubeLut, exportLutToCube } from "../../lutParser";
 import { AdjustPanel } from "./AdjustPanel";
 import { OverlayPanel } from "./OverlayPanel";
 import { ToolsPanel } from "./ToolsPanel";
+import { HslMixerPanel } from "./HslMixerPanel";
+import { ToneCurvesPanel } from "./ToneCurvesPanel";
 
 export function EditPanel({
     // Grading props
-    filters, setFilters, filterGroup, setFilterGroup, isEdited, resetAll, revertAi, dm, cardBdr, cardBg,
+    filters, setFilters, filterGroup, setFilterGroup, hslMixer, setHslMixer, curves, setCurves, isEdited, resetAll, revertAi, dm, cardBdr, cardBg,
     image, runBrowserUpscale, aiUpscaleStatus, aiUpscaleLog, aiUpscaleProgress, aiUpscaleResult, aiUpscaleResultSize, applyAiResult,
     saveFile,
     aiScale, setAiScale, aiBeautySmooth, setAiBeautySmooth, aiBeautyClarity, setAiBeautyClarity, aiBeautyGlow, setAiBeautyGlow,
@@ -27,11 +29,14 @@ export function EditPanel({
     // Overlay props
     texts, selText, setSelText, addText, deleteText, updateText, inputSt,
 
-    // Luminar AI props
+    // PhotoLab AI props
     accentAi, setAccentAi, accentOffsets,
     structureAi, setStructureAi,
     skyMode, setSkyMode, skyOpacity, setSkyOpacity, skyLightMatch, setSkyLightMatch, customSkyUrl, setCustomSkyUrl, skyMaskStatus, skyMaskLog,
     relightNear, setRelightNear, relightFar, setRelightFar, depthMapStatus, depthMapLog,
+
+    // Prequel Aesthetic Studio props
+    chromatic, setChromatic, prism, setPrism, halation, setHalation, filmDust, setFilmDust, glitter, setGlitter, vhs, setVhs, lightLeak, setLightLeak, heatmap, setHeatmap, vibeAudio, setVibeAudio,
     setActiveTab
 }) {
     const [subTab, setSubTab] = useState("grade");
@@ -82,10 +87,36 @@ export function EditPanel({
 
     return (
         <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+            {/* Top Reset Action Header */}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 12px", background: dm ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)', borderRadius: "10px", border: `1px solid ${cardBdr}` }}>
+                <span style={{ fontSize: "11.5px", fontWeight: 700, color: isEdited ? "#6c63ff" : (dm ? "#aaa" : "#666") }}>
+                    {isEdited ? "✨ Photo Modified" : "📷 Original Image"}
+                </span>
+                <button onClick={resetAll}
+                    style={{
+                        padding: "5px 12px",
+                        borderRadius: "8px",
+                        border: "1px solid rgba(239, 68, 68, 0.35)",
+                        background: "rgba(239, 68, 68, 0.12)",
+                        color: "#ef4444",
+                        fontSize: "11px",
+                        fontWeight: 800,
+                        cursor: "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "4px",
+                        transition: "all .18s ease"
+                    }}
+                    title="Reset all adjustments, filters, LUTs, crop, and FX back to original">
+                    <span>🔄</span> Reset All
+                </button>
+            </div>
+
             {/* Top Sub-tab Switcher */}
             <div style={{ display: "flex", gap: "2px", background: dm ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.04)', border: `1px solid ${dm ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'}`, padding: "3px", borderRadius: "10px" }}>
                 {[
-                    { id: "grade", label: "🎨 Color" },
+                    { id: "grade", label: "🎛️ Adjust" },
+                    { id: "aesthetics", label: "⚡ Aesthetics" },
                     { id: "crop", label: "📐 Crop" },
                     { id: "luminar", label: "✨ AI Studio" },
                     { id: "ai", label: "🧠 AI Tools" },
@@ -95,18 +126,180 @@ export function EditPanel({
                     return (
                         <button key={tab.id} onClick={() => setSubTab(tab.id)}
                             style={{
-                                flex: 1, padding: "8px 4px", fontSize: "11.5px", fontWeight: 700, border: "none", cursor: "pointer", fontFamily: "inherit",
+                                flex: 1, padding: "8px 2px", fontSize: "11px", fontWeight: 700, border: "none", cursor: "pointer", fontFamily: "inherit",
                                 background: active ? (dm ? '#333' : '#fff') : 'transparent',
                                 color: active ? "#6c63ff" : dm ? "#a1a1aa" : "#666677",
                                 borderRadius: "8px",
                                 boxShadow: active ? "0 2px 6px rgba(0,0,0,.08)" : "none",
-                                transition: "all .18s"
+                                transition: "all .18s",
+                                whiteSpace: "nowrap"
                             }}>
                             {tab.label}
                         </button>
                     );
                 })}
             </div>
+
+            {/* Prequel Aesthetic Studio */}
+            {subTab === "aesthetics" && (
+                <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                    {/* Style Packs */}
+                    <div style={{ padding: "14px", background: cardBg, border: `1.5px solid ${cardBdr}`, borderRadius: "12px", display: "flex", flexDirection: "column", gap: "12px" }}>
+                        <SL>One-Tap Prequel Style Packs</SL>
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
+                            {PREQUEL_PRESETS.map(pack => (
+                                <button key={pack.id}
+                                    onClick={() => {
+                                        setFilters(prev => ({ ...prev, ...pack.values }));
+                                        setChromatic(pack.fx.chromatic || 0);
+                                        setHalation(pack.fx.halation || 0);
+                                        setVhs(!!pack.fx.vhs);
+                                        setLightLeak(pack.fx.lightLeak || 'none');
+                                        setGlitter(pack.fx.glitter || 0);
+                                        setFilmDust(pack.fx.filmDust || 0);
+                                        setPrism(pack.fx.prism || 0);
+                                        setHeatmap(pack.fx.heatmap || 0);
+                                    }}
+                                    style={{
+                                        padding: "10px",
+                                        borderRadius: "10px",
+                                        border: `1.5px solid ${cardBdr}`,
+                                        background: dm ? "rgba(255,255,255,0.03)" : "#ffffff",
+                                        color: dm ? "#ffffff" : "#1a1a1a",
+                                        textAlign: "left",
+                                        cursor: "pointer",
+                                        transition: "all .18s ease",
+                                        display: "flex",
+                                        flexDirection: "column",
+                                        gap: "4px"
+                                    }}>
+                                    <div style={{ fontSize: "15px", display: "flex", alignItems: "center", gap: "4px" }}>{pack.icon} <span style={{ fontWeight: 800, fontSize: "12px" }}>{pack.name}</span></div>
+                                    <div style={{ fontSize: "10px", color: dm ? "#aaa" : "#666", lineHeight: "1.3" }}>{pack.desc}</div>
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* FX Sliders */}
+                    <div style={{ padding: "14px", background: cardBg, border: `1.5px solid ${cardBdr}`, borderRadius: "12px", display: "flex", flexDirection: "column", gap: "14px" }}>
+                        <SL>Retro FX & Refraction</SL>
+                        <div>
+                            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
+                                <span style={{ fontSize: "12px", fontWeight: 600, color: dm ? '#ccc' : '#555' }}>🌈 Chromatic Aberration</span>
+                                <span style={{ fontSize: "12px", fontWeight: 700, color: "#6c63ff" }}>{chromatic}%</span>
+                            </div>
+                            <SmoothSlider min={0} max={100} step={1} value={chromatic} defaultValue={0} onChange={setChromatic} />
+                        </div>
+
+                        <div>
+                            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
+                                <span style={{ fontSize: "12px", fontWeight: 600, color: dm ? '#ccc' : '#555' }}>💎 Prism Flare & Rays</span>
+                                <span style={{ fontSize: "12px", fontWeight: 700, color: "#6c63ff" }}>{prism}%</span>
+                            </div>
+                            <SmoothSlider min={0} max={100} step={1} value={prism} defaultValue={0} onChange={setPrism} />
+                        </div>
+
+                        <div>
+                            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
+                                <span style={{ fontSize: "12px", fontWeight: 600, color: dm ? '#ccc' : '#555' }}>🌫️ Halation & Bloom Glow</span>
+                                <span style={{ fontSize: "12px", fontWeight: 700, color: "#6c63ff" }}>{halation}%</span>
+                            </div>
+                            <SmoothSlider min={0} max={100} step={1} value={halation} defaultValue={0} onChange={setHalation} />
+                        </div>
+
+                        <div>
+                            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
+                                <span style={{ fontSize: "12px", fontWeight: 600, color: dm ? '#ccc' : '#555' }}>✨ Sparkles & Glitter Stars</span>
+                                <span style={{ fontSize: "12px", fontWeight: 700, color: "#6c63ff" }}>{glitter}%</span>
+                            </div>
+                            <SmoothSlider min={0} max={100} step={1} value={glitter} defaultValue={0} onChange={setGlitter} />
+                        </div>
+
+                        <div>
+                            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
+                                <span style={{ fontSize: "12px", fontWeight: 600, color: dm ? '#ccc' : '#555' }}>🎞️ Vintage Film Dust & Scratches</span>
+                                <span style={{ fontSize: "12px", fontWeight: 700, color: "#6c63ff" }}>{filmDust}%</span>
+                            </div>
+                            <SmoothSlider min={0} max={100} step={1} value={filmDust} defaultValue={0} onChange={setFilmDust} />
+                        </div>
+
+                        <div>
+                            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
+                                <span style={{ fontSize: "12px", fontWeight: 600, color: dm ? '#ccc' : '#555' }}>🔮 Infrared Thermal Vision</span>
+                                <span style={{ fontSize: "12px", fontWeight: 700, color: "#6c63ff" }}>{heatmap}%</span>
+                            </div>
+                            <SmoothSlider min={0} max={100} step={1} value={heatmap} defaultValue={0} onChange={setHeatmap} />
+                        </div>
+                    </div>
+
+                    {/* VHS Camcorder & Light Leaks */}
+                    <div style={{ padding: "14px", background: cardBg, border: `1.5px solid ${cardBdr}`, borderRadius: "12px", display: "flex", flexDirection: "column", gap: "14px" }}>
+                        <SL>VHS Camcorder & Light Leaks</SL>
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                            <div>
+                                <div style={{ fontSize: "12.5px", fontWeight: 700 }}>📹 90s VHS Camcorder HUD</div>
+                                <div style={{ fontSize: "10.5px", color: dm ? "#aaa" : "#666" }}>Adds PLAY ▶, date stamp & retro scanlines</div>
+                            </div>
+                            <input type="checkbox" checked={vhs} onChange={e => setVhs(e.target.checked)} style={{ width: "18px", height: "18px", accentColor: "#6c63ff", cursor: "pointer" }} />
+                        </div>
+
+                        <div>
+                            <div style={{ fontSize: "12px", fontWeight: 600, marginBottom: "8px" }}>🌅 Vintage Light Leaks</div>
+                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
+                                {LIGHT_LEAK_OPTIONS.map(opt => (
+                                    <button key={opt.id} onClick={() => setLightLeak(opt.id)}
+                                        style={{
+                                            padding: "8px",
+                                            borderRadius: "8px",
+                                            border: `1.5px solid ${lightLeak === opt.id ? "#6c63ff" : cardBdr}`,
+                                            background: lightLeak === opt.id ? (dm ? "rgba(108,99,255,0.2)" : "rgba(108,99,255,0.08)") : "transparent",
+                                            color: lightLeak === opt.id ? "#6c63ff" : (dm ? "#ddd" : "#333"),
+                                            fontSize: "11px",
+                                            fontWeight: 700,
+                                            cursor: "pointer",
+                                            display: "flex",
+                                            alignItems: "center",
+                                            gap: "6px"
+                                        }}>
+                                        <span>{opt.icon}</span>
+                                        <span>{opt.label}</span>
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Aesthetic Audio Vibe */}
+                    <div style={{ padding: "14px", background: cardBg, border: `1.5px solid ${cardBdr}`, borderRadius: "12px", display: "flex", flexDirection: "column", gap: "10px" }}>
+                        <SL>🎵 Aesthetic Sound Vibe</SL>
+                        <div style={{ fontSize: "11px", color: dm ? "#aaa" : "#666" }}>Select background music vibe for preview:</div>
+                        <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                            {VIBE_AUDIO_OPTIONS.map(opt => (
+                                <button key={opt.id} onClick={() => setVibeAudio(opt.id)}
+                                    style={{
+                                        padding: "8px 10px",
+                                        borderRadius: "8px",
+                                        border: `1.5px solid ${vibeAudio === opt.id ? "#6c63ff" : cardBdr}`,
+                                        background: vibeAudio === opt.id ? (dm ? "rgba(108,99,255,0.2)" : "rgba(108,99,255,0.08)") : "transparent",
+                                        color: vibeAudio === opt.id ? "#6c63ff" : (dm ? "#ddd" : "#333"),
+                                        fontSize: "11.5px",
+                                        fontWeight: 700,
+                                        cursor: "pointer",
+                                        display: "flex",
+                                        alignItems: "center",
+                                        justifyContent: "space-between"
+                                    }}>
+                                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                                        <span>{opt.icon}</span>
+                                        <span>{opt.label}</span>
+                                    </div>
+                                    <span style={{ fontSize: "10px", opacity: 0.7 }}>{opt.desc}</span>
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* 1. Grade (Adjust Color / LUTs) */}
             {subTab === "grade" && (
@@ -345,22 +538,32 @@ export function EditPanel({
                         {/* Sliders Group Switcher */}
                         <div style={{ display: "flex", flexWrap: "wrap", gap: "4px", marginBottom: "14px", background: dm ? '#2a2a2a' : '#f2f2f8', padding: "4px", borderRadius: "10px" }}>
                             {[
-                                { key: "basic", label: "Basic" },
-                                { key: "enhance", label: "Enhance" },
-                                { key: "hsl", label: "Color" },
-                                { key: "style", label: "Style" }
+                                { key: "basic", label: "☀️ Light" },
+                                { key: "hsl", label: "🎨 Color" },
+                                { key: "selective", label: "🔴 HSL Mixer" },
+                                { key: "curves", label: "📈 Curves" },
+                                { key: "enhance", label: "✨ Details" },
+                                { key: "style", label: "🌌 Vignette" }
                             ].map(g => (
                                 <button key={g.key} onClick={() => setFilterGroup(g.key)}
-                                    style={{ flex: "1 1 auto", padding: "6px 8px", fontSize: "11px", fontWeight: 500, border: "none", cursor: "pointer", fontFamily: "inherit", background: filterGroup === g.key ? (dm ? '#444' : '#fff') : 'transparent', color: filterGroup === g.key ? "#6c63ff" : "#999", borderRadius: "8px", boxShadow: filterGroup === g.key ? "0 1px 4px rgba(0,0,0,.08)" : "none", transition: "all .18s", whiteSpace: "nowrap" }}>
+                                    style={{ flex: "1 1 auto", padding: "6px 8px", fontSize: "11px", fontWeight: filterGroup === g.key ? 700 : 500, border: "none", cursor: "pointer", fontFamily: "inherit", background: filterGroup === g.key ? (dm ? '#444' : '#fff') : 'transparent', color: filterGroup === g.key ? "#6c63ff" : (dm ? "#aaa" : "#666"), borderRadius: "8px", boxShadow: filterGroup === g.key ? "0 1px 4px rgba(0,0,0,.08)" : "none", transition: "all .18s", whiteSpace: "nowrap" }}>
                                     {g.label}
                                 </button>
                             ))}
                         </div>
 
+                        {/* Render 8-Channel Selective HSL Mixer */}
+                        {filterGroup === "selective" && (
+                            <HslMixerPanel hslMixer={hslMixer} setHslMixer={setHslMixer} dm={dm} cardBg={cardBg} cardBdr={cardBdr} />
+                        )}
 
+                        {/* Render RGB Tone Curves Graph */}
+                        {filterGroup === "curves" && (
+                            <ToneCurvesPanel curves={curves} setCurves={setCurves} dm={dm} cardBg={cardBg} cardBdr={cardBdr} />
+                        )}
 
                         {/* Render sliders */}
-                        {COLOR_FILTERS.filter(f => f.group === filterGroup).map(f => {
+                        {filterGroup !== "selective" && filterGroup !== "curves" && COLOR_FILTERS.filter(f => f.group === filterGroup).map(f => {
                             const val = filters[f.key]; const changed = val !== f.default;
                             return (
                                 <div key={f.key} style={{ marginBottom: "16px" }}>

@@ -202,19 +202,74 @@ export function analyzeFaceMetrics(landmarks) {
 }
 
 /**
+ * Analyzes exposure, average luminance, and shadow/highlight clipping.
+ * Returns perceived brightness (0-100), shadow clipping %, highlight clipping %,
+ * and flags for dark / underexposed images.
+ */
+export function computeExposure(imageElementOrCanvas, canvas, ctx, darkThreshold = 28) {
+  const w = 160;
+  const h = 120;
+  ctx.drawImage(imageElementOrCanvas, 0, 0, w, h);
+  const imgData = ctx.getImageData(0, 0, w, h);
+  const data = imgData.data;
+  const totalPixels = w * h;
+
+  let totalLuminance = 0;
+  let shadowPixels = 0;   // crushed deep shadows (lum < 22)
+  let highlightPixels = 0; // blown highlights (lum > 240)
+
+  for (let i = 0; i < totalPixels; i++) {
+    const r = data[i * 4];
+    const g = data[i * 4 + 1];
+    const b = data[i * 4 + 2];
+    // Perceived luminance formula (ITU-R BT.601)
+    const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+    totalLuminance += lum;
+
+    if (lum < 22) shadowPixels++;
+    else if (lum > 240) highlightPixels++;
+  }
+
+  const avgLum255 = totalLuminance / totalPixels;
+  const brightness = Math.round((avgLum255 / 255) * 100);
+  const shadowPercent = Math.round((shadowPixels / totalPixels) * 100);
+  const highlightPercent = Math.round((highlightPixels / totalPixels) * 100);
+
+  // A photo is marked dark if average brightness is below the threshold,
+  // or if over 60% of the frame consists of crushed black pixels.
+  const isDark = brightness < darkThreshold || shadowPercent > 60;
+  const isOverexposed = brightness > 82 && highlightPercent > 35;
+
+  let exposureCategory = "normal";
+  if (isDark) exposureCategory = "dark";
+  else if (isOverexposed) exposureCategory = "overexposed";
+
+  return {
+    brightness,
+    shadowClipping: shadowPercent,
+    highlightClipping: highlightPercent,
+    isDark,
+    isOverexposed,
+    exposureCategory
+  };
+}
+
+/**
  * Orchestrates local client-side AI photo culling process.
  * Loads and decodes raw/regular files, groups duplicates using perceptual hashes,
  * computes quality metric ratings, and designates the "Key Photo" keepers.
  * 
  * @param {Array} images - List of `{ name, file, previewUrl, ... }`
- * @param {Object} options - Grouping threshold, blur strictness, blink detection toggles
+ * @param {Object} options - Grouping threshold, blur strictness, blink detection toggles, dark detection
  * @param {Function} onProgress - Progress reporting callback `{ current, total, name }`
  */
 export async function cullBatch(images, options = {}, onProgress) {
   const {
     groupingSensitivity = 12, // Hamming distance threshold (default ~12)
     blurStrictness = 50,       // Sharpness cutoff (default 50)
-    enableFaceLandmarks = true // Run MediaPipe vision resolver
+    enableFaceLandmarks = true, // Run MediaPipe vision resolver
+    darkThreshold = 28,        // Brightness threshold below which photo is dark (0-100)
+    enableExposureAnalysis = true
   } = options;
 
   let fl = null;
@@ -242,6 +297,11 @@ export async function cullBatch(images, options = {}, onProgress) {
   sharpnessCanvas.width = 300;
   sharpnessCanvas.height = 200;
   const sharpnessCtx = sharpnessCanvas.getContext("2d");
+
+  const exposureCanvas = document.createElement("canvas");
+  exposureCanvas.width = 160;
+  exposureCanvas.height = 120;
+  const exposureCtx = exposureCanvas.getContext("2d");
 
   for (let i = 0; i < total; i++) {
     const imgObj = images[i];
@@ -328,7 +388,12 @@ export async function cullBatch(images, options = {}, onProgress) {
       const primaryFace = faces[0]?.rect || null;
       const sharpness = computeSharpness(tempCanvas, sharpnessCanvas, sharpnessCtx, primaryFace);
 
-      // 5. Generate 160px Thumbnail using reusable tempCanvas
+      // 5. Compute Exposure & Luminance Metrics (Dark vs Well-Lit analysis)
+      const exposure = enableExposureAnalysis
+        ? computeExposure(tempCanvas, exposureCanvas, exposureCtx, darkThreshold)
+        : { brightness: 50, shadowClipping: 0, highlightClipping: 0, isDark: false, isOverexposed: false, exposureCategory: "normal" };
+
+      // 6. Generate 160px Thumbnail using reusable tempCanvas
       const tMaxDim = 160;
       const tScale = Math.min(1, tMaxDim / Math.max(sW, sH));
       const tW = Math.round(sW * tScale);
@@ -342,7 +407,7 @@ export async function cullBatch(images, options = {}, onProgress) {
 
       const thumbnailUrl = tempCanvas.toDataURL("image/jpeg", 0.80);
 
-      // 6. Aggregate Quality Score (0 to 100)
+      // 7. Aggregate Quality Score (0 to 100)
       let score = sharpness;
       const warnings = [];
 
@@ -359,6 +424,14 @@ export async function cullBatch(images, options = {}, onProgress) {
         score = Math.min(100, score + 10);
       }
 
+      if (exposure.isDark) {
+        warnings.push(`Underexposed / dark photo (Brightness: ${exposure.brightness}%, Shadows: ${exposure.shadowClipping}%)`);
+        score = Math.max(5, score - 20); // Penalty prevents dark accidental shots from becoming Key Photo
+      } else if (exposure.isOverexposed) {
+        warnings.push(`Overexposed / blown highlights (Brightness: ${exposure.brightness}%)`);
+        score = Math.max(5, score - 15);
+      }
+
       results.push({
         ...imgObj,
         previewUrl: finalPreviewUrl,
@@ -366,6 +439,9 @@ export async function cullBatch(images, options = {}, onProgress) {
         dHash,
         sharpness,
         faces,
+        exposure,
+        isDark: exposure.isDark,
+        brightness: exposure.brightness,
         cullScore: score,
         warnings,
         isKeyPhoto: false,
@@ -385,7 +461,10 @@ export async function cullBatch(images, options = {}, onProgress) {
         isKeyPhoto: false,
         warnings: [`Analysis Error: ${e.message}`],
         sharpness: 10,
-        faces: []
+        faces: [],
+        exposure: { brightness: 50, shadowClipping: 0, highlightClipping: 0, isDark: false, isOverexposed: false, exposureCategory: "normal" },
+        isDark: false,
+        brightness: 50
       });
     } finally {
       if (imageBitmap) {
@@ -398,7 +477,7 @@ export async function cullBatch(images, options = {}, onProgress) {
     await new Promise((resolve) => setTimeout(resolve, 15));
   }
 
-  // 6. PERCEPTUAL SIMILARITY GROUPING & KEY PHOTO auto-selection
+  // 8. PERCEPTUAL SIMILARITY GROUPING & KEY PHOTO auto-selection
   // We cluster consecutive images whose Hamming distance is <= groupingSensitivity
   let currentGroupId = 0;
   const groups = [];
@@ -430,12 +509,12 @@ export async function cullBatch(images, options = {}, onProgress) {
     currentGroupId++;
   }
 
-  // 7. AUTO-PROMOTE "KEY PHOTO" with 4-Tier Quality Classification
+  // 9. AUTO-PROMOTE "KEY PHOTO" with 4-Tier Quality Classification
   // ---------------------------------------------------------------
   // Tier 1 — KEEPER     : Best in group, sharp & clear → 5★ 🟢 Green
   // Tier 2 — ALTERNATE  : Good duplicate, not the best → 3★ 🔵 Blue
   // Tier 3 — BLURRY     : Out-of-focus / soft image    → 2★ 🟡 Yellow
-  // Tier 4 — REJECTED   : Eyes closed / blink / severe quality fail → 1★ 🔴 Red
+  // Tier 4 — REJECTED   : Eyes closed / blink / severe quality fail / pitch black → 1★ 🔴 Red
   for (const group of groups) {
     // Sort group members by quality score (highest first)
     group.sort((a, b) => b.cullScore - a.cullScore);
@@ -448,10 +527,11 @@ export async function cullBatch(images, options = {}, onProgress) {
         w.toLowerCase().includes("blink") || w.toLowerCase().includes("closed")
       );
       const isBlurry = item.sharpness < blurStrictness;
-      const isSeverelyBad = item.cullScore < 15; // Near-zero quality
+      const isPitchBlack = item.isDark && item.brightness < 12;
+      const isSeverelyBad = item.cullScore < 15 || isPitchBlack; // Near-zero quality or completely dark
 
       if (hasBlink || isSeverelyBad) {
-        // Tier 4 — REJECTED: Eye blink, or catastrophically low score
+        // Tier 4 — REJECTED: Eye blink, or catastrophically low score / pitch black
         item.category = "rejected";
         item.rating = 1;
         item.label = "red";

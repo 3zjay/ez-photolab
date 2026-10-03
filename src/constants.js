@@ -1,21 +1,50 @@
 
+export const HSL_CHANNELS = [
+  { id: "red", name: "Red", icon: "🔴", color: "#ef4444" },
+  { id: "orange", name: "Orange", icon: "🟠", color: "#f97316" },
+  { id: "yellow", name: "Yellow", icon: "🟡", color: "#eab308" },
+  { id: "green", name: "Green", icon: "🟢", color: "#22c55e" },
+  { id: "cyan", name: "Cyan", icon: "🔵", color: "#06b6d4" },
+  { id: "blue", name: "Blue", icon: "🔷", color: "#3b82f6" },
+  { id: "purple", name: "Purple", icon: "🟣", color: "#a855f7" },
+  { id: "magenta", name: "Magenta", icon: "🌸", color: "#ec4899" },
+];
+
+export const DEFAULT_HSL_MIXER = {
+  red: { hue: 0, sat: 0, lum: 0 },
+  orange: { hue: 0, sat: 0, lum: 0 },
+  yellow: { hue: 0, sat: 0, lum: 0 },
+  green: { hue: 0, sat: 0, lum: 0 },
+  cyan: { hue: 0, sat: 0, lum: 0 },
+  blue: { hue: 0, sat: 0, lum: 0 },
+  purple: { hue: 0, sat: 0, lum: 0 },
+  magenta: { hue: 0, sat: 0, lum: 0 },
+};
+
 export const COLOR_FILTERS = [
   { key:"brightness",  label:"Brightness",  min:0,    max:200, default:100, unit:"%",  group:"basic" },
   { key:"contrast",    label:"Contrast",    min:0,    max:200, default:100, unit:"%",  group:"basic" },
-  { key:"saturation",  label:"Saturation",  min:0,    max:200, default:100, unit:"%",  group:"basic" },
   { key:"exposure",    label:"Exposure",    min:-100, max:100, default:0,   unit:"",   group:"basic" },
-  { key:"temperature", label:"Warmth",      min:-100, max:100, default:0,   unit:"",   group:"basic" },
-  { key:"tint",        label:"Tint",        min:-100, max:100, default:0,   unit:"",   group:"basic" },
-  { key:"sharpness",   label:"Sharpness",   min:0,    max:20,  default:0,   unit:"",   group:"enhance" },
-  { key:"clarity",     label:"Clarity",     min:0,    max:20,  default:0,   unit:"",   group:"enhance" },
-  { key:"denoise",     label:"Smooth",      min:0,    max:10,  default:0,   unit:"",   group:"enhance" },
-  { key:"highlights",  label:"Highlights",  min:-100, max:100, default:0,   unit:"",   group:"enhance" },
-  { key:"shadows",     label:"Shadows",     min:-100, max:100, default:0,   unit:"",   group:"enhance" },
-  { key:"hue",         label:"Hue",         min:-180, max:180, default:0,   unit:"°",  group:"hsl" },
+  { key:"highlights",  label:"Highlights",  min:-100, max:100, default:0,   unit:"",   group:"basic" },
+  { key:"shadows",     label:"Shadows",     min:-100, max:100, default:0,   unit:"",   group:"basic" },
+  { key:"whites",      label:"Whites",      min:-100, max:100, default:0,   unit:"",   group:"basic" },
+  { key:"blacks",      label:"Blacks",      min:-100, max:100, default:0,   unit:"",   group:"basic" },
+
+  { key:"temperature", label:"Warmth",      min:-100, max:100, default:0,   unit:"",   group:"hsl" },
+  { key:"tint",        label:"Tint",        min:-100, max:100, default:0,   unit:"",   group:"hsl" },
+  { key:"saturation",  label:"Saturation",  min:0,    max:200, default:100, unit:"%",  group:"hsl" },
   { key:"vibrance",    label:"Vibrance",    min:0,    max:200, default:100, unit:"%",  group:"hsl" },
+  { key:"hue",         label:"Hue Shift",   min:-180, max:180, default:0,   unit:"°",  group:"hsl" },
+  { key:"fade",        label:"Fade / Lift", min:0,    max:100, default:0,   unit:"%",  group:"hsl" },
+
+  { key:"sharpness",   label:"Sharpness",   min:0,    max:20,  default:0,   unit:"",   group:"enhance" },
+  { key:"clarity",     label:"Clarity / Structure", min:0, max:20, default:0, unit:"", group:"enhance" },
+  { key:"denoise",     label:"Smooth / Denoise",   min:0, max:10, default:0, unit:"", group:"enhance" },
+  { key:"haze",        label:"Haze / Dehaze",       min:-100, max:100, default:0, unit:"", group:"enhance" },
+
+  { key:"glow",        label:"Bloom Glow",  min:0,    max:100, default:0,   unit:"%",  group:"style" },
   { key:"vignette",    label:"Vignette",    min:0,    max:100, default:0,   unit:"%",  group:"style" },
-  { key:"fade",        label:"Fade",        min:0,    max:100, default:0,   unit:"%",  group:"style" },
-  { key:"grain",       label:"Grain",       min:0,    max:100, default:0,   unit:"",   group:"style" },
+  { key:"grain",       label:"Film Grain",  min:0,    max:100, default:0,   unit:"",   group:"style" },
 ];
 export const DEFAULT_FILTERS = Object.fromEntries(COLOR_FILTERS.map(f=>[f.key,f.default]));
 
@@ -40,6 +69,33 @@ export const PRESETS = [
   { name:"Soft Matte", icon:"🌫️", values:{ contrast:80,saturation:90,fade:40,shadows:15,highlights:-15,clarity:-10 }},
   { name:"Golden",     icon:"🌇", values:{ temperature:35,saturation:120,highlights:15,shadows:-5,vibrance:125 }},
   { name:"Neo-Tokyo",  icon:"🌃", values:{ contrast:130,saturation:150,temperature:-30,tint:30,clarity:10,vignette:25 }},
+];
+
+export const PREQUEL_PRESETS = [
+  { id: "y2k", name: "Y2K Flash", icon: "📼", desc: "Retro 2000s flash glow, pinkish tint & soft bloom", values: { contrast: 108, saturation: 120, temperature: 15, tint: 20, fade: 18, grain: 25, vignette: 15 }, fx: { chromatic: 35, halation: 45, vhs: true, lightLeak: 'gold', glitter: 0, filmDust: 0, prism: 0, heatmap: 0 } },
+  { id: "vhs1998", name: "VHS 1998", icon: "📹", desc: "Classic 90s camcorder aesthetic with scanlines & date stamp", values: { contrast: 95, saturation: 90, temperature: 10, tint: -5, fade: 25, grain: 40 }, fx: { chromatic: 50, vhs: true, filmDust: 30, lightLeak: 'red', halation: 0, glitter: 0, prism: 0, heatmap: 0 } },
+  { id: "disco", name: "Disco Prism", icon: "🪩", desc: "70s disco flare, rainbow prism light leaks & sparkles", values: { contrast: 115, saturation: 130, temperature: 25, tint: 10, highlights: 20 }, fx: { prism: 65, halation: 50, glitter: 50, lightLeak: 'prism', chromatic: 0, vhs: false, filmDust: 0, heatmap: 0 } },
+  { id: "cyberpunk", name: "Cyberpunk", icon: "🌃", desc: "Futuristic neon cyan & magenta split with dark contrast", values: { contrast: 135, saturation: 140, temperature: -35, tint: 35, clarity: 15, vignette: 30 }, fx: { chromatic: 60, halation: 35, lightLeak: 'neon', prism: 0, vhs: false, glitter: 0, filmDust: 0, heatmap: 0 } },
+  { id: "indie", name: "Indie Kid", icon: "🌈", desc: "Hyper-saturated pop colors with bright contrast", values: { contrast: 125, saturation: 165, temperature: 10, vibrance: 140, highlights: 15 }, fx: { halation: 25, glitter: 40, chromatic: 0, prism: 0, vhs: false, filmDust: 0, lightLeak: 'none', heatmap: 0 } },
+  { id: "dreamy", name: "Dreamy Aura", icon: "☁️", desc: "Pastel bloom glow with soft highlights and film dust", values: { contrast: 82, saturation: 105, temperature: 12, tint: 15, fade: 35, clarity: -10 }, fx: { halation: 75, glitter: 30, filmDust: 30, chromatic: 0, prism: 0, vhs: false, lightLeak: 'gold', heatmap: 0 } },
+  { id: "heatmap", name: "Thermal Vision", icon: "🔮", desc: "Infrared thermal spectrum heatmap vision", values: { contrast: 140, saturation: 180, temperature: -10, clarity: 10 }, fx: { heatmap: 85, chromatic: 35, halation: 0, prism: 0, vhs: false, glitter: 0, filmDust: 0, lightLeak: 'none' } }
+];
+
+export const LIGHT_LEAK_OPTIONS = [
+  { id: "none", label: "None", icon: "⊘" },
+  { id: "gold", label: "Golden Hour Burn", icon: "🌅" },
+  { id: "prism", label: "Rainbow Prism", icon: "🌈" },
+  { id: "red", label: "Vintage Red Leak", icon: "🔴" },
+  { id: "neon", label: "Neon Cyan Flare", icon: "⚡" }
+];
+
+export const VIBE_AUDIO_OPTIONS = [
+  { id: "none", label: "Off", icon: "🔇", desc: "No audio vibe" },
+  { id: "y2k", label: "Y2K Synthwave", icon: "🎹", desc: "Retro 80s/90s analog synth pad" },
+  { id: "lofi", label: "Lo-Fi Vintage Beats", icon: "🎧", desc: "Mellow vinyl tape beat" },
+  { id: "synth", label: "Cyberpunk Pulse", icon: "⚡", desc: "Driving arpeggiated bassline" },
+  { id: "chill", label: "Dreamy Chillwave", icon: "☁️", desc: "Ambient ambient swell" },
+  { id: "disco", label: "70s Disco Funk", icon: "🪩", desc: "Upbeat disco groove stings" }
 ];
 
 export const LUT_PRESETS = [

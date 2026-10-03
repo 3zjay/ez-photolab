@@ -49,6 +49,7 @@ const TimelineItem = React.memo(({ grp, idx, isCurrent, onClick, accent }) => {
   const gKeepers   = grp.filter(x => (x.category || "alternate") === "keeper").length;
   const gBlurry    = grp.filter(x => x.category === "blurry").length;
   const gRejected  = grp.filter(x => x.category === "rejected").length;
+  const gDark      = grp.filter(x => x.isDark).length;
 
   return (
     <div
@@ -100,11 +101,12 @@ const TimelineItem = React.memo(({ grp, idx, isCurrent, onClick, accent }) => {
       </div>
 
       {/* Warn badges */}
-      {(gBlurry > 0 || gRejected > 0) && (
+      {(gBlurry > 0 || gRejected > 0 || gDark > 0) && (
         <div style={{
           position: "absolute", bottom: "4px", left: "4px",
           display: "flex", gap: "2px"
         }}>
+          {gDark > 0 && <span style={{ fontSize: "8px", background: "#7c3aedee", color: "#fff", padding: "1px 3px", borderRadius: "3px", fontWeight: 800 }} title={`${gDark} dark photos in cluster`}>🌙{gDark}</span>}
           {gBlurry > 0 && <span style={{ fontSize: "8px", background: "#eab30888", color: "#fff", padding: "1px 3px", borderRadius: "3px", fontWeight: 800 }}>◐{gBlurry}</span>}
           {gRejected > 0 && <span style={{ fontSize: "8px", background: "#ef444488", color: "#fff", padding: "1px 3px", borderRadius: "3px", fontWeight: 800 }}>✕{gRejected}</span>}
         </div>
@@ -144,6 +146,8 @@ export default function CullPage({
   const [sensitivity, setSensitivity] = useState(12);
   const [blurCutoff, setBlurCutoff] = useState(50);
   const [useFaceLandmarks, setUseFaceLandmarks] = useState(true);
+  const [darkThreshold, setDarkThreshold] = useState(28);
+  const [enableExposureCheck, setEnableExposureCheck] = useState(true);
 
   // Runtime State
   const [isProcessing, setIsProcessing] = useState(false);
@@ -151,12 +155,13 @@ export default function CullPage({
   const [showFaceBoxes, setShowFaceBoxes] = useState(true);
   const [showShortcutsHelp, setShowShortcutsHelp] = useState(true);
   const [activePhotoUrl, setActivePhotoUrl] = useState(null);
+  const [exposureFilter, setExposureFilter] = useState("all"); // "all", "well_lit", "dark"
 
   // Physical Export & Layout Configuration States
   const [isExporting, setIsExporting] = useState(false);
   const [exportProgress, setExportProgress] = useState({ current: 0, total: 0, currentFile: "" });
   const [exportMethod, setExportMethod] = useState("folders"); // "folders" or "xmp"
-  const [layoutMode, setLayoutMode] = useState("full_sort"); // "full_sort", "keepers_rejects", "keepers_only", "clusters"
+  const [layoutMode, setLayoutMode] = useState("full_sort"); // "full_sort", "dark_separated", "dark_only", "keepers_rejects", "keepers_only", "clusters"
 
   // Toast / Status state
   const [toastMessage, setToastMessage] = useState(null);
@@ -214,7 +219,9 @@ export default function CullPage({
         {
           groupingSensitivity: sensitivity,
           blurStrictness: blurCutoff,
-          enableFaceLandmarks: useFaceLandmarks
+          enableFaceLandmarks: useFaceLandmarks,
+          darkThreshold: darkThreshold,
+          enableExposureAnalysis: enableExposureCheck
         },
         (prog) => setProgress(prog)
       );
@@ -233,8 +240,8 @@ export default function CullPage({
 
   // 3. Promote a selected duplicate to become the new "Key Photo"
   const handlePromoteToKeyPhoto = (item) => {
-    const groupItems = groups[activeGroupIndex];
-    if (!groupItems) return;
+    const groupItems = activeGroup;
+    if (!groupItems || groupItems.length === 0) return;
 
     // Reset old key photo, assign new one
     groupItems.forEach((x) => {
@@ -254,10 +261,8 @@ export default function CullPage({
     // Re-sort the group so key photo is index 0
     groupItems.sort((a, b) => (b.isKeyPhoto ? 1 : 0) - (a.isKeyPhoto ? 1 : 0));
 
-    const updatedGroups = [...groups];
-    updatedGroups[activeGroupIndex] = groupItems;
-    setGroups(updatedGroups);
-    setCullResults(updatedGroups.flat());
+    setGroups([...groups]);
+    setCullResults(groups.flat());
     setActiveAlternateIndex(0); // Reset selected alternate preview
 
     showToast(`Promoted ${item.name} to Key Photo!`);
@@ -265,10 +270,6 @@ export default function CullPage({
 
   // 4. Update rating / label manually
   const updateActivePhotoRating = (ratingValue, labelValue) => {
-    const activeGroup = groups[activeGroupIndex];
-    if (!activeGroup) return;
-
-    const activePhoto = activeGroup[activeAlternateIndex];
     if (!activePhoto) return;
 
     activePhoto.rating = ratingValue !== undefined ? ratingValue : activePhoto.rating;
@@ -285,9 +286,8 @@ export default function CullPage({
       activePhoto.category = "alternate";
     }
 
-    const updatedGroups = [...groups];
-    setGroups(updatedGroups);
-    setCullResults(updatedGroups.flat());
+    setGroups([...groups]);
+    setCullResults(groups.flat());
   };
 
   // 5. Exporter to write XMP Sidecar files
@@ -330,6 +330,8 @@ export default function CullPage({
       // Determine what files will actually be copied
       const filesToCopy = mode === "keepers_only"
         ? allImages.filter(item => item.isKeyPhoto || item.category === "keeper")
+        : mode === "dark_only"
+        ? allImages.filter(item => item.isDark)
         : allImages;
 
       if (filesToCopy.length === 0) {
@@ -341,12 +343,19 @@ export default function CullPage({
       let alternatesDir = null;
       let blurryDir = null;
       let rejectedDir = null;
+      let wellLitDir = null;
+      let darkDir = null;
 
       if (mode === "full_sort") {
         keepersDir   = await outputHandle.getDirectoryHandle("📗 Keepers",   { create: true });
         alternatesDir = await outputHandle.getDirectoryHandle("📘 Alternates", { create: true });
         blurryDir    = await outputHandle.getDirectoryHandle("📙 Blurry",     { create: true });
         rejectedDir  = await outputHandle.getDirectoryHandle("📕 Rejected",   { create: true });
+      } else if (mode === "dark_separated") {
+        wellLitDir   = await outputHandle.getDirectoryHandle("☀️ Well-Lit Photos", { create: true });
+        darkDir      = await outputHandle.getDirectoryHandle("🌙 Dark & Underexposed", { create: true });
+      } else if (mode === "dark_only") {
+        darkDir      = await outputHandle.getDirectoryHandle("🌙 Dark & Underexposed", { create: true });
       } else if (mode === "keepers_rejects") {
         keepersDir   = await outputHandle.getDirectoryHandle("Keepers",            { create: true });
         alternatesDir = await outputHandle.getDirectoryHandle("Rejected & Alternates", { create: true });
@@ -373,6 +382,10 @@ export default function CullPage({
             else if (cat === "alternate") targetDir = alternatesDir;
             else if (cat === "blurry")    targetDir = blurryDir;
             else                          targetDir = rejectedDir; // rejected
+          } else if (mode === "dark_separated") {
+            targetDir = item.isDark ? darkDir : wellLitDir;
+          } else if (mode === "dark_only") {
+            targetDir = darkDir;
           } else if (mode === "keepers_rejects") {
             targetDir = item.isKeyPhoto ? keepersDir : alternatesDir;
           } else if (mode === "keepers_only") {
@@ -404,28 +417,44 @@ export default function CullPage({
     }
   };
 
+  // Filter duplicate groups based on exposure status if requested
+  const displayedGroups = React.useMemo(() => {
+    if (exposureFilter === "dark") {
+      return groups.filter(grp => grp.some(item => item.isDark));
+    }
+    if (exposureFilter === "well_lit") {
+      return groups.filter(grp => grp.some(item => !item.isDark));
+    }
+    return groups;
+  }, [groups, exposureFilter]);
+
+  const safeGroupIndex = Math.min(activeGroupIndex, Math.max(0, displayedGroups.length - 1));
+  const activeGroup = displayedGroups[safeGroupIndex] || [];
+  const activePhoto = activeGroup[activeAlternateIndex] || activeGroup[0] || null;
+  const keyPhoto = activeGroup[0] || null;
+
   // 6. High-speed Keyboard Listeners
   const handleKeyDown = useCallback((e) => {
-    if (isProcessing || groups.length === 0) return;
+    if (isProcessing || displayedGroups.length === 0) return;
 
-    const activeGroup = groups[activeGroupIndex];
-    if (!activeGroup) return;
+    const currentGroup = displayedGroups[safeGroupIndex];
+    if (!currentGroup) return;
 
-    const activePhoto = activeGroup[activeAlternateIndex];
+    const currentPhoto = currentGroup[activeAlternateIndex] || currentGroup[0];
 
     switch (e.key) {
       // Cycle Duplicate Groups (Left / Right)
       case "ArrowRight":
         e.preventDefault();
-        if (activeGroupIndex < groups.length - 1) {
-          setActiveGroupIndex(prev => prev + 1);
+        if (safeGroupIndex < displayedGroups.length - 1) {
+          setActiveGroupIndex(safeGroupIndex + 1);
           setActiveAlternateIndex(0);
         }
         break;
       case "ArrowLeft":
         e.preventDefault();
-        if (activeGroupIndex > 0) {
-          setActiveGroupIndex(prev => prev - 1);
+        if (safeGroupIndex > 0) {
+          setActiveGroupIndex(safeGroupIndex - 1);
           setActiveAlternateIndex(0);
         }
         break;
@@ -433,7 +462,7 @@ export default function CullPage({
       // Cycle Alternates inside current Group (Up / Down)
       case "ArrowDown":
         e.preventDefault();
-        if (activeAlternateIndex < activeGroup.length - 1) {
+        if (activeAlternateIndex < currentGroup.length - 1) {
           setActiveAlternateIndex(prev => prev + 1);
         }
         break;
@@ -469,15 +498,15 @@ export default function CullPage({
       case "s":
       case "S":
         e.preventDefault();
-        if (activePhoto && !activePhoto.isKeyPhoto) {
-          handlePromoteToKeyPhoto(activePhoto);
+        if (currentPhoto && !currentPhoto.isKeyPhoto) {
+          handlePromoteToKeyPhoto(currentPhoto);
         }
         break;
 
       default:
         break;
     }
-  }, [groups, activeGroupIndex, activeAlternateIndex, isProcessing]);
+  }, [displayedGroups, safeGroupIndex, activeAlternateIndex, isProcessing]);
 
   // Set keyboard focus on mount or selection
   useEffect(() => {
@@ -499,10 +528,6 @@ export default function CullPage({
     yellow: "#eab308",
     red: "#ef4444"
   };
-
-  const activeGroup = groups[activeGroupIndex] || [];
-  const activePhoto = activeGroup[activeAlternateIndex] || null;
-  const keyPhoto = activeGroup[0] || null;
 
   // On-demand Object URL generation for active preview to prevent OOM
   useEffect(() => {
@@ -867,7 +892,7 @@ export default function CullPage({
               <h3 style={{ margin: 0, fontSize: "15px", fontWeight: 700 }}>AI Parameters & Sensitivity Settings</h3>
             </div>
             
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "28px" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "24px" }}>
               
               {/* Grouping Sensitivity */}
               <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
@@ -906,20 +931,54 @@ export default function CullPage({
                   Threshold for out-of-focus warning flags. Alternates below this setting get flagged as blurry candidates.
                 </span>
               </div>
+
+              {/* Dark Photo Exposure Cutoff */}
+              <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between" }}>
+                  <label style={{ fontSize: "13px", fontWeight: 700 }}>Dark Photo Exposure Cutoff</label>
+                  <span style={{ fontSize: "13px", color: "#a855f7", fontWeight: 800 }}>Under {darkThreshold}%</span>
+                </div>
+                <input
+                  type="range"
+                  min="10"
+                  max="45"
+                  value={darkThreshold}
+                  onChange={(e) => setDarkThreshold(parseInt(e.target.value))}
+                  style={{ accentColor: "#a855f7", cursor: "pointer", width: "100%" }}
+                />
+                <span style={{ fontSize: "11px", color: dm ? "#a1a1aa" : "#71717a", lineHeight: "1.4" }}>
+                  Threshold below which images are classified as dark/underexposed and separated.
+                </span>
+              </div>
             </div>
 
-            {/* MediaPipe blink selection */}
-            <div style={{ display: "flex", alignItems: "center", gap: "10px", marginTop: "10px" }}>
-              <input
-                type="checkbox"
-                id="cull_landmarks"
-                checked={useFaceLandmarks}
-                onChange={(e) => setUseFaceLandmarks(e.target.checked)}
-                style={{ accentColor: accent, width: "17px", height: "17px", cursor: "pointer" }}
-              />
-              <label htmlFor="cull_landmarks" style={{ fontSize: "13px", fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: "6px" }}>
-                Enable MediaPipe Face Landmarker (Auto-detects closed eyes, blinks, and smiles)
-              </label>
+            {/* Checkbox Options */}
+            <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginTop: "4px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                <input
+                  type="checkbox"
+                  id="cull_landmarks"
+                  checked={useFaceLandmarks}
+                  onChange={(e) => setUseFaceLandmarks(e.target.checked)}
+                  style={{ accentColor: accent, width: "17px", height: "17px", cursor: "pointer" }}
+                />
+                <label htmlFor="cull_landmarks" style={{ fontSize: "13px", fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: "6px" }}>
+                  Enable MediaPipe Face Landmarker (Auto-detects closed eyes, blinks, and smiles)
+                </label>
+              </div>
+
+              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                <input
+                  type="checkbox"
+                  id="cull_exposure"
+                  checked={enableExposureCheck}
+                  onChange={(e) => setEnableExposureCheck(e.target.checked)}
+                  style={{ accentColor: "#a855f7", width: "17px", height: "17px", cursor: "pointer" }}
+                />
+                <label htmlFor="cull_exposure" style={{ fontSize: "13px", fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: "6px" }}>
+                  Enable Exposure & Darkness Analysis (Detects and separates dark vs well-lit pictures)
+                </label>
+              </div>
             </div>
           </div>
 
@@ -1003,10 +1062,12 @@ export default function CullPage({
         const alternates = all.filter(x => x.category === "alternate" || (!x.isKeyPhoto && !x.category && x.rating === 3)).length;
         const blurry    = all.filter(x => x.category === "blurry").length;
         const rejected  = all.filter(x => x.category === "rejected"  || (x.rating === 1 && !x.category)).length;
+        const darkCount = all.filter(x => x.isDark).length;
+        const wellLitCount = all.filter(x => !x.isDark).length;
         return (
           <div className="glass-panel" style={{
             borderRadius: "18px",
-            padding: "18px 24px",
+            padding: "16px 22px",
             display: "flex",
             alignItems: "center",
             gap: "8px",
@@ -1033,8 +1094,86 @@ export default function CullPage({
                 <span style={{ fontSize: "10px", color: dm ? "#666" : "#999" }}>({tier.desc})</span>
               </div>
             ))}
+
+            <div style={{ width: "1px", height: "24px", background: dm ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)", margin: "0 4px" }} />
+
+            {/* Quick Exposure Separation Filters */}
+            <button
+              onClick={() => {
+                setExposureFilter(prev => prev === "dark" ? "all" : "dark");
+                setActiveGroupIndex(0);
+                setActiveAlternateIndex(0);
+              }}
+              style={{
+                display: "flex", alignItems: "center", gap: "6px",
+                background: exposureFilter === "dark" ? "rgba(168, 85, 247, 0.28)" : "rgba(168, 85, 247, 0.10)",
+                border: `1.5px solid ${exposureFilter === "dark" ? "#a855f7" : "rgba(168, 85, 247, 0.35)"}`,
+                borderRadius: "10px",
+                padding: "6px 12px",
+                cursor: "pointer",
+                transition: "all 0.15s ease",
+                transform: exposureFilter === "dark" ? "scale(1.02)" : "none"
+              }}
+              title="Click to isolate clusters with dark / underexposed photos"
+            >
+              <span style={{ fontSize: "14px" }}>🌙</span>
+              <span style={{ fontSize: "12px", fontWeight: 800, color: "#c084fc" }}>{darkCount}</span>
+              <span style={{ fontSize: "11px", fontWeight: 700, color: dm ? "#e9d5ff" : "#581c87" }}>Dark Photos</span>
+              {exposureFilter === "dark" && (
+                <span style={{ fontSize: "9px", background: "#a855f7", color: "#fff", padding: "1px 5px", borderRadius: "4px", fontWeight: 800 }}>ACTIVE</span>
+              )}
+            </button>
+
+            <button
+              onClick={() => {
+                setExposureFilter(prev => prev === "well_lit" ? "all" : "well_lit");
+                setActiveGroupIndex(0);
+                setActiveAlternateIndex(0);
+              }}
+              style={{
+                display: "flex", alignItems: "center", gap: "6px",
+                background: exposureFilter === "well_lit" ? "rgba(234, 179, 8, 0.28)" : "rgba(234, 179, 8, 0.10)",
+                border: `1.5px solid ${exposureFilter === "well_lit" ? "#eab308" : "rgba(234, 179, 8, 0.35)"}`,
+                borderRadius: "10px",
+                padding: "6px 12px",
+                cursor: "pointer",
+                transition: "all 0.15s ease",
+                transform: exposureFilter === "well_lit" ? "scale(1.02)" : "none"
+              }}
+              title="Click to isolate clusters with well-lit photos"
+            >
+              <span style={{ fontSize: "14px" }}>☀️</span>
+              <span style={{ fontSize: "12px", fontWeight: 800, color: "#facc15" }}>{wellLitCount}</span>
+              <span style={{ fontSize: "11px", fontWeight: 700, color: dm ? "#fef08a" : "#713f12" }}>Well-Lit</span>
+              {exposureFilter === "well_lit" && (
+                <span style={{ fontSize: "9px", background: "#eab308", color: "#000", padding: "1px 5px", borderRadius: "4px", fontWeight: 800 }}>ACTIVE</span>
+              )}
+            </button>
+
+            {exposureFilter !== "all" && (
+              <button
+                onClick={() => {
+                  setExposureFilter("all");
+                  setActiveGroupIndex(0);
+                  setActiveAlternateIndex(0);
+                }}
+                style={{
+                  background: "transparent",
+                  border: `1px dashed ${dm ? "rgba(255,255,255,0.2)" : "rgba(0,0,0,0.2)"}`,
+                  color: dm ? "#a1a1aa" : "#71717a",
+                  borderRadius: "8px",
+                  padding: "5px 10px",
+                  fontSize: "11px",
+                  fontWeight: 600,
+                  cursor: "pointer"
+                }}
+              >
+                ✕ Clear Filter
+              </button>
+            )}
+
             <div style={{ marginLeft: "auto", fontSize: "11px", color: dm ? "#555" : "#bbb", fontWeight: 600 }}>
-              {all.length} total · {groups.length} clusters
+              {all.length} total · {displayedGroups.length} shown of {groups.length} clusters
             </div>
           </div>
         );
@@ -1060,7 +1199,7 @@ export default function CullPage({
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: `1px solid ${dm ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)"}`, paddingBottom: "12px", marginBottom: "16px" }}>
               <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
                 <span style={{ background: "linear-gradient(135deg, #06b6d4, #6c63ff)", color: "#fff", padding: "4px 10px", borderRadius: "8px", fontSize: "11px", fontWeight: 800 }}>
-                  CLUSTER {activeGroupIndex + 1} / {groups.length}
+                  CLUSTER {safeGroupIndex + 1} / {displayedGroups.length}
                 </span>
                 <span style={{ fontSize: "13px", fontWeight: 600, color: dm ? "#9ca3af" : "#4b5563" }}>
                   {activeGroup.length} duplicate alternates
@@ -1195,9 +1334,18 @@ export default function CullPage({
                 }}
               >
                 <div>
-                  <span style={{ color: "#aaa" }}>Sharpness Value:</span>{" "}
+                  <span style={{ color: "#aaa" }}>Sharpness:</span>{" "}
                   <strong style={{ color: activePhoto.sharpness >= blurCutoff ? "#22c55e" : "#ef4444" }}>
                     {activePhoto.sharpness}%
+                  </strong>
+                </div>
+
+                <div style={{ width: "1px", background: "rgba(255, 255, 255, 0.15)" }} />
+
+                <div>
+                  <span style={{ color: "#aaa" }}>Exposure:</span>{" "}
+                  <strong style={{ color: activePhoto.isDark ? "#c084fc" : "#22c55e" }}>
+                    {activePhoto.isDark ? `🌙 Dark (${activePhoto.brightness || 0}%)` : `☀️ Well-Lit (${activePhoto.brightness || 0}%)`}
                   </strong>
                 </div>
 
@@ -1361,6 +1509,53 @@ export default function CullPage({
                 <span style={{ fontSize: "12px", color: dm ? "#a1a1aa" : "#71717a", fontWeight: 700 }}>AI Quality Details:</span>
                 
                 <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginTop: "8px" }}>
+                  {/* Exposure Analysis Card */}
+                  <div
+                    style={{
+                      background: activePhoto.isDark ? "rgba(168, 85, 247, 0.08)" : (dm ? "rgba(255,255,255,0.01)" : "rgba(0,0,0,0.01)"),
+                      border: `1px solid ${activePhoto.isDark ? "rgba(168, 85, 247, 0.3)" : (dm ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.04)")}`,
+                      padding: "10px",
+                      borderRadius: "10px",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "6px"
+                    }}
+                  >
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: "11px", fontWeight: 800 }}>
+                      <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                        <span>{activePhoto.isDark ? "🌙" : "☀️"}</span> Exposure & Luminance
+                      </span>
+                      <span style={{ color: activePhoto.isDark ? "#c084fc" : "#22c55e" }}>
+                        {activePhoto.isDark ? "🌙 Dark / Underexposed" : "☀️ Well-Lit / Balanced"}
+                      </span>
+                    </div>
+
+                    <div style={{ display: "flex", flexDirection: "column", gap: "4px", fontSize: "10px", color: dm ? "#aaa" : "#555" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between" }}>
+                        <span>Luminance / Brightness:</span>
+                        <strong style={{ color: activePhoto.isDark ? "#c084fc" : (dm ? "#fff" : "#111") }}>
+                          {activePhoto.brightness !== undefined ? `${activePhoto.brightness}%` : "N/A"}
+                        </strong>
+                      </div>
+                      <div style={{ width: "100%", height: "4px", background: dm ? "#222" : "#ddd", borderRadius: "2px", overflow: "hidden" }}>
+                        <div
+                          style={{
+                            height: "100%",
+                            width: `${Math.min(100, Math.max(3, activePhoto.brightness || 0))}%`,
+                            background: activePhoto.isDark ? "linear-gradient(90deg, #3b0764, #9333ea)" : "linear-gradient(90deg, #f59e0b, #22c55e)"
+                          }}
+                        />
+                      </div>
+
+                      {activePhoto.exposure && (
+                        <div style={{ display: "flex", justifyContent: "space-between", marginTop: "2px", fontSize: "9.5px", color: dm ? "#777" : "#888" }}>
+                          <span>Crushed Shadows: {activePhoto.exposure.shadowClipping || 0}%</span>
+                          <span>Highlights: {activePhoto.exposure.highlightClipping || 0}%</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
                   {/* General flags */}
                   {activePhoto.warnings?.length > 0 ? (
                     activePhoto.warnings.map((w, idx) => (
@@ -1384,7 +1579,7 @@ export default function CullPage({
                     ))
                   ) : (
                     <div style={{ color: "#22c55e", fontSize: "11px", fontWeight: 700, display: "flex", alignItems: "center", gap: "6px", background: "rgba(34, 197, 94, 0.05)", padding: "8px 12px", borderRadius: "10px", border: "1px solid rgba(34, 197, 94, 0.15)" }}>
-                      <span>✓</span> Perfect focus. No issues detected!
+                      <span>✓</span> Perfect focus and balanced exposure.
                     </div>
                   )}
 
@@ -1510,8 +1705,13 @@ export default function CullPage({
                         <span style={{ fontSize: "11px", fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "160px" }}>
                           {item.name}
                         </span>
-                        <div style={{ display: "flex", gap: "10px", fontSize: "10px", color: dm ? "#a1a1aa" : "#71717a" }}>
+                        <div style={{ display: "flex", gap: "8px", fontSize: "10px", color: dm ? "#a1a1aa" : "#71717a", flexWrap: "wrap", alignItems: "center" }}>
                           <span>Focus: {item.sharpness}%</span>
+                          {item.isDark ? (
+                            <span style={{ color: "#c084fc", fontWeight: 700 }}>🌙 Dark ({item.brightness}%)</span>
+                          ) : (
+                            <span style={{ color: "#eab308" }}>☀️ {item.brightness}%</span>
+                          )}
                           {item.isKeyPhoto ? (
                             <span style={{ color: "#22c55e", fontWeight: 800 }}>★ Key Photo</span>
                           ) : (
@@ -1594,9 +1794,11 @@ export default function CullPage({
                   {/* Folder Layout Options */}
                   <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
                     {[
+                      { id: "dark_separated",  title: "🌙 Separate Dark & Well-Lit Photos (Exposure Split)", desc: "Splits entire photoshoot into ☀️ Well-Lit Photos and 🌙 Dark & Underexposed folders." },
                       { id: "full_sort",       title: "★ Full 4-Folder Sort (Recommended)", desc: "Separates into 📗 Keepers · 📘 Alternates · 📙 Blurry · 📕 Rejected based on AI ratings." },
                       { id: "keepers_rejects", title: "Keepers vs Rejected",                desc: "Creates /Keepers and /Rejected & Alternates folders." },
                       { id: "keepers_only",    title: "Keepers Only",                       desc: "Only saves the best 5-star photos to a /Keepers folder." },
+                      { id: "dark_only",       title: "🌙 Dark Photos Only",                desc: "Isolates and exports only the underexposed and dark photos." },
                       { id: "clusters",        title: "AI Duplicate Groups",                desc: "Puts each duplicate burst into /Group_1, /Group_2, etc. folders." }
                     ].map((opt) => (
                       <label
@@ -1722,10 +1924,10 @@ export default function CullPage({
         >
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <span style={{ fontSize: "11px", fontWeight: 800, color: dm ? "#a1a1aa" : "#71717a", textTransform: "uppercase", letterSpacing: "0.5px" }}>
-              Duplicate Clusters Timeline
+              {exposureFilter === "dark" ? "🌙 Dark Clusters Timeline" : exposureFilter === "well_lit" ? "☀️ Well-Lit Clusters Timeline" : "Duplicate Clusters Timeline"}
             </span>
             <span style={{ fontSize: "11px", color: accent, fontWeight: 800 }}>
-              Cluster {activeGroupIndex + 1} of {groups.length}
+              Cluster {displayedGroups.length > 0 ? safeGroupIndex + 1 : 0} of {displayedGroups.length}
             </span>
           </div>
 
@@ -1738,16 +1940,28 @@ export default function CullPage({
               scrollBehavior: "smooth"
             }}
           >
-            {groups.map((grp, idx) => (
-              <TimelineItem
-                key={idx}
-                grp={grp}
-                idx={idx}
-                isCurrent={idx === activeGroupIndex}
-                onClick={handleTimelineItemClick}
-                accent={accent}
-              />
-            ))}
+            {displayedGroups.length === 0 ? (
+              <div style={{ padding: "16px", textAlign: "center", color: dm ? "#aaa" : "#666", fontSize: "12px", width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: "10px" }}>
+                <span>No clusters found matching the active <strong>"{exposureFilter === "dark" ? "Dark Photos" : "Well-Lit"}"</strong> filter.</span>
+                <button
+                  onClick={() => setExposureFilter("all")}
+                  style={{ background: accent, color: "#fff", border: "none", borderRadius: "6px", padding: "4px 10px", cursor: "pointer", fontSize: "11px", fontWeight: 700 }}
+                >
+                  View All Photos
+                </button>
+              </div>
+            ) : (
+              displayedGroups.map((grp, idx) => (
+                <TimelineItem
+                  key={idx}
+                  grp={grp}
+                  idx={idx}
+                  isCurrent={idx === safeGroupIndex}
+                  onClick={handleTimelineItemClick}
+                  accent={accent}
+                />
+              ))
+            )}
           </div>
         </div>
       )}

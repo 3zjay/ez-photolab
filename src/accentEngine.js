@@ -19,6 +19,7 @@ export function analyzeImage(imgElement) {
   const data = imgData.data;
 
   let totalLum = 0;
+  let totalSat = 0;
   let rSum = 0, gSum = 0, bSum = 0;
   let shadowCount = 0;
   let highlightCount = 0;
@@ -36,6 +37,11 @@ export function analyzeImage(imgElement) {
     gSum += g;
     bSum += b;
 
+    const max = Math.max(r, g, b);
+    const min = Math.min(r, g, b);
+    const sat = max === 0 ? 0 : (max - min) / max;
+    totalSat += sat;
+
     // Standard relative luminance formula
     const lum = 0.299 * r + 0.587 * g + 0.114 * b;
     lums[i / 4] = lum;
@@ -46,6 +52,7 @@ export function analyzeImage(imgElement) {
   }
 
   const avgLum = totalLum / numPixels;
+  const avgSat = totalSat / numPixels;
   const avgR = rSum / numPixels;
   const avgG = gSum / numPixels;
   const avgB = bSum / numPixels;

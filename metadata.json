@@ -1,0 +1,6 @@
+{
+  "name": "PHOTOlab",
+  "description": "Professional AI Photo Editor featuring AI background removal, upscaling, beauty filters, and batch processing.",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

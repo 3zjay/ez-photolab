@@ -100,16 +100,20 @@ export function calcBatchDims(natW, natH, mode, preset, customW, customH, keepAs
 
 // ── CSS filter from state ─────────────────────────────────────────────────────
 export function toCSSFilter(f) {
-  const ev = 1 + f.exposure/100;
-  const bv = (f.brightness/100)*ev;
-  const hlAdj = f.highlights > 0 ? 1 + f.highlights*0.002 : 1 + f.highlights*0.003;
-  const shAdj = f.shadows > 0 ? 1 + f.shadows*0.003 : 1 + f.shadows*0.002;
-  let s = `brightness(${(bv*hlAdj*shAdj).toFixed(3)}) contrast(${(f.contrast/100).toFixed(3)}) saturate(${(f.saturation/100 * f.vibrance/100).toFixed(3)})`;
-  if (f.hue     !== 0) s += ` hue-rotate(${f.hue}deg)`;
-  if (f.denoise > 0)   s += ` blur(${(f.denoise*0.05).toFixed(2)}px)`;
-  if (f.sharpness > 0) s += ` contrast(${(1+f.sharpness*0.022).toFixed(3)})`;
-  if (f.clarity   > 0) s += ` contrast(${(1+f.clarity*0.016).toFixed(3)})`;
-  if (f.tint !== 0) {
+  const ev = 1 + (f.exposure || 0)/100;
+  const bv = ((f.brightness || 100)/100)*ev;
+  const hlAdj = (f.highlights || 0) > 0 ? 1 + f.highlights*0.002 : 1 + (f.highlights || 0)*0.003;
+  const shAdj = (f.shadows || 0) > 0 ? 1 + f.shadows*0.003 : 1 + (f.shadows || 0)*0.002;
+  const wAdj = (f.whites || 0) > 0 ? 1 + f.whites*0.002 : 1 + (f.whites || 0)*0.002;
+  const bAdj = (f.blacks || 0) > 0 ? 1 + f.blacks*0.002 : 1 + (f.blacks || 0)*0.002;
+  const contrastFactor = ((f.contrast || 100)/100) * (f.haze ? (1 + f.haze*0.003) : 1);
+  let s = `brightness(${(bv*hlAdj*shAdj*wAdj*bAdj).toFixed(3)}) contrast(${contrastFactor.toFixed(3)}) saturate(${(((f.saturation || 100)/100) * ((f.vibrance || 100)/100)).toFixed(3)})`;
+  if (f.hue && f.hue !== 0) s += ` hue-rotate(${f.hue}deg)`;
+  if (f.denoise && f.denoise > 0) s += ` blur(${(f.denoise*0.05).toFixed(2)}px)`;
+  if (f.sharpness && f.sharpness > 0) s += ` contrast(${(1+f.sharpness*0.022).toFixed(3)})`;
+  if (f.clarity && f.clarity > 0) s += ` contrast(${(1+f.clarity*0.016).toFixed(3)})`;
+  if (f.glow && f.glow > 0) s += ` drop-shadow(0 0 ${(f.glow*0.12).toFixed(1)}px rgba(255,255,255,0.45))`;
+  if (f.tint && f.tint !== 0) {
     const tintSign = f.tint > 0 ? 120 : 300;
     const tintAmt  = Math.abs(f.tint)/400;
     s += ` sepia(${tintAmt.toFixed(3)}) hue-rotate(${tintSign}deg) sepia(0)`;
@@ -276,6 +280,137 @@ export function apply3DLut(imgData, lutData, size, intensity = 1.0) {
   }
 }
 
+// Applies RGB Tone Curves using precomputed lookup tables
+export function applyCurves(imgData, curves) {
+  if (!curves) return;
+  const { master, red, green, blue } = curves;
+  
+  const isModified = (pts) => pts && pts.some(p => (p.x === 0 && p.y !== 0) || (p.x === 255 && p.y !== 255) || (p.x !== 0 && p.x !== 255));
+  if (!isModified(master) && !isModified(red) && !isModified(green) && !isModified(blue)) return;
+
+  const buildLut = (pts) => {
+    const lut = new Uint8Array(256);
+    const sorted = [...(pts || [{ x: 0, y: 0 }, { x: 255, y: 255 }])].sort((a, b) => a.x - b.x);
+    for (let i = 0; i < 256; i++) {
+      let val = i;
+      if (sorted.length >= 2) {
+        if (i <= sorted[0].x) val = sorted[0].y;
+        else if (i >= sorted[sorted.length - 1].x) val = sorted[sorted.length - 1].y;
+        else {
+          for (let j = 0; j < sorted.length - 1; j++) {
+            if (i >= sorted[j].x && i <= sorted[j + 1].x) {
+              const t = (i - sorted[j].x) / (sorted[j + 1].x - sorted[j].x || 1);
+              val = sorted[j].y + t * (sorted[j + 1].y - sorted[j].y);
+              break;
+            }
+          }
+        }
+      }
+      lut[i] = Math.min(255, Math.max(0, Math.round(val)));
+    }
+    return lut;
+  };
+
+  const mLut = buildLut(master);
+  const rLut = buildLut(red);
+  const gLut = buildLut(green);
+  const bLut = buildLut(blue);
+
+  const d = imgData.data;
+  for (let i = 0; i < d.length; i += 4) {
+    d[i]     = mLut[rLut[d[i]]];
+    d[i + 1] = mLut[gLut[d[i + 1]]];
+    d[i + 2] = mLut[bLut[d[i + 2]]];
+  }
+}
+
+// Applies selective 8-channel HSL adjustments to image data
+export function applyHslMixer(imgData, hslMixer) {
+  if (!hslMixer) return;
+  const isAnyModified = Object.values(hslMixer).some(v => v.hue !== 0 || v.sat !== 0 || v.lum !== 0);
+  if (!isAnyModified) return;
+
+  const d = imgData.data;
+
+  const channels = [
+    { id: 'red', center: 0, width: 45 },
+    { id: 'orange', center: 30, width: 35 },
+    { id: 'yellow', center: 60, width: 40 },
+    { id: 'green', center: 120, width: 70 },
+    { id: 'cyan', center: 180, width: 45 },
+    { id: 'blue', center: 225, width: 60 },
+    { id: 'purple', center: 275, width: 45 },
+    { id: 'magenta', center: 315, width: 45 }
+  ];
+
+  for (let i = 0; i < d.length; i += 4) {
+    let r = d[i] / 255;
+    let g = d[i + 1] / 255;
+    let b = d[i + 2] / 255;
+
+    const max = Math.max(r, g, b);
+    const min = Math.min(r, g, b);
+    let h = 0, s = 0, l = (max + min) / 2;
+
+    if (max !== min) {
+      const delta = max - min;
+      s = l > 0.5 ? delta / (2 - max - min) : delta / (max + min);
+      switch (max) {
+        case r: h = (g - b) / delta + (g < b ? 6 : 0); break;
+        case g: h = (b - r) / delta + 2; break;
+        case b: h = (r - g) / delta + 4; break;
+      }
+      h *= 60;
+    }
+
+    let deltaH = 0, deltaS = 0, deltaL = 0;
+
+    channels.forEach(ch => {
+      const config = hslMixer[ch.id];
+      if (!config || (config.hue === 0 && config.sat === 0 && config.lum === 0)) return;
+
+      let diff = Math.abs(h - ch.center);
+      if (diff > 180) diff = 360 - diff;
+
+      if (diff < ch.width) {
+        const weight = Math.cos((diff / ch.width) * (Math.PI / 2));
+        deltaH += config.hue * weight;
+        deltaS += config.sat * weight;
+        deltaL += config.lum * weight;
+      }
+    });
+
+    if (deltaH === 0 && deltaS === 0 && deltaL === 0) continue;
+
+    h = (h + deltaH + 360) % 360;
+    s = Math.min(1, Math.max(0, s * (1 + deltaS / 100)));
+    l = Math.min(1, Math.max(0, l * (1 + deltaL / 100)));
+
+    let nr, ng, nb;
+    if (s === 0) {
+      nr = ng = nb = l;
+    } else {
+      const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+      const p = 2 * l - q;
+      const hue2rgb = (p, q, t) => {
+        if (t < 0) t += 1;
+        if (t > 1) t -= 1;
+        if (t < 1 / 6) return p + (q - p) * 6 * t;
+        if (t < 1 / 2) return q;
+        if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+        return p;
+      };
+      nr = hue2rgb(p, q, h / 360 + 1 / 3);
+      ng = hue2rgb(p, q, h / 360);
+      nb = hue2rgb(p, q, h / 360 - 1 / 3);
+    }
+
+    d[i] = Math.min(255, Math.max(0, Math.round(nr * 255)));
+    d[i + 1] = Math.min(255, Math.max(0, Math.round(ng * 255)));
+    d[i + 2] = Math.min(255, Math.max(0, Math.round(nb * 255)));
+  }
+}
+
 export async function renderFinal(
   imageSrc, cssFilterStr, filters, rotation, flipH, flipV, texts, targetW, targetH,
   lutData = null, lutSize = 33, lutIntensity = 1.0,
@@ -283,7 +418,8 @@ export async function renderFinal(
   beautySmooth = 0, beautyClarity = 0, beautyGlow = 0, beautyUseMask = false,
   structureAmt = 0, skyId = 'none', skyOpacity = 100, skyLightMatch = 50, customSkyUrl = null,
   nearVal = 0, farVal = 0,
-  faceOvalMask = null, skyMask = null, depthMap = null
+  faceOvalMask = null, skyMask = null, depthMap = null,
+  prequelFx = {}, hslMixer = null, curves = null
 ) {
   // Always load a fresh Image to avoid canvas taint and stale DOM refs
   const imgEl = await loadImageFromSrc(imageSrc);
@@ -369,10 +505,15 @@ export async function renderFinal(
     applyRelight(canvas, ctx, W, H, depthMapScaled, nearVal, farVal);
   }
 
-  // Apply 3D LUT
-  if (lutData) {
+  // Apply RGB Curves, 8-Channel HSL Mixer, and 3D LUT
+  const isHslModified = hslMixer && Object.values(hslMixer).some(v => v.hue !== 0 || v.sat !== 0 || v.lum !== 0);
+  const isCurvesModified = curves && Object.values(curves).some(pts => pts.some(p => (p.x === 0 && p.y !== 0) || (p.x === 255 && p.y !== 255) || (p.x !== 0 && p.x !== 255)));
+
+  if (lutData || isHslModified || isCurvesModified) {
     const imgData = ctx.getImageData(0, 0, W, H);
-    apply3DLut(imgData, lutData, lutSize, lutIntensity);
+    if (isCurvesModified) applyCurves(imgData, curves);
+    if (isHslModified) applyHslMixer(imgData, hslMixer);
+    if (lutData) apply3DLut(imgData, lutData, lutSize, lutIntensity);
     ctx.putImageData(imgData, 0, 0);
   }
 
@@ -414,6 +555,19 @@ export async function renderFinal(
     ctx.drawImage(gC, 0, 0);
     ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
   }
+
+  // Prequel Aesthetic Studio FX Pipeline
+  if (prequelFx) {
+    if (prequelFx.thermal || prequelFx.heatmap) applyThermalHeatmap(canvas, ctx, W, H, prequelFx.thermal || prequelFx.heatmap);
+    if (prequelFx.chromatic) applyChromaticAberration(canvas, ctx, W, H, prequelFx.chromatic);
+    if (prequelFx.prism) applyPrismRefraction(canvas, ctx, W, H, prequelFx.prism);
+    if (prequelFx.halation) applyHalationGlow(canvas, ctx, W, H, prequelFx.halation);
+    if (prequelFx.filmDust) applyFilmDust(canvas, ctx, W, H, prequelFx.filmDust);
+    if (prequelFx.glitter) applyGlitterSparkles(canvas, ctx, W, H, prequelFx.glitter);
+    if (prequelFx.lightLeak && prequelFx.lightLeak !== 'none') applyLightLeak(canvas, ctx, W, H, prequelFx.lightLeak);
+    if (prequelFx.vhs) applyVhsOverlay(canvas, ctx, W, H, true);
+  }
+
   // Text overlays
   texts.forEach(t => {
     if (!t.content.trim()) return;
@@ -687,6 +841,246 @@ export function applyRelight(canvas, ctx, W, H, depthMapCanvas, nearVal, farVal)
     d[i] = Math.min(255, Math.max(0, d[i] * mult));
     d[i+1] = Math.min(255, Math.max(0, d[i+1] * mult));
     d[i+2] = Math.min(255, Math.max(0, d[i+2] * mult));
+  }
+
+  ctx.putImageData(imgData, 0, 0);
+}
+
+export function applyChromaticAberration(canvas, ctx, W, H, amount) {
+  if (!amount || amount <= 0) return;
+  const shift = Math.max(1, Math.round((amount / 100) * Math.min(W, H) * 0.018));
+  const imgData = ctx.getImageData(0, 0, W, H);
+  const copyData = ctx.getImageData(0, 0, W, H);
+  const d = imgData.data;
+  const c = copyData.data;
+
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      const idx = (y * W + x) * 4;
+      const rx = Math.min(W - 1, Math.max(0, x + shift));
+      const rIdx = (y * W + rx) * 4;
+      const bx = Math.min(W - 1, Math.max(0, x - shift));
+      const bIdx = (y * W + bx) * 4;
+
+      d[idx] = c[rIdx];         // Red shift right
+      d[idx + 2] = c[bIdx + 2]; // Blue shift left
+    }
+  }
+  ctx.putImageData(imgData, 0, 0);
+}
+
+export function applyPrismRefraction(canvas, ctx, W, H, amount) {
+  if (!amount || amount <= 0) return;
+  const alpha = (amount / 100) * 0.55;
+  ctx.save();
+  ctx.globalCompositeOperation = 'screen';
+
+  const g = ctx.createLinearGradient(0, 0, W * 0.8, H);
+  g.addColorStop(0.0, `rgba(255, 0, 128, ${alpha})`);
+  g.addColorStop(0.25, `rgba(0, 220, 255, ${alpha * 0.8})`);
+  g.addColorStop(0.5, `rgba(255, 230, 0, ${alpha * 0.9})`);
+  g.addColorStop(0.75, `rgba(128, 0, 255, ${alpha * 0.7})`);
+  g.addColorStop(1.0, `rgba(255, 255, 255, ${alpha})`);
+
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, W, H);
+
+  ctx.beginPath();
+  ctx.arc(W * 0.15, H * 0.15, W * 0.35, 0, Math.PI * 2);
+  ctx.strokeStyle = `rgba(255,255,255,${alpha * 0.6})`;
+  ctx.lineWidth = Math.max(4, W * 0.015);
+  ctx.stroke();
+
+  ctx.restore();
+}
+
+export function applyHalationGlow(canvas, ctx, W, H, amount) {
+  if (!amount || amount <= 0) return;
+  const bloomCanvas = document.createElement('canvas');
+  bloomCanvas.width = W; bloomCanvas.height = H;
+  const bCtx = bloomCanvas.getContext('2d');
+
+  bCtx.drawImage(canvas, 0, 0);
+  const blurPx = Math.max(8, Math.round((amount / 100) * Math.min(W, H) * 0.04));
+  bCtx.filter = `blur(${blurPx}px) brightness(1.2) contrast(1.1)`;
+  bCtx.drawImage(canvas, 0, 0);
+
+  ctx.save();
+  ctx.globalCompositeOperation = 'screen';
+  ctx.globalAlpha = (amount / 100) * 0.45;
+  ctx.drawImage(bloomCanvas, 0, 0);
+
+  ctx.globalCompositeOperation = 'color-dodge';
+  ctx.fillStyle = `rgba(255, 120, 150, ${(amount / 100) * 0.15})`;
+  ctx.fillRect(0, 0, W, H);
+
+  ctx.restore();
+}
+
+export function applyFilmDust(canvas, ctx, W, H, amount) {
+  if (!amount || amount <= 0) return;
+  ctx.save();
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.65)';
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.45)';
+
+  const numSpecks = Math.round((amount / 100) * 120);
+  for (let i = 0; i < numSpecks; i++) {
+    const x = Math.random() * W;
+    const y = Math.random() * H;
+    const r = Math.random() * 2 + 0.5;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  const numScratches = Math.round((amount / 100) * 8);
+  for (let i = 0; i < numScratches; i++) {
+    const x = Math.random() * W;
+    const y = Math.random() * H;
+    const len = Math.random() * (H * 0.15) + 15;
+    ctx.lineWidth = Math.random() * 1.5 + 0.5;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x + (Math.random() - 0.5) * 8, y + len);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+export function applyGlitterSparkles(canvas, ctx, W, H, amount) {
+  if (!amount || amount <= 0) return;
+  ctx.save();
+
+  const numStars = Math.round((amount / 100) * 25);
+  for (let i = 0; i < numStars; i++) {
+    const x = Math.random() * W;
+    const y = Math.random() * H;
+    const starSize = Math.max(8, Math.random() * (W * 0.025) + 6);
+
+    ctx.fillStyle = '#ffffff';
+    ctx.shadowColor = 'rgba(255, 220, 150, 0.9)';
+    ctx.shadowBlur = starSize * 0.8;
+
+    ctx.beginPath();
+    ctx.moveTo(x, y - starSize);
+    ctx.quadraticCurveTo(x, y, x + starSize, y);
+    ctx.quadraticCurveTo(x, y, x, y + starSize);
+    ctx.quadraticCurveTo(x, y, x - starSize, y);
+    ctx.quadraticCurveTo(x, y, x, y - starSize);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+export function applyVhsOverlay(canvas, ctx, W, H, active) {
+  if (!active) return;
+  ctx.save();
+
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.12)';
+  for (let y = 0; y < H; y += 4) {
+    ctx.fillRect(0, y, W, 2);
+  }
+
+  const fontSize = Math.max(14, Math.round(W * 0.028));
+  ctx.font = `bold ${fontSize}px monospace`;
+  ctx.fillStyle = '#facc15';
+  ctx.shadowColor = 'rgba(0, 0, 0, 0.8)';
+  ctx.shadowBlur = 4;
+
+  const pad = Math.round(W * 0.03);
+
+  ctx.fillText('PLAY  ▶  0:00:15', pad, pad + fontSize);
+
+  ctx.textAlign = 'right';
+  ctx.fillStyle = '#ef4444';
+  ctx.fillText('REC  ●', W - pad, pad + fontSize);
+
+  ctx.textAlign = 'left';
+  ctx.fillStyle = '#facc15';
+  const now = new Date();
+  const dateStr = `SLP  MAY 18 1998  ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+  ctx.fillText(dateStr, pad, H - pad);
+
+  ctx.textAlign = 'right';
+  ctx.fillText('SP  A/V 1', W - pad, H - pad);
+
+  ctx.restore();
+}
+
+export function applyLightLeak(canvas, ctx, W, H, leakType) {
+  if (!leakType || leakType === 'none') return;
+  ctx.save();
+  ctx.globalCompositeOperation = 'screen';
+
+  if (leakType === 'gold') {
+    const g = ctx.createRadialGradient(0, H / 2, 0, 0, H / 2, W * 0.7);
+    g.addColorStop(0, 'rgba(255, 170, 0, 0.75)');
+    g.addColorStop(0.5, 'rgba(255, 100, 0, 0.4)');
+    g.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, W, H);
+  } else if (leakType === 'prism') {
+    const g = ctx.createLinearGradient(0, 0, W, H);
+    g.addColorStop(0, 'rgba(255, 0, 200, 0.5)');
+    g.addColorStop(0.3, 'rgba(0, 200, 255, 0.4)');
+    g.addColorStop(0.6, 'rgba(255, 220, 0, 0.5)');
+    g.addColorStop(1, 'rgba(150, 0, 255, 0.3)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, W, H);
+  } else if (leakType === 'red') {
+    const g = ctx.createRadialGradient(W, 0, 0, W, 0, W * 0.85);
+    g.addColorStop(0, 'rgba(255, 30, 0, 0.8)');
+    g.addColorStop(0.6, 'rgba(255, 90, 0, 0.35)');
+    g.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, W, H);
+  } else if (leakType === 'neon') {
+    const g = ctx.createLinearGradient(0, H, W, 0);
+    g.addColorStop(0, 'rgba(0, 255, 240, 0.55)');
+    g.addColorStop(0.5, 'rgba(255, 0, 200, 0.45)');
+    g.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, W, H);
+  }
+
+  ctx.restore();
+}
+
+export function applyThermalHeatmap(canvas, ctx, W, H, amount) {
+  if (!amount || amount <= 0) return;
+  const alpha = amount / 100;
+  const imgData = ctx.getImageData(0, 0, W, H);
+  const d = imgData.data;
+
+  for (let i = 0; i < d.length; i += 4) {
+    const lum = (d[i] * 0.299 + d[i + 1] * 0.587 + d[i + 2] * 0.114) / 255;
+    let tr, tg, tb;
+
+    if (lum < 0.2) {
+      const t = lum / 0.2;
+      tr = Math.round(50 * t);
+      tg = 0;
+      tb = Math.round(150 + 105 * t);
+    } else if (lum < 0.4) {
+      const t = (lum - 0.2) / 0.2;
+      tr = Math.round(50 * (1 - t));
+      tg = Math.round(200 * t);
+      tb = Math.round(255 * (1 - t) + 100 * t);
+    } else if (lum < 0.7) {
+      const t = (lum - 0.4) / 0.3;
+      tr = Math.round(255 * t);
+      tg = Math.round(200 + 55 * (1 - t));
+      tb = 0;
+    } else {
+      const t = (lum - 0.7) / 0.3;
+      tr = 255;
+      tg = Math.round(255 * t);
+      tb = Math.round(255 * t);
+    }
+
+    d[i] = Math.round(d[i] * (1 - alpha) + tr * alpha);
+    d[i + 1] = Math.round(d[i + 1] * (1 - alpha) + tg * alpha);
+    d[i + 2] = Math.round(d[i + 2] * (1 - alpha) + tb * alpha);
   }
 
   ctx.putImageData(imgData, 0, 0);

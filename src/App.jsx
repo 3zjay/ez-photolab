@@ -8,7 +8,7 @@ import { EditPanel } from "./components/panels/EditPanel";
 import { RawBatchPanel } from "./components/panels/RawBatchPanel";
 import { Preview } from "./Preview";
 import { Empty, SL, AB, Row, Spin, SmoothSlider } from "./components/ui/common";
-import { DEFAULT_FILTERS, FB_MODES, PRESETS } from "./constants";
+import { DEFAULT_FILTERS, FB_MODES, PRESETS, DEFAULT_HSL_MIXER } from "./constants";
 import {
   toCSSFilter, toTransformCSS, saveFile, canvasToBlob, loadImageFromSrc,
   renderFinal, getExportDims, applyUnsharpMask, applyNoiseReduction, applyAutoLevels, applyAutoContrast, calcBatchDims,
@@ -237,6 +237,13 @@ export default function App() {
   const [selText, setSelText] = useState(null);
   const [activeTab, setActiveTab] = useState("home");
   const [filterGroup, setFilterGroup] = useState("basic");
+  const [hslMixer, setHslMixer] = useState(DEFAULT_HSL_MIXER);
+  const [curves, setCurves] = useState({
+    master: [{ x: 0, y: 0 }, { x: 255, y: 255 }],
+    red: [{ x: 0, y: 0 }, { x: 255, y: 255 }],
+    green: [{ x: 0, y: 0 }, { x: 255, y: 255 }],
+    blue: [{ x: 0, y: 0 }, { x: 255, y: 255 }]
+  });
   const [lutId, setLutId] = useState('none');
   const [lutIntensity, setLutIntensity] = useState(1.0);
   const [customLutData, setCustomLutData] = useState(null);
@@ -275,6 +282,17 @@ export default function App() {
   const [logoMargin, setLogoMargin] = useState(20);
   const [logoX, setLogoX] = useState(null);
   const [logoY, setLogoY] = useState(null);
+
+  // PREQUEL AESTHETIC STUDIO STATE
+  const [chromatic, setChromatic] = useState(0);
+  const [prism, setPrism] = useState(0);
+  const [halation, setHalation] = useState(0);
+  const [filmDust, setFilmDust] = useState(0);
+  const [glitter, setGlitter] = useState(0);
+  const [vhs, setVhs] = useState(false);
+  const [lightLeak, setLightLeak] = useState('none');
+  const [heatmap, setHeatmap] = useState(0);
+  const [vibeAudio, setVibeAudio] = useState('none');
 
   // BATCH STATE
   const [sourceHandle, setSourceHandle] = useState(null);
@@ -933,9 +951,18 @@ export default function App() {
 
   const resetAll = () => {
     setFilters(DEFAULT_FILTERS);
+    setHslMixer(DEFAULT_HSL_MIXER);
+    setCurves({
+      master: [{ x: 0, y: 0 }, { x: 255, y: 255 }],
+      red: [{ x: 0, y: 0 }, { x: 255, y: 255 }],
+      green: [{ x: 0, y: 0 }, { x: 255, y: 255 }],
+      blue: [{ x: 0, y: 0 }, { x: 255, y: 255 }]
+    });
     setRotation(0);
     setFlipH(false);
     setFlipV(false);
+    setCropMode(false);
+    setCropBox({ x: 0, y: 0, w: 100, h: 100 });
     setTexts([]);
     setSelText(null);
     setLutId('none');
@@ -955,6 +982,23 @@ export default function App() {
     setDepthMapStatus('idle');
     setDepthMapLog('');
     setAiPreviewUrl(null);
+    setBeautyPreviewUrl(null);
+    setChromatic(0);
+    setPrism(0);
+    setHalation(0);
+    setFilmDust(0);
+    setGlitter(0);
+    setVhs(false);
+    setLightLeak('none');
+    setHeatmap(0);
+    setVibeAudio('none');
+    setBgResult(null);
+    setBgSubUrl(null);
+    setBgStatus('idle');
+    setAiUpscaleResult(null);
+    setAiBeautyResult(null);
+    setAiFaceRestoreResult(null);
+    setAiRemoveResult(null);
     if (originalImage) {
       setImage(originalImage);
     }
@@ -1067,7 +1111,8 @@ export default function App() {
         aiBeautySmooth, aiBeautyClarity, aiBeautyGlow, aiBeautyUseMask,
         structureAi, skyMode, skyOpacity, skyLightMatch, customSkyUrl,
         relightNear, relightFar,
-        faceOvalMaskRef.current, skyMaskRef.current, depthMapRef.current
+        faceOvalMaskRef.current, skyMaskRef.current, depthMapRef.current,
+        { chromatic, prism, halation, filmDust, glitter, vhs, lightLeak, heatmap }
       );
       const fmts = { jpg: { mime: "image/jpeg", ext: "jpg" }, png: { mime: "image/png", ext: "png" }, webp: { mime: "image/webp", ext: "webp" } };
       const { mime, ext } = fmts[exportFmt];
@@ -1100,7 +1145,8 @@ export default function App() {
         aiBeautySmooth, aiBeautyClarity, aiBeautyGlow, aiBeautyUseMask,
         structureAi, skyMode, skyOpacity, skyLightMatch, customSkyUrl,
         relightNear, relightFar,
-        faceOvalMaskRef.current, skyMaskRef.current, depthMapRef.current
+        faceOvalMaskRef.current, skyMaskRef.current, depthMapRef.current,
+        { chromatic, prism, halation, filmDust, glitter, vhs, lightLeak, heatmap }
       );
       const blob = await canvasToBlob(canvas, "image/jpeg", 0.82);
       if (!blob || blob.size === 0) throw new Error("Empty blob");
@@ -1112,7 +1158,9 @@ export default function App() {
     setFbExporting(false);
   };
 
-  const isEdited = Object.entries(filters).some(([k, v]) => v !== DEFAULT_FILTERS[k]) || rotation !== 0 || flipH || flipV || texts.length > 0 || lutId !== 'none' || accentAi !== 0 || structureAi !== 0 || skyMode !== 'none' || relightNear !== 0 || relightFar !== 0;
+  const isHslEdited = Object.values(hslMixer).some(c => c.hue !== 0 || c.sat !== 0 || c.lum !== 0);
+  const isCurvesEdited = Object.values(curves).some(pts => pts.some(p => (p.x === 0 && p.y !== 0) || (p.x === 255 && p.y !== 255) || (p.x !== 0 && p.x !== 255)));
+  const isEdited = Object.entries(filters).some(([k, v]) => v !== DEFAULT_FILTERS[k]) || isHslEdited || isCurvesEdited || rotation !== 0 || flipH || flipV || texts.length > 0 || lutId !== 'none' || accentAi !== 0 || structureAi !== 0 || skyMode !== 'none' || relightNear !== 0 || relightFar !== 0 || chromatic !== 0 || prism !== 0 || halation !== 0 || filmDust !== 0 || glitter !== 0 || vhs || lightLeak !== 'none' || heatmap !== 0;
   const showSplit = isEdited && activeTab === "edit" && !cropMode;
   const transformCSS = toTransformCSS(rotation, flipH, flipV);
 
@@ -2379,7 +2427,7 @@ export default function App() {
       {activeTab === "edit" && (
         <EditPanel {...{
           // Color & LUTs / Grading props
-          filters, setFilters, filterGroup, setFilterGroup, isEdited, resetAll, revertAi, dm, cardBdr, cardBg, image, runBrowserUpscale, aiUpscaleStatus, aiUpscaleLog, aiUpscaleProgress, aiUpscaleResult, aiUpscaleResultSize, applyAiResult, saveFile, aiScale, setAiScale, aiBeautySmooth, setAiBeautySmooth, aiBeautyClarity, setAiBeautyClarity, aiBeautyGlow, setAiBeautyGlow, aiBeautyUseMask, setAiBeautyUseMask, runFalFaceRestore, aiFaceRestoreStatus, aiFaceRestoreLog, aiFaceRestoreResult, lutId, setLutId, lutIntensity, setLutIntensity, customLutData, setCustomLutData, customLutName, setCustomLutName, user, logo, setLogo, logoFile, setLogoFile, logoScale, setLogoScale, logoScalePortrait, setLogoScalePortrait, logoOpacity, setLogoOpacity, logoPos, setLogoPos, logoMargin, setLogoMargin, handleLogoUpload, logoX, setLogoX, logoY, setLogoY,
+          filters, setFilters, filterGroup, setFilterGroup, hslMixer, setHslMixer, curves, setCurves, isEdited, resetAll, revertAi, dm, cardBdr, cardBg, image, runBrowserUpscale, aiUpscaleStatus, aiUpscaleLog, aiUpscaleProgress, aiUpscaleResult, aiUpscaleResultSize, applyAiResult, saveFile, aiScale, setAiScale, aiBeautySmooth, setAiBeautySmooth, aiBeautyClarity, setAiBeautyClarity, aiBeautyGlow, setAiBeautyGlow, aiBeautyUseMask, setAiBeautyUseMask, runFalFaceRestore, aiFaceRestoreStatus, aiFaceRestoreLog, aiFaceRestoreResult, lutId, setLutId, lutIntensity, setLutIntensity, customLutData, setCustomLutData, customLutName, setCustomLutName, user, logo, setLogo, logoFile, setLogoFile, logoScale, setLogoScale, logoScalePortrait, setLogoScalePortrait, logoOpacity, setLogoOpacity, logoPos, setLogoPos, logoMargin, setLogoMargin, handleLogoUpload, logoX, setLogoX, logoY, setLogoY,
           
           // Adjust / Crop props
           setRotation, setFlipH, setFlipV, rotation, flipH, flipV, cropMode, setCropMode, setCropBox, cropAspect, setCropAspect, applyCrop,
@@ -2395,6 +2443,9 @@ export default function App() {
           structureAi, setStructureAi,
           skyMode, setSkyMode, skyOpacity, setSkyOpacity, skyLightMatch, setSkyLightMatch, customSkyUrl, setCustomSkyUrl, skyMaskStatus, skyMaskLog,
           relightNear, setRelightNear, relightFar, setRelightFar, depthMapStatus, depthMapLog,
+          
+          // Prequel Aesthetic Studio props
+          chromatic, setChromatic, prism, setPrism, halation, setHalation, filmDust, setFilmDust, glitter, setGlitter, vhs, setVhs, lightLeak, setLightLeak, heatmap, setHeatmap, vibeAudio, setVibeAudio,
           setActiveTab
         }} />
       )}
@@ -2589,7 +2640,7 @@ export default function App() {
               </div>
             )}
             <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: "20px", position: "relative", overflow: "hidden" }}>
-              <Preview {...{ image: (aiPreviewUrl || beautyPreviewUrl || image), originalImage, dragging, setDragging, loadImage, fileInputRef, imgRef, splitRef, previewRef, activeTab, bgResult, bgMode, showBefore, setShowBefore, showSplit, splitPos, isDragSplit, setIsDragSplit, cssFilter, transformCSS, filters, texts, selText, setSelText, updateText, cropMode, cropBox, setCropBox, cropAspect, isEdited, setImage, setBgStatus, setBgSubUrl, setBgResult, isMobile, rotation, flipH, flipV, activeLutData, lutIntensity, lutId, dm, rawLoading, rawProgressMsg, logo, logoScale, logoScalePortrait, logoOpacity, logoPos, logoMargin, logoX, setLogoX, logoY, setLogoY, setLogoPos, filterGroup }} highResImage={image} />
+              <Preview {...{ image: (aiPreviewUrl || beautyPreviewUrl || image), originalImage, dragging, setDragging, loadImage, fileInputRef, imgRef, splitRef, previewRef, activeTab, bgResult, bgMode, showBefore, setShowBefore, showSplit, splitPos, isDragSplit, setIsDragSplit, cssFilter, transformCSS, filters, texts, selText, setSelText, updateText, cropMode, cropBox, setCropBox, cropAspect, isEdited, resetAll, setImage, setBgStatus, setBgSubUrl, setBgResult, isMobile, rotation, flipH, flipV, activeLutData, lutIntensity, lutId, dm, rawLoading, rawProgressMsg, logo, logoScale, logoScalePortrait, logoOpacity, logoPos, logoMargin, logoX, setLogoX, logoY, setLogoY, setLogoPos, filterGroup, chromatic, prism, halation, filmDust, glitter, vhs, lightLeak, heatmap, vibeAudio, hslMixer, curves }} highResImage={image} />
             </div>
           </div>
         )
@@ -2617,7 +2668,7 @@ export default function App() {
             {image ? (
               <>
                 <div style={{ height: "42vh", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", position: "relative", borderBottom: `1px solid ${dm ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'}` }}>
-                  <Preview {...{ image: (aiPreviewUrl || beautyPreviewUrl || image), originalImage, dragging, setDragging, loadImage, fileInputRef, imgRef, splitRef, previewRef, activeTab, bgResult, bgMode, showBefore, setShowBefore, showSplit, splitPos, isDragSplit, setIsDragSplit, cssFilter, transformCSS, filters, texts, selText, setSelText, updateText, cropMode, cropBox, setCropBox, cropAspect, isEdited, setImage, setBgStatus, setBgSubUrl, setBgResult, isMobile, rotation, flipH, flipV, activeLutData, lutIntensity, lutId, dm, rawLoading, rawProgressMsg, logo, logoScale, logoScalePortrait, logoOpacity, logoPos, logoMargin, logoX, setLogoX, logoY, setLogoY, setLogoPos, filterGroup }} highResImage={image} />
+                  <Preview {...{ image: (aiPreviewUrl || beautyPreviewUrl || image), originalImage, dragging, setDragging, loadImage, fileInputRef, imgRef, splitRef, previewRef, activeTab, bgResult, bgMode, showBefore, setShowBefore, showSplit, splitPos, isDragSplit, setIsDragSplit, cssFilter, transformCSS, filters, texts, selText, setSelText, updateText, cropMode, cropBox, setCropBox, cropAspect, isEdited, resetAll, setImage, setBgStatus, setBgSubUrl, setBgResult, isMobile, rotation, flipH, flipV, activeLutData, lutIntensity, lutId, dm, rawLoading, rawProgressMsg, logo, logoScale, logoScalePortrait, logoOpacity, logoPos, logoMargin, logoX, setLogoX, logoY, setLogoY, setLogoPos, filterGroup, chromatic, prism, halation, filmDust, glitter, vhs, lightLeak, heatmap, vibeAudio, hslMixer, curves }} highResImage={image} />
                 </div>
                 <div className="glass-panel" style={{ flex: 1, overflowY: "auto", WebkitOverflowScrolling: "touch", borderTop: `1px solid ${dm ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'}` }}>
                   {renderPanel(true)}
@@ -2625,7 +2676,7 @@ export default function App() {
               </>
             ) : (
               <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: "16px", position: "relative", overflow: "hidden" }}>
-                <Preview {...{ image: (aiPreviewUrl || beautyPreviewUrl || image), originalImage, dragging, setDragging, loadImage, fileInputRef, imgRef, splitRef, previewRef, activeTab, bgResult, bgMode, showBefore, setShowBefore, showSplit, splitPos, isDragSplit, setIsDragSplit, cssFilter, transformCSS, filters, texts, selText, setSelText, updateText, cropMode, cropBox, setCropBox, cropAspect, isEdited, setImage, setBgStatus, setBgSubUrl, setBgResult, isMobile, rotation, flipH, flipV, activeLutData, lutIntensity, lutId, dm, rawLoading, rawProgressMsg, logo, logoScale, logoScalePortrait, logoOpacity, logoPos, logoMargin, logoX, setLogoX, logoY, setLogoY, setLogoPos, filterGroup }} highResImage={image} />
+                <Preview {...{ image: (aiPreviewUrl || beautyPreviewUrl || image), originalImage, dragging, setDragging, loadImage, fileInputRef, imgRef, splitRef, previewRef, activeTab, bgResult, bgMode, showBefore, setShowBefore, showSplit, splitPos, isDragSplit, setIsDragSplit, cssFilter, transformCSS, filters, texts, selText, setSelText, updateText, cropMode, cropBox, setCropBox, cropAspect, isEdited, setImage, setBgStatus, setBgSubUrl, setBgResult, isMobile, rotation, flipH, flipV, activeLutData, lutIntensity, lutId, dm, rawLoading, rawProgressMsg, logo, logoScale, logoScalePortrait, logoOpacity, logoPos, logoMargin, logoX, setLogoX, logoY, setLogoY, setLogoPos, filterGroup, hslMixer, curves }} highResImage={image} />
               </div>
             )}
           </div>

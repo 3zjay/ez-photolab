@@ -1,23 +1,26 @@
 import Stripe from 'stripe';
 import admin from 'firebase-admin';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
-
-if (!admin.apps.length) {
-  try {
-    admin.initializeApp({
-      credential: admin.credential.cert({
-        projectId: process.env.FIREBASE_PROJECT_ID,
-        clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-        privateKey: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n'),
-      }),
-    });
-  } catch (error) {
-    console.error('Firebase Admin init error:', error);
+function getDb() {
+  if (!admin.apps.length) {
+    if (!process.env.FIREBASE_PROJECT_ID || !process.env.FIREBASE_CLIENT_EMAIL || !process.env.FIREBASE_PRIVATE_KEY) {
+      throw new Error('Firebase Admin environment variables are incomplete.');
+    }
+    try {
+      admin.initializeApp({
+        credential: admin.credential.cert({
+          projectId: process.env.FIREBASE_PROJECT_ID,
+          clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+          privateKey: (process.env.FIREBASE_PRIVATE_KEY || '').replace(/\\n/g, '\n'),
+        }),
+      });
+    } catch (error) {
+      console.error('Firebase Admin init error:', error);
+      throw error;
+    }
   }
+  return admin.firestore();
 }
-
-const db = admin.firestore();
 
 // We must disable bodyParser to read the raw body for Stripe signature validation
 export const config = {
@@ -39,6 +42,11 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method Not Allowed' });
   }
 
+  if (!process.env.STRIPE_SECRET_KEY) {
+    return res.status(500).json({ error: 'STRIPE_SECRET_KEY environment variable is missing.' });
+  }
+
+  const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
   const sig = req.headers['stripe-signature'];
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
@@ -52,6 +60,7 @@ export default async function handler(req, res) {
   }
 
   try {
+    const db = getDb();
     switch (event.type) {
       case 'checkout.session.completed': {
         const session = event.data.object;

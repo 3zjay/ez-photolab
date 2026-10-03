@@ -1,7 +1,5 @@
 import Stripe from 'stripe';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
-
 export default async function handler(req, res) {
   // Enable CORS
   res.setHeader('Access-Control-Allow-Credentials', true);
@@ -21,6 +19,11 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method Not Allowed' });
   }
 
+  if (!process.env.STRIPE_SECRET_KEY) {
+    return res.status(500).json({ error: 'STRIPE_SECRET_KEY environment variable is not configured.' });
+  }
+
+  const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
   const { priceId, userId, successUrl, cancelUrl } = req.body;
 
   if (!priceId || !userId) {

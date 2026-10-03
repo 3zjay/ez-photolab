@@ -1,11 +1,11 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import { FONT_MAP, PRESETS, LUT_PRESETS } from "./constants";
-import { apply3DLut } from "./utils";
+import { apply3DLut, applyCurves, applyHslMixer } from "./utils";
 import { RAW_EXTENSIONS } from "./rawProcessor";
 import { ModernImageUploadIcon } from "./components/ui/common";
 
-export function Preview({ image, originalImage, dragging, setDragging, loadImage, fileInputRef, imgRef, splitRef, activeTab, bgResult, bgMode, showBefore, setShowBefore, showSplit, splitPos, isDragSplit, setIsDragSplit, cssFilter, transformCSS, filters, texts, selText, setSelText, updateText, cropMode, cropBox, setCropBox, cropAspect, isEdited, setImage, setBgStatus, setBgSubUrl, setBgResult, isMobile, rotation, flipH, flipV, activeLutData, lutIntensity, lutId, dm, rawLoading, rawProgressMsg, logo, logoScale, logoScalePortrait, logoOpacity, logoPos, logoMargin, logoX, setLogoX, logoY, setLogoY, setLogoPos, filterGroup, highResImage }) {
+export function Preview({ image, originalImage, dragging, setDragging, loadImage, fileInputRef, imgRef, splitRef, activeTab, bgResult, bgMode, showBefore, setShowBefore, showSplit, splitPos, isDragSplit, setIsDragSplit, cssFilter, transformCSS, filters, texts, selText, setSelText, updateText, cropMode, cropBox, setCropBox, cropAspect, isEdited, resetAll, setImage, setBgStatus, setBgSubUrl, setBgResult, isMobile, rotation, flipH, flipV, activeLutData, lutIntensity, lutId, dm, rawLoading, rawProgressMsg, logo, logoScale, logoScalePortrait, logoOpacity, logoPos, logoMargin, logoX, setLogoX, logoY, setLogoY, setLogoPos, filterGroup, highResImage, chromatic, prism, halation, filmDust, glitter, vhs, lightLeak, heatmap, vibeAudio, hslMixer, curves }) {
   const maxH = isMobile ? "40vh" : "calc(100vh - 120px)";
   const activeLut = (lutId && lutId !== 'none') ? (lutId === 'custom'
       ? { name: 'Custom LUT', description: 'User-uploaded custom 3D LUT curve configuration.', bestFor: 'Custom grading workflows', tier: 'premium', icon: '📂' }
@@ -17,11 +17,21 @@ export function Preview({ image, originalImage, dragging, setDragging, loadImage
 
   const [dragTxt, setDragTxt] = useState(null);
   const [draggingLogo, setDraggingLogo] = useState(false);
+  const [viewMode, setViewMode] = useState("auto"); // "auto" | "after" | "before" | "split"
+  const [isHoldingBefore, setIsHoldingBefore] = useState(false);
+
   const containerRef = useRef(null);
   const lutCanvasRef = useRef(null);
 
   const [dimensions, setDimensions] = useState({ w: 0, h: 0 });
   const [origDimensions, setOrigDimensions] = useState({ w: 0, h: 0 });
+
+  const isHslModified = hslMixer && Object.values(hslMixer).some(v => v.hue !== 0 || v.sat !== 0 || v.lum !== 0);
+  const isCurvesModified = curves && Object.values(curves).some(pts => pts.some(p => (p.x === 0 && p.y !== 0) || (p.x === 255 && p.y !== 255) || (p.x !== 0 && p.x !== 255)));
+  const isLutActive = activeLutData && lutId !== 'none';
+
+  const effectiveShowBefore = showBefore || viewMode === "before" || isHoldingBefore;
+  const effectiveShowSplit = !cropMode && activeTab === "edit" && (viewMode === "split" || (viewMode === "auto" && showSplit && !effectiveShowBefore));
 
   useEffect(() => {
     const src = highResImage || image;
@@ -41,10 +51,11 @@ export function Preview({ image, originalImage, dragging, setDragging, loadImage
     img.onload = () => setOrigDimensions({ w: img.naturalWidth, h: img.naturalHeight });
   }, [originalImage]);
 
-  // Render LUT preview onto a canvas overlay
+  // Render LUT, HSL, and Curves preview onto a canvas overlay
+  const isCanvasNeeded = (isLutActive || isHslModified || isCurvesModified) && image && !effectiveShowBefore && activeTab === 'edit';
+
   useEffect(() => {
-    if (!activeLutData || !image || showBefore || activeTab !== 'edit' || lutId === 'none') {
-      // Clear the canvas if LUT is off
+    if (!isCanvasNeeded) {
       const c = lutCanvasRef.current;
       if (c) {
         const ctx = c.getContext('2d');
@@ -60,7 +71,6 @@ export function Preview({ image, originalImage, dragging, setDragging, loadImage
       const natH = imgEl.naturalHeight;
       if (!natW || !natH) return;
 
-      // Use a scaled-down preview for performance but high enough for sharpness (max 1600px wide)
       const maxPrev = 1600;
       const scale = Math.min(1, maxPrev / Math.max(natW, natH));
       const pW = Math.round(natW * scale);
@@ -70,18 +80,18 @@ export function Preview({ image, originalImage, dragging, setDragging, loadImage
       canvas.height = pH;
       const ctx = canvas.getContext('2d');
 
-      // Draw the image with CSS filters baked in
       ctx.filter = cssFilter;
       ctx.drawImage(imgEl, 0, 0, pW, pH);
       ctx.filter = 'none';
 
-      // Apply the LUT
       const imgData = ctx.getImageData(0, 0, pW, pH);
-      apply3DLut(imgData, activeLutData.data, activeLutData.size, lutIntensity);
+      if (isCurvesModified) applyCurves(imgData, curves);
+      if (isHslModified) applyHslMixer(imgData, hslMixer);
+      if (isLutActive) apply3DLut(imgData, activeLutData.data, activeLutData.size, lutIntensity);
       ctx.putImageData(imgData, 0, 0);
     }, 50);
     return () => clearTimeout(timer);
-  }, [activeLutData, lutIntensity, lutId, image, cssFilter, showBefore, activeTab, showSplit]);
+  }, [isCanvasNeeded, isLutActive, isHslModified, isCurvesModified, activeLutData, lutIntensity, lutId, image, cssFilter, effectiveShowBefore, activeTab, hslMixer, curves]);
 
   const startDragText = (e, id) => {
     e.stopPropagation(); setSelText(id); setDragTxt({ id, startX: e.clientX, startY: e.clientY });
@@ -340,52 +350,82 @@ export function Preview({ image, originalImage, dragging, setDragging, loadImage
         </div>
       )}
 
-      {!showSplit && !cropMode && (
+      {!cropMode && image && activeTab === "edit" && (
         <div style={{
           position: "absolute",
           top: "12px",
           right: "12px",
           display: "flex",
-          background: dm ? "rgba(30, 30, 40, 0.85)" : "rgba(255, 255, 255, 0.9)",
-          backdropFilter: "blur(12px)",
-          WebkitBackdropFilter: "blur(12px)",
-          border: `1.5px solid ${dm ? "rgba(255,255,255,0.08)" : "#eee"}`,
-          zIndex: 10,
-          borderRadius: "10px",
+          background: dm ? "rgba(20, 24, 35, 0.88)" : "rgba(255, 255, 255, 0.92)",
+          backdropFilter: "blur(16px)",
+          WebkitBackdropFilter: "blur(16px)",
+          border: `1.5px solid ${dm ? "rgba(255,255,255,0.12)" : "#e2e8f0"}`,
+          zIndex: 30,
+          borderRadius: "12px",
           padding: "3px",
           gap: "2px",
-          boxShadow: "0 4px 20px rgba(0,0,0,.15)"
+          boxShadow: "0 8px 24px rgba(0,0,0,0.2)"
         }}>
-          {["After", "Before"].map(l => (
-            <button
-              key={l}
-              onClick={() => setShowBefore(l === "Before")}
-              style={{
-                padding: "5px 12px",
-                fontSize: "12px",
-                fontWeight: 600,
-                border: "none",
-                cursor: "pointer",
-                background: (l === "Before") === showBefore
-                  ? "linear-gradient(135deg,#6c63ff,#a78bfa)"
-                  : "transparent",
-                color: (l === "Before") === showBefore
-                  ? "#fff"
-                  : (dm ? "#9ca3af" : "#888"),
-                borderRadius: "7px",
-                transition: "all .18s"
-              }}
-            >
-              {l}
-            </button>
-          ))}
+          {[
+            { id: "after", label: "✨ After" },
+            { id: "before", label: "📷 Before" },
+            { id: "split", label: "↔️ Split" }
+          ].map(btn => {
+            const isActive = (btn.id === "before" && effectiveShowBefore) ||
+                             (btn.id === "split" && effectiveShowSplit) ||
+                             (btn.id === "after" && !effectiveShowBefore && !effectiveShowSplit);
+            return (
+              <button
+                key={btn.id}
+                onClick={() => {
+                  if (btn.id === "before") {
+                    setViewMode("before");
+                    setShowBefore(true);
+                  } else if (btn.id === "split") {
+                    setViewMode("split");
+                    setShowBefore(false);
+                  } else {
+                    setViewMode("after");
+                    setShowBefore(false);
+                  }
+                }}
+                style={{
+                  padding: "5px 11px",
+                  fontSize: "11px",
+                  fontWeight: isActive ? 700 : 500,
+                  border: "none",
+                  cursor: "pointer",
+                  background: isActive
+                    ? "linear-gradient(135deg, #6c63ff, #a78bfa)"
+                    : "transparent",
+                  color: isActive ? "#ffffff" : (dm ? "#9ca3af" : "#64748b"),
+                  borderRadius: "8px",
+                  transition: "all .18s ease",
+                  boxShadow: isActive ? "0 2px 8px rgba(108,99,255,0.35)" : "none"
+                }}
+              >
+                {btn.label}
+              </button>
+            );
+          })}
         </div>
       )}
-      {showSplit && <div style={{ position: "absolute", top: "12px", right: "12px", zIndex: 10, padding: "5px 12px", background: "rgba(108,99,255,.9)", borderRadius: "20px", fontSize: "11px", fontWeight: 600, color: "#fff" }}>← Drag to compare →</div>}
+
+      {effectiveShowBefore && (
+        <div style={{ position: "absolute", top: "12px", left: "12px", zIndex: 30, padding: "5px 12px", background: "rgba(239, 68, 68, 0.9)", backdropFilter: "blur(8px)", borderRadius: "20px", fontSize: "11px", fontWeight: 800, color: "#fff", letterSpacing: "0.5px", boxShadow: "0 4px 14px rgba(239,68,68,0.35)" }}>
+          📷 ORIGINAL UNTOUCHED
+        </div>
+      )}
+
       {activeTab === "tools" && bgResult && <div style={{ position: "absolute", top: "12px", right: "12px", padding: "4px 12px", background: "#f0fff4", border: "1.5px solid #86efac", borderRadius: "20px", fontSize: "11px", fontWeight: 600, color: "#16a34a", zIndex: 10 }}>✓ BG Removed</div>}
       {cropMode && <div style={{ position: "absolute", top: "12px", right: "12px", padding: "5px 12px", background: "rgba(234,179,8,.9)", borderRadius: "20px", fontSize: "11px", fontWeight: 600, color: "#fff", zIndex: 10 }}>✂ Crop Mode</div>}
 
       <div ref={splitRef}
+        onMouseDown={(e) => { if (e.target.tagName !== 'BUTTON' && !cropMode) setIsHoldingBefore(true); }}
+        onMouseUp={() => setIsHoldingBefore(false)}
+        onMouseLeave={() => setIsHoldingBefore(false)}
+        onTouchStart={(e) => { if (e.target.tagName !== 'BUTTON' && !cropMode) setIsHoldingBefore(true); }}
+        onTouchEnd={() => setIsHoldingBefore(false)}
         style={{
           position: "relative",
           maxWidth: "100%",
@@ -394,7 +434,7 @@ export function Preview({ image, originalImage, dragging, setDragging, loadImage
           borderRadius: "14px",
           overflow: "hidden",
           boxShadow: "0 8px 40px rgba(0,0,0,.12)",
-          cursor: showSplit ? (isDragSplit ? "grabbing" : "ew-resize") : "default",
+          cursor: effectiveShowSplit ? (isDragSplit ? "grabbing" : "ew-resize") : "pointer",
           userSelect: "none"
         }}
       >
@@ -403,19 +443,19 @@ export function Preview({ image, originalImage, dragging, setDragging, loadImage
             {bgMode === "transparent" && <div className="checker" style={{ position: "absolute", inset: 0 }} />}
             <img src={bgResult} alt="result" style={{ maxWidth: "100%", maxHeight: maxH, width: "auto", height: "auto", display: "block", position: "relative" }} />
           </>
-        ) : showSplit ? (
+        ) : effectiveShowSplit ? (
           <>
             <div style={{ position: "relative", lineHeight: 0 }}>
               <img ref={imgRef} src={image} alt="after"
-                style={{ maxWidth: "100%", maxHeight: maxH, width: "auto", height: "auto", display: "block", filter: (activeLutData && lutId !== 'none' && !showBefore && activeTab === 'edit') ? 'none' : cssFilter, transform: transformCSS, visibility: (activeLutData && lutId !== 'none' && !showBefore && activeTab === 'edit') ? 'hidden' : 'visible' }} />
-              <canvas ref={lutCanvasRef} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none", display: (activeLutData && lutId !== 'none' && !showBefore && activeTab === 'edit') ? 'block' : 'none', transform: transformCSS }} />
+                style={{ maxWidth: "100%", maxHeight: maxH, width: "auto", height: "auto", display: "block", filter: isCanvasNeeded ? 'none' : cssFilter, transform: transformCSS, visibility: isCanvasNeeded ? 'hidden' : 'visible' }} />
+              <canvas ref={lutCanvasRef} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none", display: isCanvasNeeded ? 'block' : 'none', transform: transformCSS }} />
             </div>
             {filters.temperature !== 0 && <div style={{ position: "absolute", inset: 0, background: tempColor, mixBlendMode: "overlay", pointerEvents: "none", clipPath: `inset(0 ${100 - splitPos}% 0 0)` }} />}
             {filters.vignette > 0 && <div style={{ position: "absolute", inset: 0, background: `radial-gradient(ellipse at center,transparent 38%,rgba(0,0,0,${filters.vignette / 100}) 100%)`, pointerEvents: "none", clipPath: `inset(0 ${100 - splitPos}% 0 0)` }} />}
             <div style={{ position: "absolute", inset: 0, clipPath: `inset(0 0 0 ${splitPos}%)` }}>
-              <img src={originalImage || image} alt="before" style={{ maxWidth: "100%", maxHeight: maxH, width: "auto", height: "auto", display: "block", filter: "none", transform: transformCSS }} />
+              <img src={originalImage || image} alt="before" style={{ maxWidth: "100%", maxHeight: maxH, width: "auto", height: "auto", display: "block", filter: "none", transform: "none" }} />
             </div>
-            <div onMouseDown={e => { e.preventDefault(); setIsDragSplit(true); }} onTouchStart={e => { e.preventDefault(); setIsDragSplit(true); }}
+            <div onMouseDown={e => { e.preventDefault(); e.stopPropagation(); setIsDragSplit(true); }} onTouchStart={e => { e.preventDefault(); e.stopPropagation(); setIsDragSplit(true); }}
               style={{ position: "absolute", top: 0, bottom: 0, left: `${splitPos}%`, transform: "translateX(-50%)", width: "44px", zIndex: 20, display: "flex", alignItems: "center", justifyContent: "center", cursor: isDragSplit ? "grabbing" : "ew-resize" }}>
               <div style={{ width: "2px", height: "100%", background: "#fff", boxShadow: "0 0 6px rgba(0,0,0,.5)" }} />
               <div style={{ position: "absolute", width: "36px", height: "36px", borderRadius: "50%", background: "#fff", boxShadow: "0 2px 12px rgba(0,0,0,.25)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "14px", color: "#6c63ff", fontWeight: 700 }}>⇄</div>
@@ -430,15 +470,54 @@ export function Preview({ image, originalImage, dragging, setDragging, loadImage
         ) : (
           <>
             <div ref={containerRef} style={{ position: "relative", lineHeight: 0 }}>
-              <img ref={imgRef} src={showBefore ? (originalImage || image) : image} alt="photo"
-                style={{ maxWidth: "100%", maxHeight: maxH, width: "auto", height: "auto", display: "block", filter: showBefore || activeTab === "tools" ? "none" : (activeLutData && lutId !== 'none' && !showBefore && activeTab === 'edit' ? 'none' : cssFilter), transition: "filter .08s ease", transform: showBefore ? "none" : transformCSS, visibility: (activeLutData && lutId !== 'none' && !showBefore && activeTab === 'edit') ? 'hidden' : 'visible' }} />
-              {/* LUT Preview Canvas */}
-              <canvas ref={lutCanvasRef} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none", display: (activeLutData && lutId !== 'none' && !showBefore && activeTab === 'edit') ? 'block' : 'none', transform: showBefore ? "none" : transformCSS }} />
-              {!showBefore && activeTab === "edit" && filters.temperature !== 0 && <div style={{ position: "absolute", inset: 0, background: tempColor, mixBlendMode: "overlay", pointerEvents: "none" }} />}
-              {!showBefore && activeTab === "edit" && filters.fade > 0 && <div style={{ position: "absolute", inset: 0, background: `rgba(255,255,255,${filters.fade / 180})`, mixBlendMode: "screen", pointerEvents: "none" }} />}
-              {!showBefore && activeTab === "edit" && filters.vignette > 0 && <div style={{ position: "absolute", inset: 0, background: `radial-gradient(ellipse at center,transparent 38%,rgba(0,0,0,${filters.vignette / 100}) 100%)`, pointerEvents: "none" }} />}
-              {!showBefore && activeTab === "edit" && filters.grain > 0 && (
+              <img ref={imgRef} src={effectiveShowBefore ? (originalImage || image) : image} alt="photo"
+                style={{ maxWidth: "100%", maxHeight: maxH, width: "auto", height: "auto", display: "block", filter: effectiveShowBefore || activeTab === "tools" ? "none" : (isCanvasNeeded ? 'none' : cssFilter), transition: "filter .08s ease", transform: effectiveShowBefore ? "none" : transformCSS, visibility: isCanvasNeeded && !effectiveShowBefore ? 'hidden' : 'visible' }} />
+              {/* LUT, HSL, and Curves Preview Canvas */}
+              <canvas ref={lutCanvasRef} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none", display: isCanvasNeeded && !effectiveShowBefore ? 'block' : 'none', transform: effectiveShowBefore ? "none" : transformCSS }} />
+              {!effectiveShowBefore && activeTab === "edit" && filters.temperature !== 0 && <div style={{ position: "absolute", inset: 0, background: tempColor, mixBlendMode: "overlay", pointerEvents: "none" }} />}
+              {!effectiveShowBefore && activeTab === "edit" && filters.fade > 0 && <div style={{ position: "absolute", inset: 0, background: `rgba(255,255,255,${filters.fade / 180})`, mixBlendMode: "screen", pointerEvents: "none" }} />}
+              {!effectiveShowBefore && activeTab === "edit" && filters.vignette > 0 && <div style={{ position: "absolute", inset: 0, background: `radial-gradient(ellipse at center,transparent 38%,rgba(0,0,0,${filters.vignette / 100}) 100%)`, pointerEvents: "none" }} />}
+              {!effectiveShowBefore && activeTab === "edit" && filters.grain > 0 && (
                 <div style={{ position: "absolute", inset: 0, pointerEvents: "none", mixBlendMode: "overlay", opacity: 0.4, backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E")` }} />
+              )}
+              {/* Prequel Live FX Overlays */}
+              {!showBefore && activeTab === "edit" && halation > 0 && (
+                <div style={{ position: "absolute", inset: 0, pointerEvents: "none", zIndex: 4, mixBlendMode: "screen", opacity: halation / 100, background: "radial-gradient(circle at center, rgba(255,180,180,0.5) 0%, rgba(255,120,120,0.2) 60%, transparent 100%)" }} />
+              )}
+              {!showBefore && activeTab === "edit" && heatmap > 0 && (
+                <div style={{ position: "absolute", inset: 0, pointerEvents: "none", zIndex: 4, mixBlendMode: "color", opacity: heatmap / 100, filter: `invert(${Math.round(heatmap * 0.8)}%) hue-rotate(${Math.round(heatmap * 2.4)}deg)` }} />
+              )}
+              {!showBefore && activeTab === "edit" && lightLeak !== 'none' && (
+                <div style={{
+                  position: "absolute", inset: 0, pointerEvents: "none", zIndex: 5, mixBlendMode: "screen", opacity: 0.8,
+                  background: lightLeak === 'gold' ? 'radial-gradient(circle at 10% 20%, rgba(255, 170, 50, 0.75) 0%, rgba(255, 90, 0, 0.4) 40%, transparent 70%)'
+                            : lightLeak === 'prism' ? 'linear-gradient(135deg, rgba(255,0,128,0.5) 0%, rgba(0,255,200,0.5) 50%, rgba(255,255,0,0.5) 100%)'
+                            : lightLeak === 'red' ? 'radial-gradient(circle at 90% 80%, rgba(255, 30, 60, 0.8) 0%, rgba(200, 0, 0, 0.4) 45%, transparent 70%)'
+                            : 'radial-gradient(circle at 50% 10%, rgba(0, 230, 255, 0.7) 0%, rgba(180, 0, 255, 0.4) 50%, transparent 75%)'
+                }} />
+              )}
+              {!showBefore && activeTab === "edit" && vhs && (
+                <div style={{ position: "absolute", inset: 0, pointerEvents: "none", zIndex: 6, display: "flex", flexDirection: "column", justifyContent: "space-between", padding: "16px", color: "#00ff66", fontFamily: "monospace", textShadow: "0 0 6px rgba(0,255,102,0.8)", fontSize: "13px", fontWeight: "bold", background: "repeating-linear-gradient(0deg, rgba(0,0,0,0.12) 0px, rgba(0,0,0,0.12) 1px, transparent 1px, transparent 3px)" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between" }}>
+                    <span>PLAY ▶</span>
+                    <span>SP</span>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between" }}>
+                    <span>{new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }).toUpperCase()}</span>
+                    <span>VHS HI-FI</span>
+                  </div>
+                </div>
+              )}
+              {!showBefore && activeTab === "edit" && vibeAudio !== 'none' && (
+                <div style={{ position: "absolute", bottom: "12px", left: "12px", zIndex: 25, background: "rgba(10,10,20,0.85)", backdropFilter: "blur(12px)", padding: "6px 12px", borderRadius: "20px", border: "1px solid rgba(255,255,255,0.15)", display: "flex", alignItems: "center", gap: "8px", boxShadow: "0 4px 16px rgba(0,0,0,0.4)", pointerEvents: "none" }}>
+                  <span style={{ fontSize: "14px" }}>🎵</span>
+                  <span style={{ fontSize: "11px", fontWeight: 700, color: "#a78bfa" }}>Vibe: {vibeAudio.toUpperCase()}</span>
+                  <div style={{ display: "flex", alignItems: "flex-end", gap: "2px", height: "12px" }}>
+                    {[1, 2, 3, 4].map(i => (
+                      <div key={i} style={{ width: "3px", height: `${6 + (i * 2)}px`, background: "#06b6d4", borderRadius: "2px" }} />
+                    ))}
+                  </div>
+                </div>
               )}
               {!showBefore && texts.map(t => (
                 <div key={t.id} onMouseDown={e => startDragText(e, t.id)} onClick={() => setSelText(t.id)}
@@ -514,11 +593,17 @@ export function Preview({ image, originalImage, dragging, setDragging, loadImage
         </div>
       )}
 
-      <div style={{ position: "absolute", bottom: "12px", left: "50%", transform: "translateX(-50%)" }}>
+      <div style={{ position: "absolute", bottom: "12px", left: "50%", transform: "translateX(-50%)", display: "flex", gap: "8px", zIndex: 30 }}>
         <button onClick={() => { setImage(null); setBgStatus("idle"); setBgSubUrl(null); setBgResult(null); }}
-          style={{ background: dm ? "#1e2230" : "#fff", color: dm ? "#9ca3af" : "#999", padding: "6px 14px", border: dm ? "1.5px solid #3f445a" : "1.5px solid #eee", borderRadius: "8px", fontSize: "12px", fontWeight: 500, cursor: "pointer", boxShadow: "0 1px 4px rgba(0,0,0,.06)" }}>
+          style={{ background: dm ? "#1e2230" : "#fff", color: dm ? "#cbd5e1" : "#555", padding: "6px 14px", border: dm ? "1.5px solid #3f445a" : "1.5px solid #e2e8f0", borderRadius: "8px", fontSize: "12px", fontWeight: 600, cursor: "pointer", boxShadow: "0 2px 8px rgba(0,0,0,.12)" }}>
           ← New Photo
         </button>
+        {isEdited && resetAll && (
+          <button onClick={resetAll}
+            style={{ background: "rgba(239, 68, 68, 0.95)", color: "#ffffff", padding: "6px 14px", border: "none", borderRadius: "8px", fontSize: "12px", fontWeight: 700, cursor: "pointer", boxShadow: "0 2px 10px rgba(239, 68, 68, 0.35)", display: "flex", alignItems: "center", gap: "5px" }}>
+            <span>🔄</span> Reset Edits
+          </button>
+        )}
       </div>
     </>
   );
