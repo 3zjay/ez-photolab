@@ -1,35 +1,6 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
-import { cullBatch, analyzePhotoExposure } from "./cullEngine";
+import React, { useState, useEffect, useRef, useCallback, useMemo, memo } from "react";
+import { cullBatch, analyzePhotoExposure, getPhotoIsDark, clusterPhotos } from "./cullEngine";
 import { exportXmpSidecars } from "./xmpExporter";
-
-/**
- * Universal evaluator for whether a photo is classified as dark or underexposed.
- * Factors in manual user override, exposure histogram metrics, median, shadows, and threshold.
- */
-export function getPhotoIsDark(item, threshold = 42) {
-  if (!item) return false;
-  // Manual override if set by user toggle
-  if (item.manualDarkOverride !== undefined) {
-    return item.manualDarkOverride;
-  }
-  if (item.exposure) {
-    const exp = item.exposure;
-    if (exp.meanBrightness !== undefined && exp.meanBrightness < threshold) return true;
-    if (exp.medianBrightness !== undefined && exp.medianBrightness < threshold) return true;
-    if (exp.exposureScore !== undefined && exp.exposureScore < threshold) return true;
-    if (exp.shadowPercent !== undefined && exp.shadowPercent > 48 && (exp.meanBrightness || 0) < (threshold + 8)) return true;
-    if (exp.deepShadowPercent !== undefined && exp.deepShadowPercent > 28) return true;
-    if (exp.brightness !== undefined && exp.brightness < threshold) return true;
-    return Boolean(exp.isDark);
-  }
-  if (item.brightness !== undefined) {
-    return item.brightness < threshold;
-  }
-  if (item.isDark !== undefined) {
-    return Boolean(item.isDark);
-  }
-  return false;
-}
 
 function StarRating({ rating, onChange, size = 18 }) {
   return (
@@ -55,7 +26,7 @@ function StarRating({ rating, onChange, size = 18 }) {
   );
 }
 
-const TimelineItem = React.memo(({ grp, idx, isCurrent, onClick, accent, darkThreshold = 42 }) => {
+const TimelineItem = memo(({ grp, idx, isCurrent, onClick, accent, darkThreshold = 42 }) => {
   const rep = grp[0];
   const elementRef = useRef(null);
 
@@ -118,6 +89,19 @@ const TimelineItem = React.memo(({ grp, idx, isCurrent, onClick, accent, darkThr
         boxShadow: `0 0 5px ${tierColor}`
       }} />
 
+      {/* Exposure Cluster Type Badge top-right */}
+      <div style={{
+        position: "absolute", top: "3px", right: "3px",
+        background: (rep.groupIsDark || gDark === grp.length) ? "rgba(124, 58, 237, 0.88)" : "rgba(202, 138, 4, 0.85)",
+        color: "#fff",
+        fontSize: "8px", fontWeight: 800,
+        padding: "1px 4px", borderRadius: "4px",
+        backdropFilter: "blur(4px)",
+        display: "flex", alignItems: "center", gap: "2px"
+      }}>
+        {(rep.groupIsDark || gDark === grp.length) ? "🌙 Dark" : "☀️ Light"}
+      </div>
+
       {/* Group Count Badge */}
       <div style={{
         position: "absolute", bottom: "4px", right: "4px",
@@ -130,12 +114,12 @@ const TimelineItem = React.memo(({ grp, idx, isCurrent, onClick, accent, darkThr
       </div>
 
       {/* Warn badges */}
-      {(gBlurry > 0 || gRejected > 0 || gDark > 0) && (
+      {(gBlurry > 0 || gRejected > 0 || (gDark > 0 && gDark < grp.length)) && (
         <div style={{
           position: "absolute", bottom: "4px", left: "4px",
           display: "flex", gap: "2px"
         }}>
-          {gDark > 0 && <span style={{ fontSize: "8px", background: "#7c3aedee", color: "#fff", padding: "1px 3px", borderRadius: "3px", fontWeight: 800 }} title={`${gDark} dark photos in cluster`}>🌙{gDark}</span>}
+          {gDark > 0 && gDark < grp.length && <span style={{ fontSize: "8px", background: "#7c3aedee", color: "#fff", padding: "1px 3px", borderRadius: "3px", fontWeight: 800 }} title={`${gDark} dark photos in cluster`}>🌙{gDark}</span>}
           {gBlurry > 0 && <span style={{ fontSize: "8px", background: "#eab30888", color: "#fff", padding: "1px 3px", borderRadius: "3px", fontWeight: 800 }}>◐{gBlurry}</span>}
           {gRejected > 0 && <span style={{ fontSize: "8px", background: "#ef444488", color: "#fff", padding: "1px 3px", borderRadius: "3px", fontWeight: 800 }}>✕{gRejected}</span>}
         </div>
@@ -175,32 +159,79 @@ export default function CullPage({
   const [sensitivity, setSensitivity] = useState(12);
   const [blurCutoff, setBlurCutoff] = useState(50);
   const [useFaceLandmarks, setUseFaceLandmarks] = useState(true);
-  const [darkThreshold, setDarkThreshold] = useState(42);
+  const [darkThreshold, setDarkThreshold] = useState(46);
   const [enableExposureCheck, setEnableExposureCheck] = useState(true);
+  const [separateExposureGroups, setSeparateExposureGroups] = useState(true);
 
-  // Dynamic slider handler: immediately re-evaluates all photos in real-time
+  // 1. Organizes results into matching duplicate clusters with strict exposure separation
+  const rebuildGroups = useCallback((results, customThreshold = darkThreshold, customSep = separateExposureGroups) => {
+    if (!results || results.length === 0) {
+      setGroups([]);
+      return;
+    }
+    const groupedList = clusterPhotos(results, {
+      groupingSensitivity: sensitivity,
+      blurStrictness: blurCutoff,
+      darkThreshold: customThreshold,
+      separateExposureGroups: customSep
+    });
+    setGroups(groupedList);
+    setActiveGroupIndex(0);
+    setActiveAlternateIndex(0);
+  }, [sensitivity, blurCutoff, darkThreshold, separateExposureGroups, setGroups, setActiveGroupIndex, setActiveAlternateIndex]);
+
+  // Dynamic slider handler: immediately re-clusters all photos in real-time
   const handleDarkThresholdChange = (val) => {
     setDarkThreshold(val);
-    if (groups && groups.length > 0) {
-      groups.forEach(grp => {
-        grp.forEach(item => {
-          item.isDark = getPhotoIsDark(item, val);
-        });
+    const targetPool = cullResults.length > 0 ? cullResults : groups.flat();
+    if (targetPool && targetPool.length > 0) {
+      const groupedList = clusterPhotos(targetPool, {
+        groupingSensitivity: sensitivity,
+        blurStrictness: blurCutoff,
+        darkThreshold: val,
+        separateExposureGroups
       });
-      setGroups([...groups]);
-      setCullResults(groups.flat());
+      setGroups(groupedList);
+      setCullResults(groupedList.flat());
     }
   };
 
-  // Manual dark / well-lit override handler
+  // Toggle separation of dark and well-lit clusters
+  const handleToggleSeparateExposureGroups = (enabled) => {
+    const nextVal = enabled !== undefined ? enabled : !separateExposureGroups;
+    setSeparateExposureGroups(nextVal);
+    const targetPool = cullResults.length > 0 ? cullResults : groups.flat();
+    if (targetPool && targetPool.length > 0) {
+      const groupedList = clusterPhotos(targetPool, {
+        groupingSensitivity: sensitivity,
+        blurStrictness: blurCutoff,
+        darkThreshold,
+        separateExposureGroups: nextVal
+      });
+      setGroups(groupedList);
+      setCullResults(groupedList.flat());
+      showToast(nextVal ? "Separated Light and Dark photos into distinct clusters" : "Merged exposure grouping");
+    }
+  };
+
+  // Manual dark / well-lit override handler (immediately moves photo to proper exposure cluster)
   const handleTogglePhotoDark = (item) => {
     if (!item) return;
     const currentIsDark = getPhotoIsDark(item, darkThreshold);
     item.manualDarkOverride = !currentIsDark;
     item.isDark = !currentIsDark;
-    setGroups([...groups]);
-    setCullResults(groups.flat());
-    showToast(`Marked ${item.name} as ${!currentIsDark ? "🌙 Dark" : "☀️ Well-Lit"}`);
+    const targetPool = cullResults.length > 0 ? cullResults : groups.flat();
+    if (targetPool && targetPool.length > 0) {
+      const groupedList = clusterPhotos(targetPool, {
+        groupingSensitivity: sensitivity,
+        blurStrictness: blurCutoff,
+        darkThreshold,
+        separateExposureGroups
+      });
+      setGroups(groupedList);
+      setCullResults(groupedList.flat());
+    }
+    showToast(`Marked ${item.name} as ${!currentIsDark ? "🌙 Dark" : "☀️ Well-Lit"} & Re-grouped`);
   };
 
   // Runtime State
@@ -231,30 +262,11 @@ export default function CullPage({
   // Active files are loaded based on whether standard folders or RAW folders are selected
   const activeInputFiles = batchImages; // Falls back to batchImages standard loaded files
 
-  // 1. Organizes results into matching duplicate groups
-  const rebuildGroups = useCallback((results) => {
-    const map = {};
-    results.forEach((item) => {
-      if (!map[item.cullGroup]) map[item.cullGroup] = [];
-      map[item.cullGroup].push(item);
-    });
-
-    const groupedList = Object.values(map);
-    // Sort each group so the designated Key Photo is at index 0
-    groupedList.forEach((group) => {
-      group.sort((a, b) => (b.isKeyPhoto ? 1 : 0) - (a.isKeyPhoto ? 1 : 0));
-    });
-
-    setGroups(groupedList);
-    setActiveGroupIndex(0);
-    setActiveAlternateIndex(0);
-  }, []);
-
   // Stable callback for timeline item selection to prevent memoized re-render triggers
   const handleTimelineItemClick = useCallback((idx) => {
     setActiveGroupIndex(idx);
     setActiveAlternateIndex(0);
-  }, []);
+  }, [setActiveGroupIndex, setActiveAlternateIndex]);
 
   // 2. Main Culling AI Execution Loop
   const handleStartCulling = async () => {
@@ -275,13 +287,14 @@ export default function CullPage({
           blurStrictness: blurCutoff,
           enableFaceLandmarks: useFaceLandmarks,
           darkThreshold: darkThreshold,
-          enableExposureAnalysis: enableExposureCheck
+          enableExposureAnalysis: enableExposureCheck,
+          separateExposureGroups: separateExposureGroups
         },
         (prog) => setProgress(prog)
       );
 
       setCullResults(results);
-      rebuildGroups(results);
+      rebuildGroups(results, darkThreshold, separateExposureGroups);
       addBatchLog?.(`✅ Completed local culling for ${results.length} files.`, "success");
       showToast("AI Culling completed successfully!");
     } catch (e) {
@@ -505,7 +518,7 @@ export default function CullPage({
   };
 
   // Filter duplicate groups based on exposure status if requested
-  const displayedGroups = React.useMemo(() => {
+  const displayedGroups = useMemo(() => {
     if (exposureFilter === "dark") {
       return groups.filter(grp => grp.some(item => getPhotoIsDark(item, darkThreshold)));
     }
@@ -1035,9 +1048,9 @@ export default function CullPage({
                 />
                 <div style={{ display: "flex", gap: "6px" }}>
                   {[
-                    { label: "Strict (30%)", val: 30, desc: "Only very dark" },
-                    { label: "Balanced (42%)", val: 42, desc: "Recommended" },
-                    { label: "Aggressive (55%)", val: 55, desc: "Catches any dim shot" }
+                    { label: "Subtle (35%)", val: 35, desc: "Only very dark" },
+                    { label: "Balanced (46%)", val: 46, desc: "Recommended" },
+                    { label: "Aggressive (58%)", val: 58, desc: "Catches any dim shot" }
                   ].map(p => (
                     <button
                       key={p.val}
@@ -1045,8 +1058,8 @@ export default function CullPage({
                       onClick={() => handleDarkThresholdChange(p.val)}
                       style={{
                         flex: 1,
-                        padding: "3px 6px",
-                        fontSize: "10px",
+                        padding: "4px 8px",
+                        fontSize: "11px",
                         fontWeight: darkThreshold === p.val ? 800 : 600,
                         background: darkThreshold === p.val ? "#a855f7" : (dm ? "#27272a" : "#f4f4f5"),
                         color: darkThreshold === p.val ? "#fff" : (dm ? "#a1a1aa" : "#52525b"),
@@ -1067,6 +1080,19 @@ export default function CullPage({
 
             {/* Checkbox Options */}
             <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginTop: "4px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                <input
+                  type="checkbox"
+                  id="cull_separate_exposure"
+                  checked={separateExposureGroups}
+                  onChange={(e) => handleToggleSeparateExposureGroups(e.target.checked)}
+                  style={{ accentColor: "#a855f7", width: "17px", height: "17px", cursor: "pointer" }}
+                />
+                <label htmlFor="cull_separate_exposure" style={{ fontSize: "13px", fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: "6px" }}>
+                  <span style={{ fontSize: "15px" }}>🌓</span> Strict Light & Dark Group Separation (Isolates dark photos into their own clusters; never mixes with well-lit shots)
+                </label>
+              </div>
+
               <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
                 <input
                   type="checkbox"
@@ -1311,8 +1337,17 @@ export default function CullPage({
             {/* Header info */}
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: `1px solid ${dm ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)"}`, paddingBottom: "12px", marginBottom: "16px" }}>
               <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                <span style={{ background: "linear-gradient(135deg, #06b6d4, #6c63ff)", color: "#fff", padding: "4px 10px", borderRadius: "8px", fontSize: "11px", fontWeight: 800 }}>
-                  CLUSTER {safeGroupIndex + 1} / {displayedGroups.length}
+                <span style={{
+                  background: (activeGroup.every(x => getPhotoIsDark(x, darkThreshold)) || activePhoto.groupIsDark)
+                    ? "linear-gradient(135deg, #7c3aed, #9333ea)"
+                    : "linear-gradient(135deg, #06b6d4, #6c63ff)",
+                  color: "#fff",
+                  padding: "4px 10px",
+                  borderRadius: "8px",
+                  fontSize: "11px",
+                  fontWeight: 800
+                }}>
+                  {(activeGroup.every(x => getPhotoIsDark(x, darkThreshold)) || activePhoto.groupIsDark) ? "🌙 DARK CLUSTER" : "☀️ WELL-LIT CLUSTER"} {safeGroupIndex + 1} / {displayedGroups.length}
                 </span>
                 <span style={{ fontSize: "13px", fontWeight: 600, color: dm ? "#9ca3af" : "#4b5563" }}>
                   {activeGroup.length} duplicate alternates
@@ -1320,6 +1355,26 @@ export default function CullPage({
               </div>
               
               <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                <button
+                  onClick={() => handleTogglePhotoDark(activePhoto)}
+                  style={{
+                    background: getPhotoIsDark(activePhoto, darkThreshold) ? "rgba(168, 85, 247, 0.2)" : "rgba(234, 179, 8, 0.15)",
+                    color: getPhotoIsDark(activePhoto, darkThreshold) ? "#c084fc" : "#eab308",
+                    border: `1px solid ${getPhotoIsDark(activePhoto, darkThreshold) ? "rgba(168, 85, 247, 0.45)" : "rgba(234, 179, 8, 0.4)"}`,
+                    padding: "5px 10px",
+                    borderRadius: "8px",
+                    fontSize: "11px",
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "4px"
+                  }}
+                  title="Click to toggle between Dark and Well-Lit classification"
+                >
+                  {getPhotoIsDark(activePhoto, darkThreshold) ? "🌙 Photo: Dark" : "☀️ Photo: Well-Lit"}
+                </button>
+
                 <button
                   onClick={() => setShowFaceBoxes(!showFaceBoxes)}
                   style={{

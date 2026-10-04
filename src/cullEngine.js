@@ -299,9 +299,38 @@ export function computeExposure(imageElementOrCanvas, canvas, ctx, darkThreshold
 }
 
 /**
+ * Universal evaluator for whether a photo is classified as dark or underexposed.
+ * Factors in manual user override, exposure histogram metrics, median, shadows, and threshold.
+ */
+export function getPhotoIsDark(item, threshold = 46) {
+  if (!item) return false;
+  // Manual override if set by user toggle
+  if (item.manualDarkOverride !== undefined) {
+    return Boolean(item.manualDarkOverride);
+  }
+  if (item.exposure) {
+    const exp = item.exposure;
+    if (exp.meanBrightness !== undefined && exp.meanBrightness < threshold) return true;
+    if (exp.medianBrightness !== undefined && exp.medianBrightness < threshold) return true;
+    if (exp.exposureScore !== undefined && exp.exposureScore < threshold) return true;
+    if (exp.shadowPercent !== undefined && exp.shadowPercent > 45 && (exp.meanBrightness || 0) < (threshold + 10)) return true;
+    if (exp.deepShadowPercent !== undefined && exp.deepShadowPercent > 25) return true;
+    if (exp.brightness !== undefined && exp.brightness < threshold) return true;
+    return Boolean(exp.isDark);
+  }
+  if (item.brightness !== undefined) {
+    return item.brightness < threshold;
+  }
+  if (item.isDark !== undefined) {
+    return Boolean(item.isDark);
+  }
+  return false;
+}
+
+/**
  * Rapid standalone exposure analyzer for single files or on-the-fly export verification.
  */
-export async function analyzePhotoExposure(imgObj, darkThreshold = 42) {
+export async function analyzePhotoExposure(imgObj, darkThreshold = 46) {
   let imageBitmap = null;
   try {
     if (imgObj.file) {
@@ -340,6 +369,130 @@ export async function analyzePhotoExposure(imgObj, darkThreshold = 42) {
 }
 
 /**
+ * Organizes analyzed photo results into duplicate clusters with strict exposure separation.
+ * Guarantees that dark photos and well-lit photos form separate, dedicated groups.
+ * Reusable both during initial batch culling and dynamically on slider adjustments.
+ */
+export function clusterPhotos(
+  items,
+  {
+    groupingSensitivity = 12,
+    blurStrictness = 50,
+    darkThreshold = 46,
+    separateExposureGroups = true
+  } = {}
+) {
+  if (!items || items.length === 0) return [];
+
+  // 1. Sync isDark for every item using threshold & overrides
+  const updatedItems = items.map((item) => {
+    const isDark = getPhotoIsDark(item, darkThreshold);
+    return {
+      ...item,
+      isDark,
+      cullGroup: -1
+    };
+  });
+
+  // 2. Perform clustering
+  let currentGroupId = 0;
+  const groups = [];
+
+  for (let i = 0; i < updatedItems.length; i++) {
+    const current = updatedItems[i];
+    if (current.cullGroup !== -1) continue;
+
+    current.cullGroup = currentGroupId;
+    const groupItems = [current];
+
+    for (let j = i + 1; j < updatedItems.length; j++) {
+      const next = updatedItems[j];
+      if (next.cullGroup !== -1) continue;
+
+      const dist = (current.dHash && next.dHash) ? getHammingDistance(current.dHash, next.dHash) : 99;
+      // Exposure separation: dark photos only group with dark photos, light with light
+      const sameExposure = !separateExposureGroups || (Boolean(current.isDark) === Boolean(next.isDark));
+      const brightnessDiff = Math.abs((current.brightness ?? 50) - (next.brightness ?? 50));
+      const exposureMatch = sameExposure && (!separateExposureGroups || brightnessDiff <= 32);
+
+      if (dist <= groupingSensitivity && exposureMatch) {
+        next.cullGroup = currentGroupId;
+        groupItems.push(next);
+      } else if (dist > groupingSensitivity || !sameExposure) {
+        // Break consecutive sequence when similarity limit or exposure boundary is reached
+        break;
+      }
+    }
+
+    // 3. Classify Group & Promote Key Photo
+    const darkMemberCount = groupItems.filter(x => x.isDark).length;
+    const isDarkGroup = darkMemberCount > groupItems.length / 2;
+
+    // Sort group members by quality score (highest first)
+    groupItems.sort((a, b) => (b.cullScore || 0) - (a.cullScore || 0));
+
+    for (let k = 0; k < groupItems.length; k++) {
+      const item = groupItems[k];
+      const isWinner = k === 0;
+
+      const hasBlink = item.warnings?.some(w =>
+        w.toLowerCase().includes("blink") || w.toLowerCase().includes("closed")
+      );
+      const isBlurry = (item.sharpness || 0) < blurStrictness;
+      const isPitchBlack = item.isDark && (item.brightness || 0) < 12;
+      const isSeverelyBad = (item.cullScore || 0) < 15 || isPitchBlack;
+
+      if (hasBlink || isSeverelyBad) {
+        item.category = "rejected";
+        item.rating = 1;
+        item.label = "red";
+        item.isKeyPhoto = false;
+      } else if (isBlurry) {
+        item.category = "blurry";
+        item.rating = 2;
+        item.label = "yellow";
+        item.isKeyPhoto = isWinner;
+      } else if (isWinner) {
+        item.category = "keeper";
+        item.rating = 5;
+        item.label = "green";
+        item.isKeyPhoto = true;
+      } else {
+        item.category = "alternate";
+        item.rating = 3;
+        item.label = "blue";
+        item.isKeyPhoto = false;
+      }
+      item.cullGroup = currentGroupId;
+      item.groupIsDark = isDarkGroup;
+    }
+
+    groups.push(groupItems);
+    currentGroupId++;
+  }
+
+  // Update original item references with the assigned groups
+  const byRefMap = new Map();
+  groups.flat().forEach(gItem => {
+    byRefMap.set(gItem.name, gItem);
+  });
+  items.forEach(orig => {
+    const updated = byRefMap.get(orig.name);
+    if (updated) {
+      orig.cullGroup = updated.cullGroup;
+      orig.isDark = updated.isDark;
+      orig.isKeyPhoto = updated.isKeyPhoto;
+      orig.category = updated.category;
+      orig.rating = updated.rating;
+      orig.label = updated.label;
+      orig.groupIsDark = updated.groupIsDark;
+    }
+  });
+
+  return groups;
+}
+
+/**
  * Orchestrates local client-side AI photo culling process.
  * Loads and decodes raw/regular files, groups duplicates using perceptual hashes,
  * computes quality metric ratings, and designates the "Key Photo" keepers.
@@ -353,8 +506,9 @@ export async function cullBatch(images, options = {}, onProgress) {
     groupingSensitivity = 12, // Hamming distance threshold (default ~12)
     blurStrictness = 50,       // Sharpness cutoff (default 50)
     enableFaceLandmarks = true, // Run MediaPipe vision resolver
-    darkThreshold = 42,        // Brightness threshold below which photo is dark (0-100)
-    enableExposureAnalysis = true
+    darkThreshold = 46,        // Brightness threshold below which photo is dark (0-100)
+    enableExposureAnalysis = true,
+    separateExposureGroups = true
   } = options;
 
   let fl = null;
@@ -562,86 +716,13 @@ export async function cullBatch(images, options = {}, onProgress) {
     await new Promise((resolve) => setTimeout(resolve, 15));
   }
 
-  // 8. PERCEPTUAL SIMILARITY GROUPING & KEY PHOTO auto-selection
-  // We cluster consecutive images whose Hamming distance is <= groupingSensitivity
-  let currentGroupId = 0;
-  const groups = [];
-
-  for (let i = 0; i < results.length; i++) {
-    const current = results[i];
-    if (current.cullGroup !== -1) continue;
-
-    // Start a new group
-    current.cullGroup = currentGroupId;
-    const groupItems = [current];
-
-    // Find consecutive duplicates
-    for (let j = i + 1; j < results.length; j++) {
-      const next = results[j];
-      if (next.cullGroup !== -1) continue;
-
-      const dist = getHammingDistance(current.dHash, next.dHash);
-      if (dist <= groupingSensitivity) {
-        next.cullGroup = currentGroupId;
-        groupItems.push(next);
-      } else {
-        // Break out for consecutive grouping (keeps scenes logically sequenced)
-        break;
-      }
-    }
-
-    groups.push(groupItems);
-    currentGroupId++;
-  }
-
-  // 9. AUTO-PROMOTE "KEY PHOTO" with 4-Tier Quality Classification
-  // ---------------------------------------------------------------
-  // Tier 1 — KEEPER     : Best in group, sharp & clear → 5★ 🟢 Green
-  // Tier 2 — ALTERNATE  : Good duplicate, not the best → 3★ 🔵 Blue
-  // Tier 3 — BLURRY     : Out-of-focus / soft image    → 2★ 🟡 Yellow
-  // Tier 4 — REJECTED   : Eyes closed / blink / severe quality fail / pitch black → 1★ 🔴 Red
-  for (const group of groups) {
-    // Sort group members by quality score (highest first)
-    group.sort((a, b) => b.cullScore - a.cullScore);
-
-    for (let k = 0; k < group.length; k++) {
-      const item = group[k];
-      const isWinner = k === 0;
-
-      const hasBlink = item.warnings.some(w =>
-        w.toLowerCase().includes("blink") || w.toLowerCase().includes("closed")
-      );
-      const isBlurry = item.sharpness < blurStrictness;
-      const isPitchBlack = item.isDark && item.brightness < 12;
-      const isSeverelyBad = item.cullScore < 15 || isPitchBlack; // Near-zero quality or completely dark
-
-      if (hasBlink || isSeverelyBad) {
-        // Tier 4 — REJECTED: Eye blink, or catastrophically low score / pitch black
-        item.category = "rejected";
-        item.rating = 1;
-        item.label = "red";
-        item.isKeyPhoto = false;
-      } else if (isBlurry) {
-        // Tier 3 — BLURRY: Soft / out-of-focus
-        item.category = "blurry";
-        item.rating = 2;
-        item.label = "yellow";
-        item.isKeyPhoto = isWinner; // Mark as "best of the blurry group" if winner
-      } else if (isWinner) {
-        // Tier 1 — KEEPER: Best in group, sharp, eyes open
-        item.category = "keeper";
-        item.rating = 5;
-        item.label = "green";
-        item.isKeyPhoto = true;
-      } else {
-        // Tier 2 — ALTERNATE: Good but not the winner
-        item.category = "alternate";
-        item.rating = 3;
-        item.label = "blue";
-        item.isKeyPhoto = false;
-      }
-    }
-  }
+  // 8. PERCEPTUAL SIMILARITY GROUPING WITH EXPOSURE SEPARATION & KEY PHOTO PROMOTION
+  clusterPhotos(results, {
+    groupingSensitivity,
+    blurStrictness,
+    darkThreshold,
+    separateExposureGroups
+  });
 
   // Restore original ordering
   results.sort((a, b) => images.indexOf(images.find(x => x.name === a.name)) - images.indexOf(images.find(x => x.name === b.name)));

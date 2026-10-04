@@ -20,6 +20,10 @@ export default defineConfig({
     }
   },
   optimizeDeps: {
+    include: ["react", "react-dom"],
     exclude: ["libraw-wasm"]
+  },
+  resolve: {
+    dedupe: ["react", "react-dom"]
   }
 })
