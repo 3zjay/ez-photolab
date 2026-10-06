@@ -1,0 +1,27 @@
+appId: com.ezphotolab.desktop.preview
+productName: PHOTOlab Desktop Preview
+asar: true
+npmRebuild: false
+directories:
+  output: release
+files:
+  - dist-desktop/**/*
+  - electron/**/*.cjs
+  - package.json
+  - '!node_modules/**/*'
+  - '!electron/**/*.test.cjs'
+extraMetadata:
+  main: electron/main.cjs
+  version: 0.1.0
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+  signAndEditExecutable: false
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  deleteAppDataOnUninstall: false
+artifactName: PHOTOlab-Desktop-Preview-${version}-${arch}-Setup.${ext}
+publish: null

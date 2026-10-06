@@ -394,6 +394,8 @@ export function clusterPhotos(
     };
   });
 
+  const originalsByCopy = new Map(updatedItems.map((copy, index) => [copy, items[index]]));
+
   // 2. Perform clustering
   let currentGroupId = 0;
   const groups = [];
@@ -430,10 +432,15 @@ export function clusterPhotos(
 
     // Sort group members by quality score (highest first)
     groupItems.sort((a, b) => (b.cullScore || 0) - (a.cullScore || 0));
+    const automaticWinner = groupItems.find(item => !item.manualSelection && !item.analysisFailed);
 
     for (let k = 0; k < groupItems.length; k++) {
       const item = groupItems[k];
-      const isWinner = k === 0;
+      item.cullGroup = currentGroupId;
+      item.groupIsDark = isDarkGroup;
+      if (item.manualSelection) continue;
+      if (item.analysisFailed) { item.category = 'alternate'; item.rating = 0; item.label = ''; item.isKeyPhoto = false; continue; }
+      const isWinner = item === automaticWinner && !groupItems.some(x => x.manualSelection && x.isKeyPhoto);
 
       const hasBlink = item.warnings?.some(w =>
         w.toLowerCase().includes("blink") || w.toLowerCase().includes("closed")
@@ -467,27 +474,16 @@ export function clusterPhotos(
       item.groupIsDark = isDarkGroup;
     }
 
+    groupItems.sort((a, b) => Number(Boolean(b.isKeyPhoto)) - Number(Boolean(a.isKeyPhoto)));
     groups.push(groupItems);
     currentGroupId++;
   }
 
   // Update original item references with the assigned groups
-  const byRefMap = new Map();
-  groups.flat().forEach(gItem => {
-    byRefMap.set(gItem.name, gItem);
-  });
-  items.forEach(orig => {
-    const updated = byRefMap.get(orig.name);
-    if (updated) {
-      orig.cullGroup = updated.cullGroup;
-      orig.isDark = updated.isDark;
-      orig.isKeyPhoto = updated.isKeyPhoto;
-      orig.category = updated.category;
-      orig.rating = updated.rating;
-      orig.label = updated.label;
-      orig.groupIsDark = updated.groupIsDark;
-    }
-  });
+  for (const updated of groups.flat()) {
+    const original = originalsByCopy.get(updated);
+    for (const key of ['cullGroup', 'isDark', 'isKeyPhoto', 'category', 'rating', 'label', 'groupIsDark']) original[key] = updated[key];
+  }
 
   return groups;
 }
@@ -696,6 +692,7 @@ export async function cullBatch(images, options = {}, onProgress) {
         previewUrl: imgObj.previewUrl || null,
         thumbnailUrl: null,
         cullScore: 10,
+        analysisFailed: true,
         cullGroup: -1,
         isKeyPhoto: false,
         warnings: [`Analysis Error: ${e.message}`],

@@ -1,5 +1,7 @@
 # ✨ PHOTOlab V2
 
+Windows desktop development: see [DESKTOP.md](DESKTOP.md) for the separate local preview and [DESKTOP_TEST_SETUP.md](DESKTOP_TEST_SETUP.md) for preparing isolated test services. The desktop work is not deployed to the live website.
+
 **A professional-grade, browser-based photo editor and batch processor with AI-powered tools.**  
 Built with React + Vite — runs entirely in your browser with zero server costs and zero uploads.
 

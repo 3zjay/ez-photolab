@@ -1,3 +1,4 @@
+import { isDesktop } from "../../platform/desktop";
 import { SL, Empty, Row, Spin, PBar, AB, SmoothSlider } from "../ui/common";
 import { BG_COLORS } from "../../constants";
 
@@ -55,7 +56,7 @@ export function ToolsPanel({ image, handleRemoveBg, bgStatus, bgProgress, bgSubU
             )}
 
             {/* ── OBJECT REMOVAL (Claid.ai — 50 free credits) ── */}
-            {image && (
+            {image && !isDesktop && (
                 <div style={{ padding: "14px", background: cardBg, border: `1.5px solid ${cardBdr}`, borderRadius: "12px", display: "flex", flexDirection: "column", gap: "10px" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                         <SL>Object Removal — LaMa Inpainting</SL>

@@ -1,18 +1,15 @@
 
 import { SL, Empty, AB, SmoothSlider } from "../ui/common";
+import { loadImageFromSrc } from '../../utils';
+import { cropForAspect } from '../../imageGeometry';
 
 export function AdjustPanel({ image, setRotation, setFlipH, setFlipV, rotation, flipH, flipV, cropMode, setCropMode, setCropBox, cropAspect, setCropAspect, applyCrop, dm, cardBg, cardBdr }) {
-    const setCropAspectRatio = ratio => {
+    const setCropAspectRatio = async ratio => {
         setCropAspect(ratio);
         if (ratio === "free") return;
         const [aw, ah] = ratio.split(":").map(Number);
-        const imgW = image?.naturalWidth || 1, imgH = image?.naturalHeight || 1;
-        const imgAspect = imgW / imgH, cropAspect = aw / ah;
-        let w, h;
-        if (imgAspect > cropAspect) { h = 100; w = h * (cropAspect / (imgW / imgH)) * (imgW / imgH); }
-        else { w = 100; h = w * (imgW / imgH) / cropAspect; }
-        w = Math.min(100, w); h = Math.min(100, h);
-        setCropBox({ x: (100 - w) / 2, y: (100 - h) / 2, w, h });
+        const img = await loadImageFromSrc(image);
+        setCropBox(cropForAspect(img.naturalWidth, img.naturalHeight, aw, ah));
     };
 
     return (
@@ -53,7 +50,7 @@ export function AdjustPanel({ image, setRotation, setFlipH, setFlipV, rotation, 
                                 <AB onClick={() => { setCropMode(false); setCropBox({ x: 0, y: 0, w: 100, h: 100 }); setCropAspect("free"); }} color={dm ? '#333' : '#f2f2f8'} textColor={dm ? '#ccc' : '#666'} style={{ flex: 1, padding: "10px" }}>Cancel</AB>
                             </div>
                         )}
-                        {!cropMode && <p style={{ fontSize: "11px", color: "#bbb", lineHeight: 1.5 }}>Select a ratio to enter crop mode.</p>}
+                        <p style={{ fontSize: "11px", color: "#bbb", lineHeight: 1.5 }}>{cropMode ? 'Drag the crop or its handles. Rotation is applied after cropping.' : 'Select a ratio to enter crop mode.'}</p>
                     </div>
                 </>
             )}

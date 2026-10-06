@@ -3,3 +3,7 @@ dist/
 .idx/
 .DS_Store
 .vercel
+
+dist-desktop/
+release/
+.desktop-test/

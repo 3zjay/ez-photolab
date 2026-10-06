@@ -312,16 +312,18 @@ export default function CullPage({
 
     // Reset old key photo, assign new one
     groupItems.forEach((x) => {
-      if (x.name === item.name) {
+      if (x === item) {
         x.isKeyPhoto = true;
         x.rating = 5;
         x.label = "green";
         x.category = "keeper";
+        x.manualSelection = true;
       } else if (x.isKeyPhoto) {
         x.isKeyPhoto = false;
         x.rating = 3;
         x.label = "blue";
         x.category = "alternate";
+        x.manualSelection = true;
       }
     });
 
@@ -342,16 +344,13 @@ export default function CullPage({
     activePhoto.rating = ratingValue !== undefined ? ratingValue : activePhoto.rating;
     activePhoto.label = labelValue !== undefined ? labelValue : activePhoto.label;
 
-    // Map new rating/label back to category
-    if (activePhoto.rating === 5 || activePhoto.label === "green") {
-      activePhoto.category = "keeper";
-    } else if (activePhoto.rating === 1 || activePhoto.label === "red") {
-      activePhoto.category = "rejected";
-    } else if (activePhoto.rating === 2 || activePhoto.label === "yellow") {
-      activePhoto.category = "blurry";
-    } else {
-      activePhoto.category = "alternate";
-    }
+    // The field just changed wins; an older green label cannot cancel a rejection.
+    const category = ratingValue !== undefined ? ({ 5: 'keeper', 1: 'rejected', 2: 'blurry' }[ratingValue] || 'alternate') : ({ green: 'keeper', red: 'rejected', yellow: 'blurry' }[labelValue] || 'alternate');
+    activePhoto.category = category;
+    activePhoto.isKeyPhoto = category === 'keeper';
+    activePhoto.manualSelection = true;
+    if (ratingValue !== undefined) activePhoto.label = ratingValue === 0 ? '' : ({ keeper: 'green', rejected: 'red', blurry: 'yellow' }[category] || 'blue');
+    else activePhoto.rating = ({ keeper: 5, rejected: 1, blurry: 2 }[category] || 3);
 
     setGroups([...groups]);
     setCullResults(groups.flat());
@@ -370,8 +369,8 @@ export default function CullPage({
 
     try {
       const allImages = groups.flat();
-      const count = await exportXmpSidecars(outputHandle, allImages, addBatchLog);
-      showToast(`Exported ${count} rating sidecars successfully!`);
+      const result = await exportXmpSidecars(outputHandle, allImages, addBatchLog);
+      showToast(`Sidecars: ${result.saved} saved, ${result.failed} failed. See the log for details.`);
     } catch (e) {
       addBatchLog?.(`❌ XMP Sidecars Export Failed: ${e.message}`, "error");
       alert(`Export failed: ${e.message}`);

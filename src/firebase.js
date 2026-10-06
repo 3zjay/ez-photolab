@@ -13,9 +13,10 @@ const firebaseConfig = {
 };
 
 // Initialize Firebase
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app);
-const googleProvider = new GoogleAuthProvider();
+const desktopPreview = import.meta.env.MODE === 'desktop';
+const app = desktopPreview ? null : initializeApp(firebaseConfig);
+const auth = app ? getAuth(app) : null;
+const db = app ? getFirestore(app) : null;
+const googleProvider = app ? new GoogleAuthProvider() : null;
 
 export { auth, db, googleProvider };

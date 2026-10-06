@@ -7,7 +7,7 @@ let depthPipePromise = null;
 
 async function getDepthPipeline() {
   if (!depthPipePromise) {
-    depthPipePromise = pipeline('depth-estimation', 'Xenova/depth-anything-small-hf');
+    depthPipePromise = pipeline('depth-estimation', 'Xenova/depth-anything-small-hf').catch(error => { depthPipePromise = null; throw error; });
   }
   return depthPipePromise;
 }

@@ -1,5 +1,7 @@
 import { BATCH_RESIZE_PRESETS, FONT_MAP } from "./constants";
 import { createSkinMask } from "./faceMasking";
+import { isDesktop, unwrap } from "./platform/desktop";
+import { transformedSize, checkCanvasSize } from './imageGeometry';
 
 // Auto-levels: stretches each RGB channel histogram to 0–255
 export function applyAutoLevels(ctx, W, H) {
@@ -101,13 +103,13 @@ export function calcBatchDims(natW, natH, mode, preset, customW, customH, keepAs
 // ── CSS filter from state ─────────────────────────────────────────────────────
 export function toCSSFilter(f) {
   const ev = 1 + (f.exposure || 0)/100;
-  const bv = ((f.brightness || 100)/100)*ev;
+  const bv = ((f.brightness ?? 100)/100)*ev;
   const hlAdj = (f.highlights || 0) > 0 ? 1 + f.highlights*0.002 : 1 + (f.highlights || 0)*0.003;
   const shAdj = (f.shadows || 0) > 0 ? 1 + f.shadows*0.003 : 1 + (f.shadows || 0)*0.002;
   const wAdj = (f.whites || 0) > 0 ? 1 + f.whites*0.002 : 1 + (f.whites || 0)*0.002;
   const bAdj = (f.blacks || 0) > 0 ? 1 + f.blacks*0.002 : 1 + (f.blacks || 0)*0.002;
-  const contrastFactor = ((f.contrast || 100)/100) * (f.haze ? (1 + f.haze*0.003) : 1);
-  let s = `brightness(${(bv*hlAdj*shAdj*wAdj*bAdj).toFixed(3)}) contrast(${contrastFactor.toFixed(3)}) saturate(${(((f.saturation || 100)/100) * ((f.vibrance || 100)/100)).toFixed(3)})`;
+  const contrastFactor = ((f.contrast ?? 100)/100) * (f.haze ? (1 + f.haze*0.003) : 1);
+  let s = `brightness(${(bv*hlAdj*shAdj*wAdj*bAdj).toFixed(3)}) contrast(${contrastFactor.toFixed(3)}) saturate(${(((f.saturation ?? 100)/100) * ((f.vibrance ?? 100)/100)).toFixed(3)})`;
   if (f.hue && f.hue !== 0) s += ` hue-rotate(${f.hue}deg)`;
   if (f.denoise && f.denoise > 0) s += ` blur(${(f.denoise*0.05).toFixed(2)}px)`;
   if (f.sharpness && f.sharpness > 0) s += ` contrast(${(1+f.sharpness*0.022).toFixed(3)})`;
@@ -126,6 +128,10 @@ export function toTransformCSS(rotation, flipH, flipV) {
 }
 
 export async function saveFile(blob, name) {
+  if (isDesktop) {
+    const result = await unwrap(window.photoLab.saveImage(name, new Uint8Array(await blob.arrayBuffer())));
+    return result || false;
+  }
   // 1. Try File System Access API for "Save As" dialog on desktop (Chrome, Edge, Opera, etc.)
   if (typeof window !== 'undefined' && typeof window.showSaveFilePicker === 'function') {
     try {
@@ -145,7 +151,7 @@ export async function saveFile(blob, name) {
       await writable.close();
       return;
     } catch (e) {
-      if (e.name === 'AbortError') return; // User cancelled, do nothing
+      if (e.name === 'AbortError') return false;
       console.warn("showSaveFilePicker failed or was rejected, falling back to download:", e);
     }
   }
@@ -426,11 +432,16 @@ export async function renderFinal(
   const natW = imgEl.naturalWidth;
   const natH = imgEl.naturalHeight;
   if (!natW || !natH) throw new Error('Image has zero dimensions — cannot export');
+  const maxPixels = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent) ? 16_000_000 : 64_000_000;
+  const drawW = Math.round(targetW || natW), drawH = Math.round(targetH || natH);
+  const { W, H } = transformedSize(drawW, drawH, rotation);
+  checkCanvasSize(W, H, maxPixels);
 
   let sourceEl = imgEl;
 
   // Run the beauty filter on a temporary canvas at natural resolution if any beauty settings are non-zero
   if (beautySmooth > 0 || beautyClarity > 0 || beautyGlow > 0) {
+    checkCanvasSize(natW, natH, maxPixels);
     const tempCanvas = document.createElement('canvas');
     tempCanvas.width = natW;
     tempCanvas.height = natH;
@@ -444,13 +455,6 @@ export async function renderFinal(
     await applyBeautyPipeline(tempCanvas, tempCtx, natW, natH, beautySmooth, beautyClarity, beautyGlow, mask);
     sourceEl = tempCanvas;
   }
-
-  const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
-  const isSafari = /Safari/i.test(navigator.userAgent) && !/Chrome|CriOS|FxiOS|Firefox/i.test(navigator.userAgent);
-  const MAX = (isMobile || isSafari) ? 16_000_000 : 268_435_456;
-  let W = targetW || natW;
-  let H = targetH || natH;
-  if (W * H > MAX) { const s = Math.sqrt(MAX / (W * H)); W = Math.floor(W * s); H = Math.floor(H * s); }
 
   const canvas = document.createElement('canvas');
   canvas.width = W; canvas.height = H;
@@ -468,17 +472,23 @@ export async function renderFinal(
   if (cssFilterStr && cssFilterStr !== 'none' && cssFilterStr.trim() !== '') {
     ctx.filter = cssFilterStr;
   }
-  ctx.drawImage(sourceEl, -W / 2, -H / 2, W, H);
+  ctx.drawImage(sourceEl, -drawW / 2, -drawH / 2, drawW, drawH);
   ctx.restore();
   ctx.filter = 'none';
+
+  const transformedMask = mask => {
+    const result = document.createElement('canvas'); result.width = W; result.height = H;
+    const context = result.getContext('2d');
+    context.translate(W / 2, H / 2); context.rotate(rotation * Math.PI / 180); context.scale(flipH ? -1 : 1, flipV ? -1 : 1);
+    context.drawImage(mask, -drawW / 2, -drawH / 2, drawW, drawH);
+    return result;
+  };
 
   // Apply Structure AI [PRO]
   if (structureAmt > 0) {
     let faceMaskScaled = null;
     if (faceOvalMask) {
-      faceMaskScaled = document.createElement('canvas');
-      faceMaskScaled.width = W; faceMaskScaled.height = H;
-      faceMaskScaled.getContext('2d').drawImage(faceOvalMask, 0, 0, W, H);
+      faceMaskScaled = transformedMask(faceOvalMask);
     }
     await applyStructureAi(canvas, ctx, W, H, structureAmt, faceMaskScaled);
   }
@@ -487,9 +497,7 @@ export async function renderFinal(
   if (skyId !== 'none') {
     let skyMaskScaled = null;
     if (skyMask) {
-      skyMaskScaled = document.createElement('canvas');
-      skyMaskScaled.width = W; skyMaskScaled.height = H;
-      skyMaskScaled.getContext('2d').drawImage(skyMask, 0, 0, W, H);
+      skyMaskScaled = transformedMask(skyMask);
     }
     await applySkyReplacement(canvas, ctx, W, H, skyId, skyMaskScaled, customSkyUrl, skyOpacity / 100, skyLightMatch / 100);
   }
@@ -498,9 +506,7 @@ export async function renderFinal(
   if (nearVal !== 0 || farVal !== 0) {
     let depthMapScaled = null;
     if (depthMap) {
-      depthMapScaled = document.createElement('canvas');
-      depthMapScaled.width = W; depthMapScaled.height = H;
-      depthMapScaled.getContext('2d').drawImage(depthMap, 0, 0, W, H);
+      depthMapScaled = transformedMask(depthMap);
     }
     applyRelight(canvas, ctx, W, H, depthMapScaled, nearVal, farVal);
   }
@@ -800,15 +806,11 @@ export async function applySkyReplacement(canvas, ctx, W, H, skyId, skyMaskCanva
   }
 
   // Combine background & foreground
-  ctx.clearRect(0, 0, W, H);
-  ctx.drawImage(canvas, 0, 0); // Keep original details as fallback
-
   ctx.save();
   ctx.globalAlpha = opacity;
   ctx.drawImage(maskedSkyBg, 0, 0);
-  ctx.restore();
-
   ctx.drawImage(fgCanvas, 0, 0);
+  ctx.restore();
 }
 
 export function applyRelight(canvas, ctx, W, H, depthMapCanvas, nearVal, farVal) {

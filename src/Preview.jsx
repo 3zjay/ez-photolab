@@ -4,6 +4,7 @@ import { FONT_MAP, PRESETS, LUT_PRESETS } from "./constants";
 import { apply3DLut, applyCurves, applyHslMixer } from "./utils";
 import { RAW_EXTENSIONS } from "./rawProcessor";
 import { ModernImageUploadIcon } from "./components/ui/common";
+import { CropOverlay } from './components/CropOverlay';
 
 export function Preview({ image, originalImage, dragging, setDragging, loadImage, fileInputRef, imgRef, splitRef, activeTab, bgResult, bgMode, showBefore, setShowBefore, showSplit, splitPos, isDragSplit, setIsDragSplit, cssFilter, transformCSS, filters, texts, selText, setSelText, updateText, cropMode, cropBox, setCropBox, cropAspect, isEdited, resetAll, setImage, setBgStatus, setBgSubUrl, setBgResult, isMobile, rotation, flipH, flipV, activeLutData, lutIntensity, lutId, dm, rawLoading, rawProgressMsg, logo, logoScale, logoScalePortrait, logoOpacity, logoPos, logoMargin, logoX, setLogoX, logoY, setLogoY, setLogoPos, filterGroup, highResImage, chromatic, prism, halation, filmDust, glitter, vhs, lightLeak, heatmap, vibeAudio, hslMixer, curves }) {
   const maxH = isMobile ? "40vh" : "calc(100vh - 120px)";
@@ -530,22 +531,7 @@ export function Preview({ image, originalImage, dragging, setDragging, loadImage
                   {t.content}
                 </div>
               ))}
-              {cropMode && (
-                <div style={{ position: "absolute", inset: 0, zIndex: 10 }}>
-                  <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,.5)" }} />
-                  <div style={{ position: "absolute", left: `${cropBox.x}%`, top: `${cropBox.y}%`, width: `${cropBox.w}%`, height: `${cropBox.h}%`,
-                    border: "2px solid #fff", boxShadow: "0 0 0 9999px rgba(0,0,0,.5)", cursor: "move" }}>
-                    <div style={{ position: "absolute", inset: 0, display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gridTemplateRows: "1fr 1fr 1fr", pointerEvents: "none" }}>
-                      {Array(9).fill(0).map((_, i) => <div key={i} style={{ border: "0.5px solid rgba(255,255,255,.3)" }} />)}
-                    </div>
-                    {[{ t: "-4px", l: "-4px", c: "nw" }, { t: "-4px", l: "calc(50% - 4px)", c: "n" }, { t: "-4px", r: "-4px", c: "ne" },
-                    { t: "calc(50% - 4px)", l: "-4px", c: "w" }, { t: "calc(50% - 4px)", r: "-4px", c: "e" },
-                    { b: "-4px", l: "-4px", c: "sw" }, { b: "-4px", l: "calc(50% - 4px)", c: "s" }, { b: "-4px", r: "-4px", c: "se" }].map(h => (
-                      <div key={h.c} style={{ position: "absolute", ...h, width: "8px", height: "8px", background: "#fff", borderRadius: "1px", cursor: `${h.c}-resize` }} />
-                    ))}
-                  </div>
-                </div>
-              )}
+              {cropMode && <CropOverlay box={cropBox} setBox={setCropBox} aspect={cropAspect} />}
               {logo && !showBefore && (
                 <img src={logo.src} style={logoStyles} alt="logo-watermark"
                   onMouseDown={startDragLogo} onTouchStart={startDragLogo} />

@@ -763,7 +763,7 @@ export function EditPanel({
                                         min={0} max={100} step={1} 
                                         value={accentAi} defaultValue={0}
                                         onChange={v => {
-                                            const isPremium = user && (user.tier === 'premium' || user.tier === 'team' || user.tier === 'admin');
+                                            const isPremium = user && (user.tier === 'pro' || user.tier === 'premium' || user.tier === 'team' || user.tier === 'admin');
                                             if (!isPremium) {
                                                 alert("Upgrade to Premium to unlock Accent AI!");
                                                 setActiveTab('account');
@@ -772,7 +772,7 @@ export function EditPanel({
                                             setAccentAi(v);
                                         }} 
                                     />
-                                    {!(user && (user.tier === 'premium' || user.tier === 'team' || user.tier === 'admin')) && (
+                                    {!(user && (user.tier === 'pro' || user.tier === 'premium' || user.tier === 'team' || user.tier === 'admin')) && (
                                         <div style={{ position: "absolute", inset: 0, cursor: "pointer", zIndex: 10 }} onClick={() => {
                                             alert("Upgrade to Premium to unlock Accent AI!");
                                             setActiveTab('account');
@@ -797,7 +797,7 @@ export function EditPanel({
                                         min={0} max={100} step={1} 
                                         value={structureAi} defaultValue={0}
                                         onChange={v => {
-                                            const isPremium = user && (user.tier === 'premium' || user.tier === 'team' || user.tier === 'admin');
+                                            const isPremium = user && (user.tier === 'pro' || user.tier === 'premium' || user.tier === 'team' || user.tier === 'admin');
                                             if (!isPremium) {
                                                 alert("Upgrade to Premium to unlock Structure AI!");
                                                 setActiveTab('account');
@@ -806,7 +806,7 @@ export function EditPanel({
                                             setStructureAi(v);
                                         }} 
                                     />
-                                    {!(user && (user.tier === 'premium' || user.tier === 'team' || user.tier === 'admin')) && (
+                                    {!(user && (user.tier === 'pro' || user.tier === 'premium' || user.tier === 'team' || user.tier === 'admin')) && (
                                         <div style={{ position: "absolute", inset: 0, cursor: "pointer", zIndex: 10 }} onClick={() => {
                                             alert("Upgrade to Premium to unlock Structure AI!");
                                             setActiveTab('account');
@@ -826,7 +826,7 @@ export function EditPanel({
                                     Detects horizons and segments skies client-side using SegFormer neural nets to replace skies with presets or custom images.
                                 </p>
                                 
-                                {!(user && (user.tier === 'premium' || user.tier === 'team' || user.tier === 'admin')) ? (
+                                {!(user && (user.tier === 'pro' || user.tier === 'premium' || user.tier === 'team' || user.tier === 'admin')) ? (
                                     <div style={{ padding: "12px", background: dm ? "rgba(108, 99, 255, 0.08)" : "#f5f3ff", border: "1px solid rgba(108, 99, 255, 0.2)", borderRadius: "8px", display: "flex", flexDirection: "column", gap: "8px", alignItems: "center", textAlign: "center", marginTop: "4px" }}>
                                         <div style={{ fontSize: "12px", fontWeight: 600, color: "#6c63ff" }}>🔒 Gated Feature</div>
                                         <div style={{ fontSize: "11px", color: dm ? "#aaa" : "#555", marginBottom: "4px" }}>Upgrade to Premium to replace skies in one click.</div>
@@ -912,7 +912,7 @@ export function EditPanel({
                                     Adjusts light source values on foreground subjects and background landscape fields based on an AI-estimated 3D depth map.
                                 </p>
                                 
-                                {!(user && (user.tier === 'premium' || user.tier === 'team' || user.tier === 'admin')) ? (
+                                {!(user && (user.tier === 'pro' || user.tier === 'premium' || user.tier === 'team' || user.tier === 'admin')) ? (
                                     <div style={{ padding: "12px", background: dm ? "rgba(108, 99, 255, 0.08)" : "#f5f3ff", border: "1px solid rgba(108, 99, 255, 0.2)", borderRadius: "8px", display: "flex", flexDirection: "column", gap: "8px", alignItems: "center", textAlign: "center", marginTop: "4px" }}>
                                         <div style={{ fontSize: "12px", fontWeight: 600, color: "#6c63ff" }}>🔒 Gated Feature</div>
                                         <div style={{ fontSize: "11px", color: dm ? "#aaa" : "#555", marginBottom: "4px" }}>Upgrade to Premium to adjust near and far depth lighting.</div>

@@ -4,12 +4,14 @@ import wasm from "vite-plugin-wasm";
 import topLevelAwait from "vite-plugin-top-level-await";
 
 // https://vitejs.dev/config/
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   plugins: [
     react(),
     wasm(),
-    topLevelAwait()
+    topLevelAwait(),
+    ...(mode === 'desktop' ? [{ name: 'desktop-html', transformIndexHtml: html => html.replace(/<link rel="manifest"[^>]*>/, '').replace(/<link[^>]+https:\/\/fonts\.(googleapis|gstatic)\.com[^>]*>/g, '').replace(/<title>.*?<\/title>/, '<title>PHOTOlab Desktop Preview</title>') }] : [])
   ],
+  build: { outDir: mode === 'desktop' ? 'dist-desktop' : 'dist' },
   server: {
     host: '0.0.0.0',
     port: 3000,
@@ -26,4 +28,4 @@ export default defineConfig({
   resolve: {
     dedupe: ["react", "react-dom"]
   }
-})
+}))

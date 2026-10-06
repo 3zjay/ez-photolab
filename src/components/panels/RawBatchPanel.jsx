@@ -10,6 +10,52 @@ export function RawBatchPanel({ dm, cardBg, cardBdr, inputSt, accent = '#6c63ff'
   const [isOver, setIsOver] = useState(false);
   const [decoding, setDecoding] = useState(false);
 
+  const handleFiles = useCallback(async (files) => {
+    setDecoding(true);
+    addBatchLog(`Starting decoding for ${files.length} files...`, 'info');
+    const newFiles = [];
+    try {
+      for (const file of files) {
+        addBatchLog(`Processing ${file.name}...`, 'info');
+        try {
+          const buffer = await file.arrayBuffer();
+          const result = await decodeRaw(buffer, (msg) => addBatchLog(`[${file.name}] ${msg}`, 'info'));
+          
+          newFiles.push({
+            file,
+            name: file.name,
+            previewUrl: result.url,
+            metadata: {
+              model: result.model,
+              iso: result.iso,
+              width: result.width,
+              height: result.height,
+              orientation: result.orientation
+            }
+          });
+          addBatchLog(`✅ Successfully decoded ${file.name} (${result.model})`, 'success');
+        } catch (e) {
+          addBatchLog(`❌ Error: ${file.name} - ${e.message}`, 'error');
+          console.error(`RAW UI Error:`, e);
+        }
+      }
+    } finally {
+      setBatchRawFiles(prev => [...prev, ...newFiles]);
+      setDecoding(false);
+      addBatchLog(`Finished processing.`, 'info');
+    }
+  }, [setBatchRawFiles, addBatchLog]);
+
+  const onDrop = (e) => {
+    e.preventDefault();
+    setIsOver(false);
+    if (e.dataTransfer.files) handleFiles(Array.from(e.dataTransfer.files));
+  };
+
+  const onSelect = (e) => {
+    if (e.target.files) handleFiles(Array.from(e.target.files));
+  };
+
   if (user && user.tier === "free") {
     return (
       <div style={{
@@ -61,51 +107,6 @@ export function RawBatchPanel({ dm, cardBg, cardBdr, inputSt, accent = '#6c63ff'
     );
   }
 
-  const handleFiles = useCallback(async (files) => {
-    setDecoding(true);
-    addBatchLog(`Starting decoding for ${files.length} files...`, 'info');
-    const newFiles = [];
-    try {
-      for (const file of files) {
-        addBatchLog(`Processing ${file.name}...`, 'info');
-        try {
-          const buffer = await file.arrayBuffer();
-          const result = await decodeRaw(buffer, (msg) => addBatchLog(`[${file.name}] ${msg}`, 'info'));
-          
-          newFiles.push({
-            file,
-            name: file.name,
-            previewUrl: result.url,
-            metadata: {
-              model: result.model,
-              iso: result.iso,
-              width: result.width,
-              height: result.height,
-              orientation: result.orientation
-            }
-          });
-          addBatchLog(`✅ Successfully decoded ${file.name} (${result.model})`, 'success');
-        } catch (e) {
-          addBatchLog(`❌ Error: ${file.name} - ${e.message}`, 'error');
-          console.error(`RAW UI Error:`, e);
-        }
-      }
-    } finally {
-      setBatchRawFiles(prev => [...prev, ...newFiles]);
-      setDecoding(false);
-      addBatchLog(`Finished processing.`, 'info');
-    }
-  }, [setBatchRawFiles, addBatchLog]);
-
-  const onDrop = (e) => {
-    e.preventDefault();
-    setIsOver(false);
-    if (e.dataTransfer.files) handleFiles(Array.from(e.dataTransfer.files));
-  };
-
-  const onSelect = (e) => {
-    if (e.target.files) handleFiles(Array.from(e.target.files));
-  };
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>

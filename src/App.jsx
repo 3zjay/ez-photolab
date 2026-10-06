@@ -1,3 +1,5 @@
+import { isDesktop, previewUser, pickDirectory } from "./platform/desktop";
+import { DesktopWorkspace, DesktopHome, DesktopAccount } from "./platform/DesktopWorkspace";
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { BatchPage } from "./BatchPage";
 import CullPage from "./CullPage";
@@ -235,7 +237,7 @@ export default function App() {
   const [cropAspect, setCropAspect] = useState("free");
   const [texts, setTexts] = useState([]);
   const [selText, setSelText] = useState(null);
-  const [activeTab, setActiveTab] = useState("home");
+  const [activeTab, setActiveTab] = useState(isDesktop ? "edit" : "home");
   const [filterGroup, setFilterGroup] = useState("basic");
   const [hslMixer, setHslMixer] = useState(DEFAULT_HSL_MIXER);
   const [curves, setCurves] = useState({
@@ -361,6 +363,7 @@ export default function App() {
   // ─── SaaS Subscription State ───────────────────────────────────────
 
   const [user, setUser] = useState(() => {
+    if (isDesktop) return previewUser;
     try {
       const params = new URLSearchParams(window.location.search);
       if (params.get("admin") === "true") {
@@ -390,6 +393,7 @@ export default function App() {
 
   // Sync state in real time with Firebase Authentication and Firestore database
   useEffect(() => {
+    if (isDesktop) return;
     let unsubscribeSnapshot = null;
 
     // Check if URL overrides with local admin mode
@@ -473,7 +477,7 @@ export default function App() {
   };
 
   const handlePaymentSuccess = async ({ email, tier, billingPeriod }) => {
-    if (!auth.currentUser) return;
+    if (!auth?.currentUser) return;
     try {
       const expiry = new Date();
       expiry.setDate(expiry.getDate() + 30);
@@ -489,7 +493,7 @@ export default function App() {
   };
 
   const handleCancelSubscription = async () => {
-    if (!auth.currentUser) return;
+    if (!auth?.currentUser) return;
     try {
       const userDocRef = doc(db, "users", auth.currentUser.uid);
       await setDoc(userDocRef, { tier: "free", offlineLeaseExpires: null }, { merge: true });
@@ -499,7 +503,7 @@ export default function App() {
   };
 
   const handleChangeBillingPeriod = async (period) => {
-    if (!auth.currentUser) return;
+    if (!auth?.currentUser) return;
     try {
       const userDocRef = doc(db, "users", auth.currentUser.uid);
       await setDoc(userDocRef, { billingPeriod: period }, { merge: true });
@@ -509,7 +513,7 @@ export default function App() {
   };
 
   const handleChangeTier = async (tier) => {
-    if (!auth.currentUser) return;
+    if (!auth?.currentUser) return;
     try {
       const expiry = new Date();
       expiry.setDate(expiry.getDate() + 30);
@@ -521,7 +525,7 @@ export default function App() {
   };
 
   const handleRenewLease = async () => {
-    if (!auth.currentUser) return;
+    if (!auth?.currentUser) return;
     try {
       const expiry = new Date();
       expiry.setDate(expiry.getDate() + 30);
@@ -655,11 +659,6 @@ export default function App() {
     setBeautyPreviewUrl(null);
     setAiPreviewUrl(null);
     setAccentOffsets(null);
-    setAccentAi(0);
-    setStructureAi(0);
-    setSkyMode('none');
-    setRelightNear(0);
-    setRelightFar(0);
     setSkyMaskStatus('idle');
     setSkyMaskLog('');
     setDepthMapStatus('idle');
@@ -871,6 +870,7 @@ export default function App() {
             setRawProgressMsg(msg);
           });
           if (result && result.url) {
+            resetAll();
             setImage(result.url);
             setOriginalImage(result.url);
             setFilters(DEFAULT_FILTERS);
@@ -925,6 +925,7 @@ export default function App() {
     } else {
       const reader = new FileReader();
       reader.onload = e => {
+        resetAll();
         setImage(e.target.result);
         setOriginalImage(e.target.result);
         setFilters(DEFAULT_FILTERS);
@@ -950,6 +951,8 @@ export default function App() {
   };
 
   const resetAll = () => {
+    setAiBeautySmooth(0); setAiBeautyClarity(0); setAiBeautyGlow(0);
+    setLogo(null); setLogoFile(null); setLogoX(null); setLogoY(null);
     setFilters(DEFAULT_FILTERS);
     setHslMixer(DEFAULT_HSL_MIXER);
     setCurves({
@@ -1017,12 +1020,13 @@ export default function App() {
     setImage(url);
   }, []);
 
-  const applyCrop = () => {
-    const img = imgRef.current; if (!img) return;
+  const applyCrop = async () => {
+    if (!image) return;
+    const img = await loadImageFromSrc(image);
     const W = img.naturalWidth, H = img.naturalHeight;
     const sx = cropBox.x / 100 * W, sy = cropBox.y / 100 * H;
     const sw = cropBox.w / 100 * W, sh = cropBox.h / 100 * H;
-    const c = document.createElement("canvas"); c.width = sw; c.height = sh;
+    const c = document.createElement("canvas"); c.width = Math.max(1, Math.round(sw)); c.height = Math.max(1, Math.round(sh));
     const ctx = c.getContext("2d"); ctx.drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh);
     setImage(c.toDataURL("image/png")); setCropMode(false); setCropBox({ x: 0, y: 0, w: 100, h: 100 });
   };
@@ -1112,7 +1116,7 @@ export default function App() {
         structureAi, skyMode, skyOpacity, skyLightMatch, customSkyUrl,
         relightNear, relightFar,
         faceOvalMaskRef.current, skyMaskRef.current, depthMapRef.current,
-        { chromatic, prism, halation, filmDust, glitter, vhs, lightLeak, heatmap }
+        { chromatic, prism, halation, filmDust, glitter, vhs, lightLeak, heatmap }, hslMixer, curves
       );
       const fmts = { jpg: { mime: "image/jpeg", ext: "jpg" }, png: { mime: "image/png", ext: "png" }, webp: { mime: "image/webp", ext: "webp" } };
       const { mime, ext } = fmts[exportFmt];
@@ -1121,7 +1125,7 @@ export default function App() {
       if (!blob || blob.size === 0) throw new Error("Canvas produced empty blob — check image source.");
       const kb = Math.round(blob.size / 1024);
       setExportInfo(`${rW.toLocaleString()}×${rH.toLocaleString()}px · ${kb > 1024 ? (kb / 1024).toFixed(1) + "MB" : kb + "KB"}`);
-      await saveFile(blob, `photolab.${ext}`);
+      if (await saveFile(blob, `photolab.${ext}`) === false) { setExportInfo("Export cancelled"); setExporting(false); return; }
       setExportDone(true); setTimeout(() => setExportDone(false), 4000);
     } catch (e) {
       console.error("Export error:", e);
@@ -1146,13 +1150,13 @@ export default function App() {
         structureAi, skyMode, skyOpacity, skyLightMatch, customSkyUrl,
         relightNear, relightFar,
         faceOvalMaskRef.current, skyMaskRef.current, depthMapRef.current,
-        { chromatic, prism, halation, filmDust, glitter, vhs, lightLeak, heatmap }
+        { chromatic, prism, halation, filmDust, glitter, vhs, lightLeak, heatmap }, hslMixer, curves
       );
       const blob = await canvasToBlob(canvas, "image/jpeg", 0.82);
       if (!blob || blob.size === 0) throw new Error("Empty blob");
       const kb = Math.round(blob.size / 1024);
       setExportInfo(`${W}×${H}px · ${kb > 1024 ? (kb / 1024).toFixed(1) + "MB" : kb + "KB"}`);
-      await saveFile(blob, `facebook_${mode.id}.jpg`);
+      if (await saveFile(blob, `facebook_${mode.id}.jpg`) === false) { setExportInfo("Export cancelled"); setFbExporting(false); return; }
       setFbDone(true); setTimeout(() => setFbDone(false), 4000);
     } catch (e) { console.error("FB export error:", e); setExportInfo("Export failed: " + e.message); }
     setFbExporting(false);
@@ -1162,11 +1166,11 @@ export default function App() {
   const isCurvesEdited = Object.values(curves).some(pts => pts.some(p => (p.x === 0 && p.y !== 0) || (p.x === 255 && p.y !== 255) || (p.x !== 0 && p.x !== 255)));
   const isEdited = Object.entries(filters).some(([k, v]) => v !== DEFAULT_FILTERS[k]) || isHslEdited || isCurvesEdited || rotation !== 0 || flipH || flipV || texts.length > 0 || lutId !== 'none' || accentAi !== 0 || structureAi !== 0 || skyMode !== 'none' || relightNear !== 0 || relightFar !== 0 || chromatic !== 0 || prism !== 0 || halation !== 0 || filmDust !== 0 || glitter !== 0 || vhs || lightLeak !== 'none' || heatmap !== 0;
   const showSplit = isEdited && activeTab === "edit" && !cropMode;
-  const transformCSS = toTransformCSS(rotation, flipH, flipV);
+  const transformCSS = cropMode ? "none" : toTransformCSS(rotation, flipH, flipV);
 
   const selectSourceFolder = async () => {
     try {
-      const handle = await window.showDirectoryPicker();
+      const handle = await pickDirectory();
       setSourceHandle(handle);
       const files = [];
       for await (const entry of handle.values()) {
@@ -1182,7 +1186,7 @@ export default function App() {
 
   const selectCullSourceFolder = async () => {
     try {
-      const handle = await window.showDirectoryPicker();
+      const handle = await pickDirectory();
       setCullSourceHandle(handle);
       const files = [];
       const RAW_REGEX = /\.(nef|cr2|cr3|arw|dng|orf|raf|rw2|pef|x3f)$/i;
@@ -1234,7 +1238,7 @@ export default function App() {
   const selectRawSourceFolder = async () => {
     addBatchLog("Opening folder picker for RAW files...", "info");
     try {
-      const handle = await window.showDirectoryPicker();
+      const handle = await pickDirectory();
       setSourceHandle(handle);
       const files = [];
       const RAW_REGEX = /\.(nef|cr2|cr3|arw|dng|orf|raf|rw2|pef|x3f)$/i;
@@ -1274,9 +1278,9 @@ export default function App() {
     try {
       let handle;
       try {
-        handle = await window.showDirectoryPicker({ mode: 'readwrite' });
+        handle = await pickDirectory({ mode: 'readwrite' });
       } catch (e) {
-        handle = await window.showDirectoryPicker();
+        handle = await pickDirectory();
       }
       setOutputHandle(handle);
     } catch (err) { if (err.name !== 'AbortError') console.error(err); }
@@ -2464,6 +2468,58 @@ export default function App() {
     </div>
   );
 
+
+  const desktopDocument = useMemo(() => ({ image, originalImage, filters, hslMixer, curves, rotation, flipH, flipV, texts, lutId, lutIntensity, customLutData, customLutName, accentAi, structureAi, skyMode, skyOpacity, skyLightMatch, customSkyUrl, relightNear, relightFar, aiBeautySmooth, aiBeautyClarity, aiBeautyGlow, aiBeautyUseMask, chromatic, prism, halation, filmDust, glitter, vhs, lightLeak, heatmap, logo, logoScale, logoScalePortrait, logoOpacity, logoPos, logoMargin, logoX, logoY, bgResult, bgMode, bgColor, bgBlur }), [image, originalImage, filters, hslMixer, curves, rotation, flipH, flipV, texts, lutId, lutIntensity, customLutData, customLutName, accentAi, structureAi, skyMode, skyOpacity, skyLightMatch, customSkyUrl, relightNear, relightFar, aiBeautySmooth, aiBeautyClarity, aiBeautyGlow, aiBeautyUseMask, chromatic, prism, halation, filmDust, glitter, vhs, lightLeak, heatmap, logo, logoScale, logoScalePortrait, logoOpacity, logoPos, logoMargin, logoX, logoY, bgResult, bgMode, bgColor, bgBlur]);
+  const restoreDesktopDocument = value => {
+    setImage(value.image);
+    setOriginalImage(value.originalImage);
+    setFilters(value.filters);
+    setHslMixer(value.hslMixer);
+    setCurves(value.curves);
+    setRotation(value.rotation);
+    setFlipH(value.flipH);
+    setFlipV(value.flipV);
+    setTexts(value.texts);
+    setLutId(value.lutId);
+    setLutIntensity(value.lutIntensity);
+    setCustomLutData(value.customLutData);
+    setCustomLutName(value.customLutName);
+    setAccentAi(value.accentAi);
+    setStructureAi(value.structureAi);
+    setSkyMode(value.skyMode);
+    setSkyOpacity(value.skyOpacity);
+    setSkyLightMatch(value.skyLightMatch);
+    setCustomSkyUrl(value.customSkyUrl);
+    setRelightNear(value.relightNear);
+    setRelightFar(value.relightFar);
+    setAiBeautySmooth(value.aiBeautySmooth);
+    setAiBeautyClarity(value.aiBeautyClarity);
+    setAiBeautyGlow(value.aiBeautyGlow);
+    setAiBeautyUseMask(value.aiBeautyUseMask);
+    setChromatic(value.chromatic);
+    setPrism(value.prism);
+    setHalation(value.halation);
+    setFilmDust(value.filmDust);
+    setGlitter(value.glitter);
+    setVhs(value.vhs);
+    setLightLeak(value.lightLeak);
+    setHeatmap(value.heatmap);
+    setLogo(value.logo);
+    setLogoScale(value.logoScale);
+    setLogoScalePortrait(value.logoScalePortrait);
+    setLogoOpacity(value.logoOpacity);
+    setLogoPos(value.logoPos);
+    setLogoMargin(value.logoMargin);
+    setLogoX(value.logoX);
+    setLogoY(value.logoY);
+    setBgResult(value.bgResult);
+    setBgMode(value.bgMode);
+    setBgColor(value.bgColor);
+    setBgBlur(value.bgBlur);
+    setBgSubUrl(null); setBgStatus('idle'); setLogoFile(null); setCropMode(false); setCropBox({ x: 0, y: 0, w: 100, h: 100 }); setSelText(null); setActiveTab('edit');
+    setAiUpscaleResult(null); setAiFaceRestoreResult(null); setAiRemoveResult(null);
+  };
+
   return (
     <div className={dm ? 'app-bg-dark text-gray-200' : 'app-bg-light text-gray-800'} style={{ minHeight: "100vh", WebkitTapHighlightColor: "transparent" }}>
       <style>{`
@@ -2502,7 +2558,7 @@ export default function App() {
           </div>
         </div>
         <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
-          {!isInstalled && (
+          {!isDesktop && !isInstalled && (
             <button 
               onClick={handleInstallClick}
               style={{
@@ -2561,9 +2617,9 @@ export default function App() {
             )}
           </button>
           <div style={{ display: "flex", background: dm ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.04)', border: `1px solid ${dm ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'}`, backdropFilter: "blur(8px)", borderRadius: "12px", padding: "3px", gap: "3px", overflowX: "auto" }}>
-            {[["home", "Home"], ["edit", "Edit Studio"], ["cull", "Cull AI"], ["batch", "Batch"], ["account", user.tier === "pro" ? "⭐ Pro" : user.tier === "team" ? "💎 Team" : user.tier === "admin" ? "⚡ Admin" : "Account"]].map(([id, lb]) => {
+            {[["home", "Home"], ["edit", "Edit Studio"], ["cull", "Cull AI"], ["batch", "Batch"], ["account", isDesktop ? "Preview services" : user.tier === "pro" ? "⭐ Pro" : user.tier === "team" ? "💎 Team" : user.tier === "admin" ? "⚡ Admin" : "Account"]].map(([id, lb]) => {
               const isActive = activeTab === id;
-              const isPremiumAccount = id === "account" && user.tier !== "free";
+              const isPremiumAccount = !isDesktop && id === "account" && user.tier !== "free";
               const isAdmin = user.tier === "admin";
               
               // Custom colors for admin badge or standard premium badge
@@ -2619,10 +2675,11 @@ export default function App() {
           )}
         </div>
       </header>
+      {isDesktop && <DesktopWorkspace document={desktopDocument} restore={restoreDesktopDocument} loadPhoto={file => { loadImage(file); setActiveTab('edit'); }} exportPhoto={() => { if (image) setShowExport(true); }} />}
 
       {!isMobile && (
         activeTab === "home" ? (
-          <LandingPage {...{ dm, loadImage, setActiveTab, handleInstallClick, deferredPrompt, isIOS, isInstalled }} onSelectPlan={(plan) => setCheckoutPlan(plan)} />
+          <>{isDesktop ? <DesktopHome onEdit={() => setActiveTab("edit")} onCull={() => setActiveTab("cull")} onBatch={() => setActiveTab("batch")} /> : <LandingPage {...{ dm, loadImage, setActiveTab, handleInstallClick, deferredPrompt, isIOS, isInstalled }} onSelectPlan={(plan) => setCheckoutPlan(plan)} />}</>
         ) : activeTab === "batch" ? (
           <BatchPage {...{ dm, cardBg, cardBdr, inputSt, user, setActiveTab, sourceHandle, outputHandle, batchImages, selectSourceFolder, selectRawSourceFolder, selectOutputFolder, batchResizeMode, setBatchResizeMode, batchResizePreset, setBatchResizePreset, batchCustomW, setBatchCustomW, batchCustomH, setBatchCustomH, batchKeepAspect, setBatchKeepAspect, batchLongEdgePx, setBatchLongEdgePx, batchAutoLevels, setBatchAutoLevels, batchAutoContrast, setBatchAutoContrast, batchSharpen, setBatchSharpen, batchSharpenAmt, setBatchSharpenAmt, batchSharpenRad, setBatchSharpenRad, batchDenoise, setBatchDenoise, batchDenoiseAmt, setBatchDenoiseAmt, batchLogo, setBatchLogo, batchLogoFile, setBatchLogoFile, handleBatchLogoUpload, batchLogoScale, setBatchLogoScale, batchLogoScalePortrait, setBatchLogoScalePortrait, batchLogoOpacity, setBatchLogoOpacity, batchLogoPos, setBatchLogoPos, batchLogoMargin, setBatchLogoMargin, batchOutputFmt, setBatchOutputFmt, batchOutputQ, setBatchOutputQ, batchPrefix, setBatchPrefix, batchSuffix, setBatchSuffix, batchProcessing, batchProgress, batchDone, handleBatchProcess, batchPreviewIdx, batchPreviewOrigUrl, batchPreviewAfterUrl, batchPreviewLoading, batchPreviewSplit, setBatchPreviewSplit, batchPreviewDragging, setBatchPreviewDragging, batchPreviewOpen, setBatchPreviewOpen, generateBatchPreview, filters, setFilters, resetAll, batchFilterGroup, setBatchFilterGroup, calcBatchDims, batchAiUpscale, setBatchAiUpscale, batchAiBeauty, setBatchAiBeauty, batchAiScale, setBatchAiScale, batchAiBeautySmooth, setBatchAiBeautySmooth, batchAiBeautyClarity, setBatchAiBeautyClarity, batchAiBeautyGlow, setBatchAiBeautyGlow, batchAiFaceRestore, setBatchAiFaceRestore, batchAiBeautyUseMask, setBatchAiBeautyUseMask, batchSection, setBatchSection, batchRawFiles, setBatchRawFiles, handleRawBatchProcess, batchLogs, addBatchLog, batchConfirmFirst, setBatchConfirmFirst, batchConfirmData, batchCancelRequested, handleCancelBatch, continueBatchProcess, cancelBatchProcess, batchStats, batchLutId, setBatchLutId, batchLutIntensity, setBatchLutIntensity, batchCustomLutData, setBatchCustomLutData, batchCustomLutName, setBatchCustomLutName, batchFbOptimize, setBatchFbOptimize, importOutputsToCull, batchCullFilter, setBatchCullFilter, batchCullSort, setBatchCullSort, cullResults }} />
 
@@ -2630,7 +2687,7 @@ export default function App() {
           <CullPage {...{ dm, cardBg, cardBdr, inputSt, sourceHandle: cullSourceHandle, outputHandle, batchImages: cullImages, selectSourceFolder: selectCullSourceFolder, selectRawSourceFolder, selectOutputFolder, batchLogs, addBatchLog, batchSection, setBatchSection, isMobile, user, setActiveTab, cullResults, setCullResults, groups, setGroups, activeGroupIndex: cullActiveGroupIndex, setActiveGroupIndex: setCullActiveGroupIndex, activeAlternateIndex: cullActiveAlternateIndex, setActiveAlternateIndex: setCullActiveAlternateIndex }} />
         ) : activeTab === "account" ? (
           <div style={{ display: "flex", justifyContent: "center", minHeight: "calc(100vh - 52px)", overflowY: "auto", background: dm ? "#0a0e17" : "#f3f4f6" }}>
-            <AccountDashboard user={user} onLogin={handleLogin} onLogout={handleLogout} onCancelSubscription={handleCancelSubscription} onChangeBillingPeriod={handleChangeBillingPeriod} onChangeTier={handleChangeTier} onRenewLease={handleRenewLease} dm={dm} />
+            {isDesktop ? <DesktopAccount /> : <AccountDashboard user={user} onLogin={handleLogin} onLogout={handleLogout} onCancelSubscription={handleCancelSubscription} onChangeBillingPeriod={handleChangeBillingPeriod} onChangeTier={handleChangeTier} onRenewLease={handleRenewLease} dm={dm} />}
           </div>
         ) : (
           <div style={{ display: "flex", height: "calc(100vh - 52px)" }}>
@@ -2649,7 +2706,7 @@ export default function App() {
       {isMobile && (
         activeTab === "home" ? (
           <div style={{ height: "calc(100vh - 52px)", overflowY: "auto" }}>
-            <LandingPage {...{ dm, loadImage, setActiveTab, handleInstallClick, deferredPrompt, isIOS, isInstalled }} onSelectPlan={(plan) => setCheckoutPlan(plan)} />
+            <>{isDesktop ? <DesktopHome onEdit={() => setActiveTab("edit")} onCull={() => setActiveTab("cull")} onBatch={() => setActiveTab("batch")} /> : <LandingPage {...{ dm, loadImage, setActiveTab, handleInstallClick, deferredPrompt, isIOS, isInstalled }} onSelectPlan={(plan) => setCheckoutPlan(plan)} />}</>
           </div>
         ) : activeTab === "batch" ? (
           <div style={{ height: "calc(100vh - 52px)", overflowY: "auto" }}>
@@ -2661,7 +2718,7 @@ export default function App() {
           </div>
         ) : activeTab === "account" ? (
           <div style={{ display: "flex", justifyContent: "center", minHeight: "calc(100vh - 52px)", overflowY: "auto", background: dm ? "#0a0e17" : "#f3f4f6" }}>
-            <AccountDashboard user={user} onLogin={handleLogin} onLogout={handleLogout} onCancelSubscription={handleCancelSubscription} onChangeBillingPeriod={handleChangeBillingPeriod} onChangeTier={handleChangeTier} onRenewLease={handleRenewLease} dm={dm} />
+            {isDesktop ? <DesktopAccount /> : <AccountDashboard user={user} onLogin={handleLogin} onLogout={handleLogout} onCancelSubscription={handleCancelSubscription} onChangeBillingPeriod={handleChangeBillingPeriod} onChangeTier={handleChangeTier} onRenewLease={handleRenewLease} dm={dm} />}
           </div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", height: "calc(100vh - 52px)", overflow: "hidden" }}>
@@ -2903,7 +2960,7 @@ export default function App() {
           </div>
         </div>
       )}
-      {checkoutPlan && (
+      {!isDesktop && checkoutPlan && (
         <StripeCheckout isOpen={!!checkoutPlan} onClose={() => setCheckoutPlan(null)} plan={checkoutPlan} dm={dm} onPaymentSuccess={handlePaymentSuccess} />
       )}
       <canvas ref={canvasRef} style={{ display: "none" }} />

@@ -1,71 +1,57 @@
-/**
- * XMP sidecar generator and exporter for EZ-PhotoLab
- * Exports Adobe/Lightroom-compatible ratings & color labels locally.
- */
-
-/**
- * Returns a standard Adobe-compliant XMP sidecar XML template.
- * @param {number} rating - Star rating (0 to 5)
- * @param {string} label - Color label (e.g., 'green', 'blue', 'red', 'yellow')
- */
-export function generateXmpContent(rating, label) {
-  const ratingVal = rating || 0;
-  const labelName = label ? label.charAt(0).toUpperCase() + label.slice(1) : "";
-
-  return `<?xpacket begin="" id="W5M0MpCehiHzreSzNTczkc9d"?>
-<x:xmpmeta xmlns:x="adobe:ns:meta/" x:xmptk="Adobe XMP Core 5.6-c140 79.160451, 2017/05/06-01:42:16">
- <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
-  <rdf:Description rdf:about=""
-    xmlns:xmp="http://ns.adobe.com/xap/1.0/"
-    xmlns:photoshop="http://ns.adobe.com/photoshop/1.0/"
-    xmlns:xmpDM="http://ns.adobe.com/xmp/1.0/DynamicMedia/"
-    xmlns:tiff="http://ns.adobe.com/tiff/1.0/"
-    xmlns:exif="http://ns.adobe.com/exif/1.0/"
-    xmp:Rating="${ratingVal}"
-    xmp:Label="${labelName}">
-  </rdf:Description>
- </rdf:RDF>
-</x:xmpmeta>
-<?xpacket end="w"?>`;
+const XMP = 'http://ns.adobe.com/xap/1.0/';
+const RDF = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#';
+function selection(rating, label) {
+  if (!Number.isInteger(rating ?? 0) || (rating ?? 0) < 0 || (rating ?? 0) > 5) throw new Error('Rating must be between 0 and 5.');
+  if (!['', 'red', 'yellow', 'green', 'blue', 'purple'].includes(label || '')) throw new Error('Unsupported color label.');
+  return { rating: rating ?? 0, label: label ? label[0].toUpperCase() + label.slice(1) : '' };
 }
-
-/**
- * Writes XMP sidecar files directly to the chosen local directory.
- * @param {FileSystemDirectoryHandle} outputHandle - File System handle of the output folder
- * @param {Array} culledImages - List of `{ name, rating, label }`
- * @param {Function} addLog - Log callback
- */
+export function generateXmpContent(rating, label) {
+  const value = selection(rating, label);
+  return `<?xpacket begin="" id="W5M0MpCehiHzreSzNTczkc9d"?>\n<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="${RDF}"><rdf:Description rdf:about="" xmlns:xmp="${XMP}" xmp:Rating="${value.rating}" xmp:Label="${value.label}"/></rdf:RDF></x:xmpmeta>\n<?xpacket end="w"?>`;
+}
+export function mergeXmpContent(existing, rating, label) {
+  const value = selection(rating, label);
+  if (existing.length > 10 * 1024 * 1024 || /<!DOCTYPE|<!ENTITY/i.test(existing)) throw new Error('Unsupported XMP document. Existing metadata was preserved.');
+  const xml = new DOMParser().parseFromString(existing, 'application/xml');
+  const descriptions = [...xml.getElementsByTagNameNS(RDF, 'Description')];
+  if (xml.getElementsByTagName('parsererror').length || !descriptions.length) throw new Error('Invalid existing XMP. Existing metadata was preserved.');
+  for (const description of descriptions) {
+    description.removeAttributeNS(XMP, 'Rating'); description.removeAttributeNS(XMP, 'Label');
+    for (const node of [...description.children]) if (node.namespaceURI === XMP && ['Rating', 'Label'].includes(node.localName)) node.remove();
+  }
+  descriptions[0].setAttributeNS(XMP, 'xmp:Rating', String(value.rating));
+  descriptions[0].setAttributeNS(XMP, 'xmp:Label', value.label);
+  return new XMLSerializer().serializeToString(xml);
+}
 export async function exportXmpSidecars(outputHandle, culledImages, addLog) {
-  if (!outputHandle) {
-    throw new Error("No output directory selected");
+  if (!outputHandle) throw new Error('Choose an output folder first.');
+  const groups = new Map();
+  for (const image of culledImages) {
+    const base = image.name.replace(/\.[^.]+$/, '');
+    const key = base.toLowerCase();
+    if (!groups.has(key)) groups.set(key, { name: `${base}.xmp`, images: [] });
+    groups.get(key).images.push(image);
   }
-
-  addLog?.(`📂 Storing XMP sidecars to selected folder...`, "info");
-
-  let count = 0;
-  for (const img of culledImages) {
-    if (!img.rating && !img.label) continue; // Skip unrated items to save disk space
-
-    // Extract base name (filename without extension, e.g. "DSC_1024.NEF" -> "DSC_1024")
-    const baseName = img.name.substring(0, img.name.lastIndexOf('.')) || img.name;
-    const xmpName = `${baseName}.xmp`;
-
+  const result = { saved: 0, failed: 0 };
+  for (const { name, images } of groups.values()) {
     try {
-      // Create new XMP file in directory
-      const fileRef = await outputHandle.getFileHandle(xmpName, { create: true });
-      const writable = await fileRef.createWritable();
-      
-      const xmlString = generateXmpContent(img.rating, img.label);
-      await writable.write(xmlString);
-      await writable.close();
-
-      count++;
-    } catch (e) {
-      addLog?.(`⚠️ Failed to write ${xmpName}: ${e.message}`, "warning");
-      console.error(`XMP Export Error for ${xmpName}:`, e);
-    }
+      const first = selection(images[0].rating, images[0].label);
+      if (images.some(image => JSON.stringify(selection(image.rating, image.label)) !== JSON.stringify(first))) throw new Error('RAW/JPEG files sharing this name have conflicting ratings. Choose the same rating before export.');
+      let handle, original;
+      try { handle = await outputHandle.getFileHandle(name); original = await handle.getFile(); }
+      catch (error) { if (error.name !== 'NotFoundError') throw error; }
+      const data = original ? mergeXmpContent(await original.text(), images[0].rating, images[0].label) : generateXmpContent(images[0].rating, images[0].label);
+      if (!handle) handle = await outputHandle.getFileHandle(name, { create: true });
+      if (original && !handle.photoLabNative) {
+        const backup = await outputHandle.getFileHandle(`${name}.${crypto.randomUUID()}.bak`, { create: true });
+        const stream = await backup.createWritable(); await stream.write(original); await stream.close();
+        const latest = await handle.getFile();
+        if (await latest.text() !== await original.text()) throw new Error('XMP changed while saving. Retry after reviewing it.');
+      }
+      const stream = await handle.createWritable({ mergeXmp: Boolean(original) });
+      await stream.write(data); await stream.close(); result.saved++;
+    } catch (error) { result.failed++; addLog?.(`${name}: ${error.message}`, 'warning'); }
   }
-
-  addLog?.(`✅ Successfully exported ${count} XMP sidecar files.`, "success");
-  return count;
+  addLog?.(`XMP sidecars: ${result.saved} saved, ${result.failed} failed. Existing metadata is backed up before updates.`, result.failed ? 'warning' : 'success');
+  return result;
 }
