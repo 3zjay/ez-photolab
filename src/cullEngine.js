@@ -543,7 +543,7 @@ export async function cullBatch(images, options = {}, onProgress) {
     let imageBitmap = null;
     let previewUrl = imgObj.previewUrl || null;
 
-    onProgress?.({ current: i + 1, total, name: imgObj.name });
+    onProgress?.({ current: i + 1, total, currentFile: imgObj.name, name: imgObj.name });
 
     try {
       if (imgObj.file) {

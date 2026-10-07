@@ -1173,36 +1173,80 @@ export default function App() {
       const handle = await pickDirectory();
       setSourceHandle(handle);
       const files = [];
-      for await (const entry of handle.values()) {
-        if (entry.kind === 'file' && entry.name.match(/\.(jpg|jpeg|png|webp)$/i)) {
-          const file = await entry.getFile();
-          files.push({ name: entry.name, file });
+      const imageRegex = /\.(jpg|jpeg|png|webp)$/i;
+      const scan = async (dirHandle, depth = 0) => {
+        for await (const entry of dirHandle.values()) {
+          if (entry.kind === 'file' && entry.name.match(imageRegex)) {
+            try {
+              const file = await entry.getFile();
+              files.push({ name: entry.name, file });
+            } catch (fileErr) {
+              console.warn(`Could not read ${entry.name}:`, fileErr);
+            }
+          } else if (entry.kind === 'directory' && depth < 2 && !entry.name.startsWith('.')) {
+            try {
+              await scan(entry, depth + 1);
+            } catch (dirErr) {
+              console.warn(`Could not scan subfolder ${entry.name}:`, dirErr);
+            }
+          }
         }
-      }
+      };
+      await scan(handle);
       setBatchImages(files);
       setBatchDone(false);
-    } catch (err) { if (err.name !== 'AbortError') console.error(err); }
+      if (files.length === 0) {
+        addBatchLog("⚠️ No JPG/PNG/WebP images found in the selected folder.", "warning");
+      } else {
+        addBatchLog(`✅ Loaded ${files.length} images from folder.`, "success");
+      }
+    } catch (err) {
+      if (err.name !== 'AbortError') {
+        console.error(err);
+        addBatchLog(`❌ Folder Error: ${err.message}`, "error");
+      }
+    }
   };
 
   const selectCullSourceFolder = async () => {
     try {
       const handle = await pickDirectory();
       setCullSourceHandle(handle);
+      setGroups([]);
+      setCullResults([]);
+      setCullActiveGroupIndex(0);
+      setCullActiveAlternateIndex(0);
       const files = [];
+      const imageRegex = /\.(jpg|jpeg|png|webp)$/i;
       const RAW_REGEX = /\.(nef|cr2|cr3|arw|dng|orf|raf|rw2|pef|x3f)$/i;
-      for await (const entry of handle.values()) {
-        if (entry.kind === 'file') {
-          if (entry.name.match(/\.(jpg|jpeg|png|webp)$/i)) {
-            const file = await entry.getFile();
-            files.push({ name: entry.name, file });
-          } else if (entry.name.match(RAW_REGEX)) {
-            const file = await entry.getFile();
-            files.push({ name: entry.name, file, isRaw: true });
+      const scan = async (dirHandle, depth = 0) => {
+        for await (const entry of dirHandle.values()) {
+          if (entry.kind === 'file') {
+            try {
+              if (entry.name.match(imageRegex)) {
+                const file = await entry.getFile();
+                files.push({ name: entry.name, file });
+              } else if (entry.name.match(RAW_REGEX)) {
+                const file = await entry.getFile();
+                files.push({ name: entry.name, file, isRaw: true });
+              }
+            } catch (fileErr) {
+              console.warn(`Could not read ${entry.name}:`, fileErr);
+            }
+          } else if (entry.kind === 'directory' && depth < 2 && !entry.name.startsWith('.')) {
+            try {
+              await scan(entry, depth + 1);
+            } catch (dirErr) {
+              console.warn(`Could not scan subfolder ${entry.name}:`, dirErr);
+            }
           }
         }
-      }
+      };
+      await scan(handle);
       setCullImages(files);
-    } catch (err) { if (err.name !== 'AbortError') console.error(err); }
+    } catch (err) {
+      if (err.name !== 'AbortError') console.error(err);
+    }
   };
 
   const importOutputsToCull = async () => {
@@ -1213,13 +1257,31 @@ export default function App() {
     addBatchLog("🔄 Importing output files into Cull AI...", "info");
     try {
       setCullSourceHandle(outputHandle);
+      setGroups([]);
+      setCullResults([]);
+      setCullActiveGroupIndex(0);
+      setCullActiveAlternateIndex(0);
       const files = [];
-      for await (const entry of outputHandle.values()) {
-        if (entry.kind === 'file' && entry.name.match(/\.(jpg|jpeg|png|webp)$/i)) {
-          const file = await entry.getFile();
-          files.push({ name: entry.name, file });
+      const imageRegex = /\.(jpg|jpeg|png|webp)$/i;
+      const scan = async (dirHandle, depth = 0) => {
+        for await (const entry of dirHandle.values()) {
+          if (entry.kind === 'file' && entry.name.match(imageRegex)) {
+            try {
+              const file = await entry.getFile();
+              files.push({ name: entry.name, file });
+            } catch (fileErr) {
+              console.warn(`Could not read ${entry.name}:`, fileErr);
+            }
+          } else if (entry.kind === 'directory' && depth < 2 && !entry.name.startsWith('.')) {
+            try {
+              await scan(entry, depth + 1);
+            } catch (dirErr) {
+              console.warn(`Could not scan subfolder ${entry.name}:`, dirErr);
+            }
+          }
         }
-      }
+      };
+      await scan(outputHandle);
       if (files.length === 0) {
         addBatchLog("⚠️ No processed files found in the output folder to cull.", "warning");
         alert("No processed files found in the output folder.");
@@ -1244,12 +1306,25 @@ export default function App() {
       const RAW_REGEX = /\.(nef|cr2|cr3|arw|dng|orf|raf|rw2|pef|x3f)$/i;
       
       addBatchLog("Scanning folder for RAW files...", "info");
-      for await (const entry of handle.values()) {
-        if (entry.kind === 'file' && entry.name.match(RAW_REGEX)) {
-          const file = await entry.getFile();
-          files.push({ name: entry.name, file });
+      const scan = async (dirHandle, depth = 0) => {
+        for await (const entry of dirHandle.values()) {
+          if (entry.kind === 'file' && entry.name.match(RAW_REGEX)) {
+            try {
+              const file = await entry.getFile();
+              files.push({ name: entry.name, file });
+            } catch (fileErr) {
+              console.warn(`Could not read ${entry.name}:`, fileErr);
+            }
+          } else if (entry.kind === 'directory' && depth < 2 && !entry.name.startsWith('.')) {
+            try {
+              await scan(entry, depth + 1);
+            } catch (dirErr) {
+              console.warn(`Could not scan subfolder ${entry.name}:`, dirErr);
+            }
+          }
         }
-      }
+      };
+      await scan(handle);
       
       if (files.length === 0) {
         addBatchLog("⚠️ No RAW files found in the selected folder.", "warning");
@@ -1280,6 +1355,7 @@ export default function App() {
       try {
         handle = await pickDirectory({ mode: 'readwrite' });
       } catch (e) {
+        if (e.name === 'AbortError') return;
         handle = await pickDirectory();
       }
       setOutputHandle(handle);

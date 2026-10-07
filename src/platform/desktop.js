@@ -1,4 +1,4 @@
-export const isDesktop = import.meta.env.MODE === 'desktop';
+export const isDesktop = import.meta.env.MODE === 'desktop' || (typeof window !== 'undefined' && Boolean(window.photoLab?.desktop));
 export const previewUser = Object.freeze({ loggedIn: false, email: '', tier: 'team', billingPeriod: 'preview', offlineLeaseExpires: null });
 export async function unwrap(result) {
   const response = await result;
@@ -26,12 +26,33 @@ export function nativeHandle(descriptor) {
     getFileHandle: async (name, options = {}) => nativeHandle(await unwrap(window.photoLab.child(descriptor.id, name, 'file', Boolean(options.create)))),
     getDirectoryHandle: async (name, options = {}) => nativeHandle(await unwrap(window.photoLab.child(descriptor.id, name, 'directory', Boolean(options.create)))),
     async *values() { for (const item of await unwrap(window.photoLab.list(descriptor.id))) yield nativeHandle(item); },
+    async *entries() { for (const item of await unwrap(window.photoLab.list(descriptor.id))) yield [item.name, nativeHandle(item)]; },
+    async *keys() { for (const item of await unwrap(window.photoLab.list(descriptor.id))) yield item.name; },
+    [Symbol.asyncIterator]() { return this.values(); },
     createWritable: async (options = {}) => {
-      let data = null;
+      let chunks = [];
       return {
-        write: async value => { data = value instanceof Blob ? new Uint8Array(await value.arrayBuffer()) : typeof value === 'string' ? new TextEncoder().encode(value) : new Uint8Array(value); },
-        close: async () => { if (!data) throw new Error('Nothing to write.'); return unwrap(window.photoLab.write(descriptor.id, data, { mergeXmp: Boolean(options.mergeXmp) })); },
-        abort: async () => { data = null; },
+        write: async value => {
+          const chunk = value instanceof Blob ? new Uint8Array(await value.arrayBuffer()) : typeof value === 'string' ? new TextEncoder().encode(value) : new Uint8Array(value);
+          chunks.push(chunk);
+        },
+        close: async () => {
+          let data;
+          if (chunks.length === 1) data = chunks[0];
+          else if (chunks.length === 0) data = new Uint8Array(0);
+          else {
+            const total = chunks.reduce((acc, c) => acc + c.byteLength, 0);
+            data = new Uint8Array(total);
+            let offset = 0;
+            for (const chunk of chunks) {
+              data.set(chunk, offset);
+              offset += chunk.byteLength;
+            }
+          }
+          chunks = [];
+          return unwrap(window.photoLab.write(descriptor.id, data, { mergeXmp: Boolean(options.mergeXmp) }));
+        },
+        abort: async () => { chunks = []; },
       };
     },
   };

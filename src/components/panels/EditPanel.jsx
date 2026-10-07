@@ -998,11 +998,11 @@ export function EditPanel({
                                                 </p>
                                                 <button
                                                     onClick={() => {
-                                                        const el = document.getElementById("pricing-container");
-                                                        if (el) {
-                                                            el.scrollIntoView({ behavior: "smooth" });
+                                                        if (setActiveTab) {
+                                                            setActiveTab('account');
                                                         } else {
-                                                            window.location.hash = "#pricing-container";
+                                                            const el = document.getElementById("pricing-container");
+                                                            if (el) el.scrollIntoView({ behavior: "smooth" });
                                                         }
                                                     }}
                                                     style={{

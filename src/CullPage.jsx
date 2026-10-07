@@ -488,12 +488,17 @@ export default function CullPage({
           }
 
           // Write file
-          const arrayBuffer = await item.file.arrayBuffer();
-          const fileRef = await targetDir.getFileHandle(destName, { create: true });
-          const writable = await fileRef.createWritable();
-          await writable.write(new Uint8Array(arrayBuffer));
-          await writable.close();
-          copiedCount++;
+          try {
+            const arrayBuffer = await item.file.arrayBuffer();
+            const fileRef = await targetDir.getFileHandle(destName, { create: true });
+            const writable = await fileRef.createWritable();
+            await writable.write(new Uint8Array(arrayBuffer));
+            await writable.close();
+            copiedCount++;
+          } catch (fileErr) {
+            console.error(`Failed to export ${destName}:`, fileErr);
+            addBatchLog?.(`⚠️ Could not save ${destName}: ${fileErr.message}`, "warning");
+          }
         }
       }
 

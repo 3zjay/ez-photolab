@@ -39,23 +39,33 @@ async function atomicWrite(filename, bytes, { replace = false, expectedHash } = 
 
 class FileService {
   constructor() { this.handles = new Map(); this.protectedFiles = new Set(); }
-  add(entry) { const id = randomUUID(); this.handles.set(id, entry); return { id, kind: entry.kind, name: path.basename(entry.path) }; }
+  add(entry) {
+    const id = randomUUID();
+    this.handles.set(id, entry);
+    const name = path.basename(entry.path) || entry.path;
+    return { id, kind: entry.kind, name };
+  }
   async grantDirectory(filename, writable = false) {
-    const real = await fs.realpath(filename);
-    if (!(await fs.stat(real)).isDirectory()) throw new Error('Choose a folder.');
+    const real = await fs.realpath(filename).catch(() => path.resolve(filename));
+    const stat = await fs.stat(real).catch(() => null);
+    if (!stat || !stat.isDirectory()) throw new Error('Choose a folder.');
     return this.add({ path: real, root: real, kind: 'directory', writable });
   }
   async grantFile(filename) {
-    const real = await fs.realpath(filename);
+    const real = await fs.realpath(filename).catch(() => path.resolve(filename));
     this.protectedFiles.add(key(real));
     return this.add({ path: real, root: path.dirname(real), kind: 'file', writable: false });
   }
   async get(id, kind) {
     const entry = this.handles.get(id);
     if (!entry || (kind && entry.kind !== kind)) throw new Error('File access has expired. Select the folder again.');
-    const parent = await fs.realpath(entry.kind === 'directory' ? entry.path : path.dirname(entry.path));
-    const relative = path.relative(entry.root, parent);
-    if (relative.startsWith('..') || path.isAbsolute(relative)) throw new Error('Folder links outside the selected folder are not allowed.');
+    const parent = await fs.realpath(entry.kind === 'directory' ? entry.path : path.dirname(entry.path)).catch(() => entry.kind === 'directory' ? entry.path : path.dirname(entry.path));
+    const rootNorm = path.resolve(entry.root).toLowerCase();
+    const parentNorm = path.resolve(parent).toLowerCase();
+    const relative = path.relative(rootNorm, parentNorm);
+    if (relative.startsWith('..') || (path.isAbsolute(relative) && path.parse(relative).root !== '')) {
+      throw new Error('Folder links outside the selected folder are not allowed.');
+    }
     const stat = await fs.lstat(entry.path).catch(error => { if (error.code !== 'ENOENT') throw error; return null; });
     if (stat?.isSymbolicLink()) throw new Error('Linked files are not supported. Select the original location.');
     return entry;
