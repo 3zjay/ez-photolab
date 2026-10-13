@@ -25,7 +25,7 @@ import { LandingPage } from "./LandingPage";
 import { StripeCheckout } from "./components/ui/StripeCheckout";
 import { AccountDashboard } from "./components/panels/AccountDashboard";
 import { auth, db, googleProvider } from "./firebase";
-import { signInWithPopup, signOut as firebaseSignOut, onAuthStateChanged } from "firebase/auth";
+import { signInWithPopup, signInWithRedirect, getRedirectResult, signOut as firebaseSignOut, onAuthStateChanged } from "firebase/auth";
 import { doc, onSnapshot, setDoc } from "firebase/firestore";
 
 export function ApertureLogo({ size = 26, className = "" }) {
@@ -392,6 +392,11 @@ export default function App() {
   useEffect(() => {
     let unsubscribeSnapshot = null;
 
+    // Handle any pending redirect sign-in results gracefully
+    getRedirectResult(auth).catch((err) => {
+      console.warn("Redirect sign-in check:", err);
+    });
+
     // Check if URL overrides with local admin mode
     const params = new URLSearchParams(window.location.search);
     if (params.get("admin") === "true") return; // Keep the static admin mode
@@ -458,6 +463,19 @@ export default function App() {
     try {
       await signInWithPopup(auth, googleProvider);
     } catch (e) {
+      // User closed the popup intentionally or dismissed the dialog
+      if (e?.code === "auth/popup-closed-by-user" || e?.code === "auth/cancelled-popup-request") {
+        return;
+      }
+      // If popup is blocked by the browser, fallback to redirect sign-in
+      if (e?.code === "auth/popup-blocked") {
+        try {
+          await signInWithRedirect(auth, googleProvider);
+          return;
+        } catch (redirectErr) {
+          console.error("Redirect login failed:", redirectErr);
+        }
+      }
       console.error("Login failed:", e);
       alert("Sign-In failed: " + e.message);
     }
