@@ -756,7 +756,7 @@ export default function App() {
     return () => clearTimeout(timer);
   }, [
     image, aiBeautySmooth, aiBeautyClarity, aiBeautyGlow, aiBeautyUseMask,
-    structureAi, skyMode, skyOpacity, skyBlend, skyLightMatch, customSkyUrl,
+    structureAi, skyMode, skyOpacity, skyLightMatch, customSkyUrl,
     relightNear, relightFar, skyMaskStatus, depthMapStatus
   ]);
 
