@@ -7,7 +7,7 @@ import {
   toCSSFilter, toTransformCSS, saveFile, canvasToBlob, loadImageFromSrc,
   renderFinal, getExportDims, applyUnsharpMask, applyNoiseReduction, applyAutoLevels, applyAutoContrast, calcBatchDims,
   apply3DLut, applyBeautyPipeline, applyStructureAi, applySkyReplacement, applyRelight,
-  renderPhotoroomCutoutComposite
+  renderPhotoroomCutoutComposite, extractSalientCutoutFallback
 } from "./utils";
 import { inpaintCanvasLocal } from "./inpaintEngine";
 import { createSkinMask, createFaceOvalMask } from "./faceMasking";
@@ -536,18 +536,7 @@ export default function App() {
     prevRawUrlsRef.current = currentUrls;
   }, [batchRawFiles]);
 
-  // AI Features state — key migration: old code stored Claid key under 'fal-api-key'
-  const [falApiKey, setFalApiKey] = useState(() => localStorage.getItem('fal-ai-key') || '');
-  const [claidApiKey, setClaidApiKey] = useState(() => {
-    // Migrate: if claid-api-key is empty but fal-api-key has a value, it's the old Claid key
-    const claid = localStorage.getItem('claid-api-key');
-    if (claid) return claid;
-    const old = localStorage.getItem('fal-api-key');
-    if (old) { localStorage.setItem('claid-api-key', old); localStorage.removeItem('fal-api-key'); return old; }
-    return '';
-  });
-  const saveFalKey = (k) => { setFalApiKey(k); localStorage.setItem('fal-ai-key', k); };
-  const saveClaidKey = (k) => { setClaidApiKey(k); localStorage.setItem('claid-api-key', k); };
+  // AI In-Browser Engines State
   const [aiUpscaleStatus, setAiUpscaleStatus] = useState('idle');
   const [aiUpscaleResult, setAiUpscaleResult] = useState(null);
   const [aiUpscaleLog, setAiUpscaleLog] = useState('');
@@ -1256,17 +1245,69 @@ export default function App() {
 
   const handleRemoveBg = async () => {
     if (!image || bgStatus === "loading") return;
-    setBgStatus("loading"); setBgProgress(0); setBgSubUrl(null); setBgResult(null);
+    setBgStatus("loading"); setBgProgress(5); setBgSubUrl(null); setBgResult(null);
     try {
-      const { removeBackground } = await import("@imgly/background-removal");
-      const blob = await (await fetch(image)).blob();
-      const out = await removeBackground(blob, { progress: (k, c, t) => setBgProgress(Math.round(c / t * 100)), model: "medium" });
-      const url = URL.createObjectURL(out);
-      setBgSubUrl(url);
+      const origImg = await loadImageFromSrc(image);
+      const natW = origImg.naturalWidth || origImg.width;
+      const natH = origImg.naturalHeight || origImg.height;
+
+      let cutoutUrl = null;
+
+      try {
+        const { removeBackground } = await import("@imgly/background-removal");
+        
+        // Downscale large camera photos to max 1280px for 3-4x faster AI segmentation
+        const maxInferDim = 1280;
+        let inferBlob = null;
+        if (Math.max(natW, natH) > maxInferDim) {
+          const scale = maxInferDim / Math.max(natW, natH);
+          const iW = Math.max(1, Math.round(natW * scale));
+          const iH = Math.max(1, Math.round(natH * scale));
+          const iCanvas = document.createElement('canvas');
+          iCanvas.width = iW; iCanvas.height = iH;
+          iCanvas.getContext('2d').drawImage(origImg, 0, 0, iW, iH);
+          inferBlob = await canvasToBlob(iCanvas, 'image/jpeg', 0.92);
+        } else {
+          inferBlob = await (await fetch(image)).blob();
+        }
+
+        const out = await removeBackground(inferBlob, {
+          progress: (k, c, t) => setBgProgress(Math.min(95, Math.round((c / t) * 90) + 5)),
+          model: "medium"
+        });
+
+        // Composite the segmentation mask onto the full-resolution source image
+        const maskImg = await loadImageFromSrc(URL.createObjectURL(out));
+        const fullCanvas = document.createElement('canvas');
+        fullCanvas.width = natW;
+        fullCanvas.height = natH;
+        const fCtx = fullCanvas.getContext('2d');
+        fCtx.drawImage(origImg, 0, 0, natW, natH);
+        fCtx.globalCompositeOperation = 'destination-in';
+        fCtx.drawImage(maskImg, 0, 0, natW, natH);
+        fCtx.globalCompositeOperation = 'source-over';
+
+        const finalCutoutBlob = await canvasToBlob(fullCanvas, 'image/png');
+        cutoutUrl = URL.createObjectURL(finalCutoutBlob);
+      } catch (imglyErr) {
+        console.warn("AI background removal model error or timeout, applying local salient cutout fallback:", imglyErr);
+        // Fallback to high-speed local perimeter color clustering & salient subject isolation
+        setBgProgress(85);
+        const sourceCanvas = document.createElement('canvas');
+        sourceCanvas.width = natW;
+        sourceCanvas.height = natH;
+        sourceCanvas.getContext('2d').drawImage(origImg, 0, 0, natW, natH);
+        const fallbackCanvas = extractSalientCutoutFallback(sourceCanvas);
+        const fbBlob = await canvasToBlob(fallbackCanvas, 'image/png');
+        cutoutUrl = URL.createObjectURL(fbBlob);
+      }
+
+      setBgProgress(100);
+      setBgSubUrl(cutoutUrl);
       setBgStatus("done");
-      await buildBgComposite(url);
+      await buildBgComposite(cutoutUrl);
     } catch (e) {
-      console.error(e);
+      console.error("Subject cutout failed:", e);
       setBgStatus("error");
     }
   };
@@ -2370,8 +2411,7 @@ export default function App() {
       mc.width = targetW;
       mc.height = targetH;
       const ctx = mc.getContext('2d');
-      ctx.fillStyle = '#000000';
-      ctx.fillRect(0, 0, mc.width, mc.height);
+      ctx.clearRect(0, 0, mc.width, mc.height);
       setAiMaskReady(false);
       maskLastPtRef.current = null;
       setMaskVersion(v => v + 1);
@@ -2395,8 +2435,7 @@ export default function App() {
       mc.width = img.naturalWidth;
       mc.height = img.naturalHeight;
       const initCtx = mc.getContext('2d');
-      initCtx.fillStyle = '#000000';
-      initCtx.fillRect(0, 0, mc.width, mc.height);
+      initCtx.clearRect(0, 0, mc.width, mc.height);
     }
     const ctx = mc.getContext('2d');
     const rect = containerEl.getBoundingClientRect();
@@ -2409,8 +2448,10 @@ export default function App() {
     const y = (clientY - rect.top) * scaleY;
     const r = Math.max(4, (aiRemoveBrush / 2) * scaleX);
 
-    ctx.fillStyle = '#ffffff';
-    ctx.strokeStyle = '#ffffff';
+    // High-visibility semi-transparent ruby/coral highlight (standard in professional retouch suites)
+    const strokeColor = 'rgba(244, 63, 94, 0.85)';
+    ctx.fillStyle = strokeColor;
+    ctx.strokeStyle = strokeColor;
     ctx.lineWidth = r * 2;
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
@@ -2456,7 +2497,7 @@ export default function App() {
     if (!mc || !image) return;
     setAiRemoveStatus('loading');
     setAiRemoveResult(null);
-    setAiRemoveLog('Reconstructing background…');
+    setAiRemoveLog('Reconstructing background texture…');
 
     try {
       const activeSrc = (bgStatus === 'done' && bgResult) ? bgResult : image;
@@ -2467,43 +2508,10 @@ export default function App() {
       const tCtx = tmpCanvas.getContext('2d');
       tCtx.drawImage(srcImg, 0, 0);
 
-      // If user explicitly provided a Claid.ai key, try Cloud LaMa first
-      if (claidApiKey?.trim()) {
-        try {
-          setAiRemoveLog('Uploading to Claid.ai LaMa…');
-          const [imgBlob, maskBlob] = await Promise.all([
-            canvasToBlob(tmpCanvas, 'image/jpeg', 0.95),
-            canvasToBlob(mc, 'image/png'),
-          ]);
-          const form = new FormData();
-          form.append('image', imgBlob, 'photo.jpg');
-          form.append('mask', maskBlob, 'mask.png');
-          form.append('operations', JSON.stringify([{ operation: 'inpaint' }]));
-
-          const res = await fetch('https://api.claid.ai/v1-beta1/image/edit', {
-            method: 'POST',
-            headers: { Authorization: `Bearer ${claidApiKey.trim()}` },
-            body: form,
-          });
-          const data = await res.json();
-          if (res.ok) {
-            const outUrl = data?.data?.output?.tmp_url || data?.data?.output?.url;
-            if (outUrl) {
-              setAiRemoveResult(outUrl);
-              setAiRemoveStatus('done');
-              setAiRemoveLog('✓ Cloud LaMa inpainting complete');
-              return;
-            }
-          }
-        } catch (cloudErr) {
-          console.warn('Cloud inpaint fallback to local engine:', cloudErr);
-        }
-      }
-
-      // Free 100% In-Browser Harmonic Patch Inpainting Engine
+      // Fast, 100% In-Browser Harmonic Patch Inpainting Engine
       await new Promise(r => setTimeout(r, 20));
-      const outCanvas = inpaintCanvasLocal(tmpCanvas, mc);
-      const resultDataUrl = outCanvas.toDataURL('image/png');
+      const outCanvas = await inpaintCanvasLocal(tmpCanvas, mc, msg => setAiRemoveLog(msg));
+      const resultDataUrl = typeof outCanvas === 'string' ? outCanvas : outCanvas.toDataURL('image/png');
 
       preCanvasImageRef.current = null;
       setEraseHistory(prev => [...prev.slice(-9), { image, bgStatus, bgSubUrl, bgResult }]);
@@ -2516,15 +2524,15 @@ export default function App() {
         subCanvas.height = subImg.naturalHeight;
         const sCtx = subCanvas.getContext('2d');
         sCtx.drawImage(subImg, 0, 0);
-        const outSubCanvas = inpaintCanvasLocal(subCanvas, mc);
-        setBgSubUrl(outSubCanvas.toDataURL('image/png'));
+        const outSubCanvas = await inpaintCanvasLocal(subCanvas, mc);
+        const outSubUrl = typeof outSubCanvas === 'string' ? outSubCanvas : outSubCanvas.toDataURL('image/png');
+        setBgSubUrl(outSubUrl);
         setBgResult(resultDataUrl);
       }
 
       // Clear mask so user can immediately paint another spot
       const mCtx = mc.getContext('2d');
-      mCtx.fillStyle = '#000000';
-      mCtx.fillRect(0, 0, mc.width, mc.height);
+      mCtx.clearRect(0, 0, mc.width, mc.height);
       maskLastPtRef.current = null;
       setAiMaskReady(false);
       setMaskVersion(v => v + 1);
@@ -2535,7 +2543,7 @@ export default function App() {
       setAiRemoveStatus('error');
       setAiRemoveLog(e?.message || 'Magic Retouch failed.');
     }
-  }, [aiMaskReady, claidApiKey, image, bgStatus, bgSubUrl, bgResult]);
+  }, [aiMaskReady, image, bgStatus, bgSubUrl, bgResult]);
 
   const applyUpscalePipeline = async (sourceCanvas, scale, onProgress) => {
     const natW = sourceCanvas.width;
@@ -2644,7 +2652,7 @@ export default function App() {
           bgShadowType, setBgShadowType, bgShadowOpacity, setBgShadowOpacity, bgShadowBlur, setBgShadowBlur, bgShadowX, setBgShadowX, bgShadowY, setBgShadowY,
           bgOutlineWidth, setBgOutlineWidth, bgOutlineColor, setBgOutlineColor,
           bgSubjectScale, setBgSubjectScale, bgSubjectX, setBgSubjectX, bgSubjectY, setBgSubjectY,
-          falApiKey, saveFalKey, claidApiKey, saveClaidKey, aiRemoveBrush, setAiRemoveBrush, toCSSFilter, initMaskCanvas, maskCanvasRef, maskDrawingRef, drawMask, aiMaskReady, handleAiRemove, aiRemoveStatus, aiRemoveLog, aiRemoveResult,
+          aiRemoveBrush, setAiRemoveBrush, toCSSFilter, initMaskCanvas, maskCanvasRef, maskDrawingRef, drawMask, aiMaskReady, handleAiRemove, aiRemoveStatus, aiRemoveLog, aiRemoveResult,
           eraseMode, setEraseMode, canUndoErase: eraseHistory.length > 0, handleUndoErase,
           
           // Overlay / Layers props

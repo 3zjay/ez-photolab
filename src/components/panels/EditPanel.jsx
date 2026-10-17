@@ -32,7 +32,7 @@ export function EditPanel({
     bgShadowType, setBgShadowType, bgShadowOpacity, setBgShadowOpacity, bgShadowBlur, setBgShadowBlur, bgShadowX, setBgShadowX, bgShadowY, setBgShadowY,
     bgOutlineWidth, setBgOutlineWidth, bgOutlineColor, setBgOutlineColor,
     bgSubjectScale, setBgSubjectScale, bgSubjectX, setBgSubjectX, bgSubjectY, setBgSubjectY,
-    falApiKey, saveFalKey, claidApiKey, saveClaidKey, aiRemoveBrush, setAiRemoveBrush, toCSSFilter, initMaskCanvas, maskCanvasRef, maskDrawingRef, drawMask, aiMaskReady, handleAiRemove, aiRemoveStatus, aiRemoveLog, aiRemoveResult,
+    aiRemoveBrush, setAiRemoveBrush, toCSSFilter, initMaskCanvas, maskCanvasRef, maskDrawingRef, drawMask, aiMaskReady, handleAiRemove, aiRemoveStatus, aiRemoveLog, aiRemoveResult,
     eraseMode, setEraseMode, canUndoErase, handleUndoErase,
     
     // Overlay / Layers props
@@ -630,7 +630,7 @@ export function EditPanel({
             {subTab === "ai" && (
                 <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
                     <ToolsPanel {...{
-                        image, cardBdr, cardBg, dm, saveFile, claidApiKey, saveClaidKey,
+                        image, cardBdr, cardBg, dm, saveFile,
                         aiRemoveBrush, setAiRemoveBrush, toCSSFilter, filters,
                         initMaskCanvas, maskCanvasRef, maskDrawingRef, drawMask,
                         aiMaskReady, handleAiRemove, aiRemoveStatus, aiRemoveLog, aiRemoveResult, applyAiResult,
@@ -649,8 +649,40 @@ export function EditPanel({
                                     <span style={{ fontSize: "13px", fontWeight: 700, color: dm ? '#f3f4f6' : '#1f2937' }}>✨ AI Portrait Beauty Retouch</span>
                                     <span style={{ fontSize: "9px", fontWeight: 700, padding: "2px 6px", background: "#f0fff4", color: "#16a34a", borderRadius: "12px", border: "1px solid #86efac" }}>FREE</span>
                                 </div>
-                                <p style={{ fontSize: "11px", color: "#aaa", lineHeight: 1.5, margin: 0 }}>Softens skin and balances portrait lighting using local MediaPipe Face Mesh segmentation.</p>
+                                <p style={{ fontSize: "11px", color: dm ? "#aaa" : "#666", lineHeight: 1.5, margin: 0 }}>Softens skin texture and balances portrait lighting with edge-preserving bilateral segmentation.</p>
                                 
+                                {/* 1-Click Portrait Presets */}
+                                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "4px" }}>
+                                    {[
+                                        { label: "Natural", s: 3, c: 3, g: 1 },
+                                        { label: "Glow", s: 5, c: 4, g: 5 },
+                                        { label: "Crisp HD", s: 2, c: 8, g: 0 },
+                                        { label: "Glamour", s: 7, c: 4, g: 6 }
+                                    ].map(p => (
+                                        <button
+                                            key={p.label}
+                                            onClick={() => {
+                                                setAiBeautySmooth(p.s);
+                                                setAiBeautyClarity(p.c);
+                                                setAiBeautyGlow(p.g);
+                                            }}
+                                            style={{
+                                                padding: "6px 2px",
+                                                borderRadius: "7px",
+                                                border: `1px solid ${cardBdr}`,
+                                                background: dm ? "#222" : "#f4f4f8",
+                                                color: dm ? "#ddd" : "#444",
+                                                fontSize: "10.5px",
+                                                fontWeight: 700,
+                                                cursor: "pointer",
+                                                fontFamily: "inherit"
+                                            }}
+                                        >
+                                            {p.label}
+                                        </button>
+                                    ))}
+                                </div>
+
                                 <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", userSelect: "none", marginBottom: "4px" }}>
                                     <input type="checkbox" checked={aiBeautyUseMask} onChange={e => setAiBeautyUseMask(e.target.checked)} 
                                         style={{ width: "16px", height: "16px", accentColor: "#6c63ff" }} />
@@ -699,7 +731,7 @@ export function EditPanel({
                                     <span style={{ fontSize: "13px", fontWeight: 700, color: dm ? '#f3f4f6' : '#1f2937' }}>👤 Neural Face Restore</span>
                                     <span style={{ fontSize: "9px", fontWeight: 700, padding: "2px 6px", background: "#f0fff4", color: "#16a34a", borderRadius: "12px", border: "1px solid #86efac" }}>FREE</span>
                                 </div>
-                                <p style={{ fontSize: "11px", color: "#aaa", lineHeight: 1.5, margin: 0 }}>Restores low-resolution, blurry, or out-of-focus faces locally on device.</p>
+                                <p style={{ fontSize: "11px", color: dm ? "#aaa" : "#666", lineHeight: 1.5, margin: 0 }}>Synthesizes sharp eye, eyebrow, and lip details and reconstructs facial lighting locally on device.</p>
                                 
                                 <AB onClick={runFalFaceRestore}
                                     disabled={aiFaceRestoreStatus === 'loading'}

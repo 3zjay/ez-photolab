@@ -826,8 +826,6 @@ export function Preview({
                   inset: 0,
                   width: "100%",
                   height: "100%",
-                  opacity: 0.55,
-                  mixBlendMode: "screen",
                   pointerEvents: "none"
                 }}
               />

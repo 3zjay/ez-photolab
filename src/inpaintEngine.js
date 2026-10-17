@@ -19,6 +19,7 @@ export async function inpaintCanvasLocal(sourceCanvas, maskCanvas, onProgress) {
   const maskData = mCtx.getImageData(0, 0, W, H).data;
 
   // 1. Build binary mask (1 = to inpaint, 0 = known pixel) and find bounding box
+  // Supports both alpha-based colored masks (rgba(244, 63, 94, ...)) and classic black-and-white masks
   const rawMask = new Uint8Array(W * H);
   let minX = W, minY = H, maxX = -1, maxY = -1;
   let maskedCount = 0;
@@ -27,8 +28,10 @@ export async function inpaintCanvasLocal(sourceCanvas, maskCanvas, onProgress) {
     const rowOff = y * W;
     for (let x = 0; x < W; x++) {
       const idx = (rowOff + x) * 4;
-      // Mask canvas uses white strokes over black background
-      if (maskData[idx] > 64 || maskData[idx + 1] > 64 || maskData[idx + 2] > 64) {
+      const isAlphaMasked = maskData[idx + 3] > 20 && (maskData[idx] > 30 || maskData[idx + 1] > 30 || maskData[idx + 2] > 30);
+      const isBrightMasked = maskData[idx] > 60 || maskData[idx + 1] > 60 || maskData[idx + 2] > 60;
+      
+      if (isAlphaMasked || isBrightMasked) {
         rawMask[rowOff + x] = 1;
         maskedCount++;
         if (x < minX) minX = x;
@@ -39,15 +42,21 @@ export async function inpaintCanvasLocal(sourceCanvas, maskCanvas, onProgress) {
     }
   }
 
+  const outCanvas = document.createElement("canvas");
+  outCanvas.width = W;
+  outCanvas.height = H;
+  const outCtx = outCanvas.getContext("2d");
+
   if (maskedCount === 0 || maxX < minX) {
-    return sourceCanvas.toDataURL("image/jpeg", 0.95);
+    outCtx.putImageData(srcImageData, 0, 0);
+    return outCanvas;
   }
 
   if (onProgress) onProgress("Analyzing surrounding texture...");
 
-  // 2. Dilate mask slightly (by ~3px scaled to image size) to remove edge halos around the object
-  const dilateRadius = Math.max(2, Math.min(6, Math.round(Math.max(W, H) / 400)));
-  const pad = dilateRadius + 24;
+  // 2. Dilate mask slightly (by ~3-6px scaled to image size) to remove edge halos around the object
+  const dilateRadius = Math.max(3, Math.min(8, Math.round(Math.max(W, H) / 350)));
+  const pad = dilateRadius + 32;
   const bMinX = Math.max(0, minX - pad);
   const bMinY = Math.max(0, minY - pad);
   const bMaxX = Math.min(W - 1, maxX + pad);
@@ -104,8 +113,8 @@ export async function inpaintCanvasLocal(sourceCanvas, maskCanvas, onProgress) {
       if (mask[lIdx] === 0) {
         // Check if near mask
         let nearMask = false;
-        for (let dy = -4; dy <= 4 && !nearMask; dy++) {
-          for (let dx = -4; dx <= 4; dx++) {
+        for (let dy = -5; dy <= 5 && !nearMask; dy++) {
+          for (let dx = -5; dx <= 5; dx++) {
             const nIdx = (ly + dy) * bW + (lx + dx);
             if (mask[nIdx] === 1) {
               nearMask = true;
@@ -132,7 +141,7 @@ export async function inpaintCanvasLocal(sourceCanvas, maskCanvas, onProgress) {
 
   // 3. Onion-peel boundary marching inward (Telea-style weighted harmonic fill)
   const workingMask = new Uint8Array(mask);
-  const searchRadius = 5;
+  const searchRadius = 6;
   let remaining = 0;
   for (let i = 0; i < workingMask.length; i++) {
     if (workingMask[i] === 1) remaining++;
@@ -210,7 +219,7 @@ export async function inpaintCanvasLocal(sourceCanvas, maskCanvas, onProgress) {
   }
 
   // 4. Anisotropic harmonic relaxation passes inside the inpainted region for seamless gradients
-  const relaxPasses = 18;
+  const relaxPasses = 24;
   for (let pass = 0; pass < relaxPasses; pass++) {
     for (let ly = 1; ly < bH - 1; ly++) {
       const rowOff = ly * bW;
@@ -255,9 +264,9 @@ export async function inpaintCanvasLocal(sourceCanvas, maskCanvas, onProgress) {
       let tr = 0, tg = 0, tb = 0;
       if (hasRingTexture) {
         const sample = ringSamples[(lx * 73 + ly * 139) % ringSamples.length];
-        tr = sample[0] * 0.65;
-        tg = sample[1] * 0.65;
-        tb = sample[2] * 0.65;
+        tr = sample[0] * 0.55;
+        tg = sample[1] * 0.55;
+        tb = sample[2] * 0.55;
       }
 
       srcData[gIdx] = Math.min(255, Math.max(0, Math.round(rBuf[lIdx] + tr)));
@@ -266,10 +275,6 @@ export async function inpaintCanvasLocal(sourceCanvas, maskCanvas, onProgress) {
     }
   }
 
-  const outCanvas = document.createElement("canvas");
-  outCanvas.width = W;
-  outCanvas.height = H;
-  outCanvas.getContext("2d").putImageData(srcImageData, 0, 0);
-
-  return outCanvas.toDataURL("image/jpeg", 0.95);
+  outCtx.putImageData(srcImageData, 0, 0);
+  return outCanvas;
 }

@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { SL, Empty, Row, Spin, PBar, AB, SmoothSlider } from "../ui/common";
 
 export function ToolsPanel({
@@ -7,8 +6,6 @@ export function ToolsPanel({
     cardBg,
     dm,
     saveFile,
-    claidApiKey,
-    saveClaidKey,
     aiRemoveBrush,
     setAiRemoveBrush,
     toCSSFilter,
@@ -28,8 +25,6 @@ export function ToolsPanel({
     canUndoErase,
     handleUndoErase
 }) {
-    const [showCloudConfig, setShowCloudConfig] = useState(false);
-
     if (!image) return <Empty>Upload a photo first</Empty>;
 
     return (
@@ -122,8 +117,6 @@ export function ToolsPanel({
                             inset: 0,
                             width: "100%",
                             height: "100%",
-                            opacity: 0.55,
-                            mixBlendMode: "screen",
                             pointerEvents: "none"
                         }}
                     />
@@ -201,60 +194,13 @@ export function ToolsPanel({
                 {aiRemoveResult && (
                     <div style={{ display: "flex", gap: "7px" }}>
                         <AB onClick={() => applyAiResult(aiRemoveResult)} color={dm ? "#252525" : "#f2f2f8"} textColor={dm ? "#ccc" : "#555"} style={{ flex: 1, padding: "9px", fontSize: "12px" }}>
-                            ← Apply Cloud Result
+                            ← Apply Result
                         </AB>
                         <AB onClick={async () => saveFile(await (await fetch(aiRemoveResult)).blob(), "retouched.jpg")} color="purple" textColor="#fff" style={{ flex: 1, padding: "9px", fontSize: "12px" }}>
                             ↓ Download
                         </AB>
                     </div>
                 )}
-
-                {/* Optional Cloud LaMa API Toggle */}
-                <div style={{ borderTop: `1px solid ${cardBdr}`, paddingTop: "8px" }}>
-                    <button
-                        onClick={() => setShowCloudConfig(v => !v)}
-                        style={{
-                            background: "none",
-                            border: "none",
-                            color: dm ? "#9ca3af" : "#64748b",
-                            fontSize: "11px",
-                            fontWeight: 600,
-                            cursor: "pointer",
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "space-between",
-                            width: "100%",
-                            fontFamily: "inherit"
-                        }}
-                    >
-                        <span>☁️ Optional: Claid.ai Cloud LaMa Key {claidApiKey?.trim() ? "(Connected)" : "(Using Local Engine)"}</span>
-                        <span>{showCloudConfig ? "▲" : "▼"}</span>
-                    </button>
-                    {showCloudConfig && (
-                        <div style={{ marginTop: "8px", padding: "10px", background: dm ? "#1a1a2e" : "#f0f4ff", border: `1px solid ${dm ? "#333" : "#d0d8ff"}`, borderRadius: "8px", display: "flex", flexDirection: "column", gap: "6px" }}>
-                            <div style={{ fontSize: "10.5px", color: dm ? "#aaa" : "#555", lineHeight: 1.4 }}>
-                                Leave blank to use the built-in free in-browser Magic Retouch engine, or enter a Claid.ai key for cloud LaMa inpainting.
-                            </div>
-                            <input
-                                type="password"
-                                value={claidApiKey}
-                                onChange={e => saveClaidKey(e.target.value)}
-                                placeholder="Optional Claid.ai API key"
-                                style={{
-                                    width: "100%",
-                                    padding: "7px 10px",
-                                    border: `1px solid ${claidApiKey ? "#6c63ff" : cardBdr}`,
-                                    borderRadius: "6px",
-                                    fontSize: "11.5px",
-                                    fontFamily: "monospace",
-                                    outline: "none",
-                                    background: dm ? "#0e0e1a" : "#fff",
-                                    color: dm ? "#ddd" : "#333"
-                                }}
-                            />
-                        </div>
-                    )}
-                </div>
             </div>
         </div>
     );

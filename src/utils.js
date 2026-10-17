@@ -1140,36 +1140,102 @@ function drawSkyPattern(skyId, W, H) {
   const c = document.createElement('canvas');
   c.width = W; c.height = H;
   const ctx = c.getContext('2d');
+
   if (skyId === 'sunset') {
     const g = ctx.createLinearGradient(0, 0, 0, H);
-    g.addColorStop(0, '#2e0854');
-    g.addColorStop(0.4, '#d85b7b');
-    g.addColorStop(0.8, '#ff7e5f');
-    g.addColorStop(1, '#feb47b');
+    g.addColorStop(0, '#1e1035');
+    g.addColorStop(0.3, '#4a154b');
+    g.addColorStop(0.55, '#c0392b');
+    g.addColorStop(0.78, '#f39c12');
+    g.addColorStop(1, '#fce38a');
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, W, H);
+
+    // Warm setting sun disc & atmospheric horizon glow
+    const sunX = W * 0.45;
+    const sunY = H * 0.65;
+    const sunGlow = ctx.createRadialGradient(sunX, sunY, 0, sunX, sunY, W * 0.45);
+    sunGlow.addColorStop(0, 'rgba(255, 250, 220, 0.9)');
+    sunGlow.addColorStop(0.2, 'rgba(255, 200, 100, 0.45)');
+    sunGlow.addColorStop(0.6, 'rgba(255, 120, 50, 0.15)');
+    sunGlow.addColorStop(1, 'rgba(255, 100, 50, 0)');
+    ctx.fillStyle = sunGlow;
+    ctx.fillRect(0, 0, W, H);
+
+    // Soft sunset cloud bands
+    ctx.fillStyle = 'rgba(240, 140, 120, 0.18)';
+    for (let i = 0; i < 4; i++) {
+      ctx.beginPath();
+      const cy = H * (0.28 + i * 0.12);
+      ctx.ellipse(W * (0.2 + i * 0.22), cy, W * 0.35, H * 0.04, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
   } else if (skyId === 'blue') {
     const g = ctx.createLinearGradient(0, 0, 0, H);
-    g.addColorStop(0, '#1a75ff');
-    g.addColorStop(0.7, '#66a3ff');
-    g.addColorStop(1, '#e6f0ff');
+    g.addColorStop(0, '#0052d4');
+    g.addColorStop(0.4, '#4364f7');
+    g.addColorStop(0.75, '#6fb1fc');
+    g.addColorStop(1, '#e3f2fd');
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, W, H);
+
+    // Soft sun flare in top corner
+    const sunGlow = ctx.createRadialGradient(W * 0.85, H * 0.15, 0, W * 0.85, H * 0.15, W * 0.45);
+    sunGlow.addColorStop(0, 'rgba(255, 255, 255, 0.85)');
+    sunGlow.addColorStop(0.3, 'rgba(255, 250, 220, 0.35)');
+    sunGlow.addColorStop(1, 'rgba(255, 255, 255, 0)');
+    ctx.fillStyle = sunGlow;
+    ctx.fillRect(0, 0, W, H);
+
+    // Realistic fluffy cumulus cloud clusters
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.45)';
+    const cloudPuffs = [
+      [0.25, 0.35, 0.16, 0.05],
+      [0.32, 0.33, 0.12, 0.06],
+      [0.18, 0.36, 0.10, 0.04],
+      [0.68, 0.42, 0.20, 0.05],
+      [0.76, 0.40, 0.15, 0.06]
+    ];
+    cloudPuffs.forEach(([cx, cy, rx, ry]) => {
+      ctx.beginPath();
+      ctx.ellipse(W * cx, H * cy, W * rx, H * ry, 0, 0, Math.PI * 2);
+      ctx.fill();
+    });
   } else if (skyId === 'stormy') {
     const g = ctx.createLinearGradient(0, 0, 0, H);
-    g.addColorStop(0, '#1c2833');
-    g.addColorStop(0.6, '#34495e');
-    g.addColorStop(1, '#566573');
+    g.addColorStop(0, '#141824');
+    g.addColorStop(0.4, '#242c3d');
+    g.addColorStop(0.75, '#404b5c');
+    g.addColorStop(1, '#697484');
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, W, H);
+
+    // Dark moody cloud billows
+    ctx.fillStyle = 'rgba(15, 20, 30, 0.35)';
+    for (let i = 0; i < 5; i++) {
+      ctx.beginPath();
+      ctx.ellipse(W * (0.15 + i * 0.2), H * (0.2 + (i % 2) * 0.12), W * 0.25, H * 0.07, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
   } else if (skyId === 'galaxy') {
-    ctx.fillStyle = '#06061a';
+    ctx.fillStyle = '#050512';
     ctx.fillRect(0, 0, W, H);
-    ctx.fillStyle = '#ffffff';
-    for (let i = 0; i < 90; i++) {
-      const x = ((i * 97) % 100) / 100 * W;
-      const y = ((i * 53) % 100) / 100 * (H * 0.75);
-      const r = (i % 3) * 0.6 + 0.6;
+
+    // Cosmic nebula glow
+    const neb = ctx.createRadialGradient(W * 0.5, H * 0.35, 0, W * 0.5, H * 0.35, W * 0.6);
+    neb.addColorStop(0, 'rgba(139, 92, 246, 0.35)');
+    neb.addColorStop(0.4, 'rgba(6, 182, 212, 0.18)');
+    neb.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = neb;
+    ctx.fillRect(0, 0, W, H);
+
+    // Twinkling stars with varying sizes
+    for (let i = 0; i < 140; i++) {
+      const x = ((i * 137.5) % W);
+      const y = ((i * 73.3) % (H * 0.75));
+      const r = (i % 4 === 0) ? 1.4 : 0.75;
+      const alpha = (i % 3 === 0) ? 0.95 : 0.65;
+      ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
       ctx.beginPath();
       ctx.arc(x, y, r, 0, Math.PI * 2);
       ctx.fill();
@@ -1582,6 +1648,96 @@ export function applyThermalHeatmap(canvas, ctx, W, H, amount) {
   }
 
   ctx.putImageData(imgData, 0, 0);
+}
+
+/**
+ * Fast, 100% offline salient-subject background cutout fallback.
+ * Uses perimeter color-clustering, distance thresholds, and morphological feathering.
+ */
+export function extractSalientCutoutFallback(sourceCanvas) {
+  const W = sourceCanvas.width;
+  const H = sourceCanvas.height;
+  const ctx = sourceCanvas.getContext('2d');
+  const imgData = ctx.getImageData(0, 0, W, H);
+  const d = imgData.data;
+
+  // 1. Sample perimeter border colors to identify background palette
+  const bgSamples = [];
+  const step = Math.max(1, Math.round(Math.min(W, H) / 80));
+
+  for (let x = 0; x < W; x += step) {
+    // Top border
+    let idx = x * 4;
+    bgSamples.push([d[idx], d[idx + 1], d[idx + 2]]);
+    // Bottom border
+    idx = ((H - 1) * W + x) * 4;
+    bgSamples.push([d[idx], d[idx + 1], d[idx + 2]]);
+  }
+  for (let y = 0; y < H; y += step) {
+    // Left border
+    let idx = (y * W) * 4;
+    bgSamples.push([d[idx], d[idx + 1], d[idx + 2]]);
+    // Right border
+    idx = (y * W + (W - 1)) * 4;
+    bgSamples.push([d[idx], d[idx + 1], d[idx + 2]]);
+  }
+
+  const outCanvas = document.createElement('canvas');
+  outCanvas.width = W;
+  outCanvas.height = H;
+  const outCtx = outCanvas.getContext('2d');
+  const outImgData = outCtx.createImageData(W, H);
+  const od = outImgData.data;
+
+  const cx = W * 0.5;
+  const cy = H * 0.52;
+  const maxDist = Math.sqrt(cx * cx + cy * cy);
+
+  for (let y = 0; y < H; y++) {
+    const rowOff = y * W;
+    for (let x = 0; x < W; x++) {
+      const idx = (rowOff + x) * 4;
+      const r = d[idx];
+      const g = d[idx + 1];
+      const b = d[idx + 2];
+
+      // Minimum color distance to any perimeter background sample
+      let minColorDist = 999999;
+      for (let s = 0; s < bgSamples.length; s += 2) {
+        const sr = bgSamples[s][0];
+        const sg = bgSamples[s][1];
+        const sb = bgSamples[s][2];
+        const dr = r - sr;
+        const dg = g - sg;
+        const db = b - sb;
+        const dist = dr * dr + dg * dg + db * db;
+        if (dist < minColorDist) minColorDist = dist;
+      }
+
+      // Distance from center prior (0 at center, 1 at corners)
+      const dx = (x - cx) / cx;
+      const dy = (y - cy) / cy;
+      const centerFactor = Math.min(1, Math.sqrt(dx * dx + dy * dy));
+
+      // Subject classification threshold
+      // Closer to borders requires a stronger color contrast to be considered subject
+      const thresh = 900 + centerFactor * 1400;
+      let alpha = 0;
+
+      if (minColorDist > thresh) {
+        const ramp = Math.min(1, (minColorDist - thresh) / 800);
+        alpha = Math.round(255 * ramp);
+      }
+
+      od[idx] = r;
+      od[idx + 1] = g;
+      od[idx + 2] = b;
+      od[idx + 3] = alpha;
+    }
+  }
+
+  outCtx.putImageData(outImgData, 0, 0);
+  return outCanvas;
 }
 
 
