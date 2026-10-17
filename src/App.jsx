@@ -2299,7 +2299,7 @@ export default function App() {
   );
 
   return (
-    <div className={dm ? 'app-bg-dark text-gray-200' : 'app-bg-light text-gray-800'} style={{ minHeight: "100vh", WebkitTapHighlightColor: "transparent" }}>
+    <div className={dm ? 'app-bg-dark text-gray-200' : 'app-bg-light text-gray-800'} style={{ minHeight: "100dvh", width: "100%", maxWidth: "100vw", overflowX: "hidden", WebkitTapHighlightColor: "transparent" }}>
       <style>{`
         *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
         ::-webkit-scrollbar{width:4px;height:4px}::-webkit-scrollbar-thumb{background:#ddd;border-radius:2px}
@@ -2327,15 +2327,15 @@ export default function App() {
         @keyframes pulse{0%,100%{opacity:.4}50%{opacity:1}}
       `}</style>
 
-      <header className="glass-panel" style={{ height: "52px", padding: "0 14px", display: "flex", alignItems: "center", justifyContent: "space-between", position: "sticky", top: 0, zIndex: 50, borderBottom: `1px solid ${dm ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'}` }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "9px", cursor: "pointer" }} onClick={() => setActiveTab("home")}>
-          <ApertureLogo size={30} />
-          <div style={{ fontSize: "17px", fontWeight: 900, color: dm ? '#ffffff' : '#0f172a', letterSpacing: "-0.5px", display: "flex", alignItems: "center", gap: "2px", fontFamily: "'Outfit', sans-serif" }}>
+      <header className="glass-panel" style={{ height: "52px", width: "100%", maxWidth: "100vw", padding: isMobile ? "0 10px" : "0 14px", gap: "8px", display: "flex", alignItems: "center", justifyContent: "space-between", position: "sticky", top: 0, zIndex: 50, borderBottom: `1px solid ${dm ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'}` }}>
+        <div style={{ display: "flex", alignItems: "center", gap: isMobile ? "6px" : "9px", cursor: "pointer", flexShrink: 0 }} onClick={() => setActiveTab("home")}>
+          <ApertureLogo size={isMobile ? 24 : 30} />
+          <div style={{ fontSize: isMobile ? "15px" : "17px", fontWeight: 900, color: dm ? '#ffffff' : '#0f172a', letterSpacing: "-0.5px", display: "flex", alignItems: "center", gap: "2px", fontFamily: "'Outfit', sans-serif" }}>
             <span>PHOTO</span>
             <span style={{ fontStyle: "italic", background: "linear-gradient(135deg, #06b6d4, #6c63ff, #ec4899)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", fontWeight: 900, paddingRight: "3px" }}>LAB</span>
           </div>
         </div>
-        <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+        <div style={{ display: "flex", gap: isMobile ? "4px" : "6px", alignItems: "center", minWidth: 0, flexShrink: 1 }}>
           {!isInstalled && (
             <button 
               onClick={handleInstallClick}
@@ -2343,8 +2343,8 @@ export default function App() {
                 background: 'linear-gradient(135deg, rgba(249, 115, 22, 0.12) 0%, rgba(250, 204, 21, 0.12) 100%)',
                 border: '1px solid rgba(249, 115, 22, 0.35)',
                 borderRadius: '8px',
-                padding: '6px 12px',
-                fontSize: '12px',
+                padding: isMobile ? '5px 8px' : '6px 12px',
+                fontSize: isMobile ? '11px' : '12px',
                 fontWeight: 700,
                 cursor: 'pointer',
                 display: 'flex',
@@ -2353,7 +2353,9 @@ export default function App() {
                 color: '#f97316',
                 transition: 'all 0.2s ease',
                 boxShadow: '0 2px 6px rgba(249, 115, 22, 0.08)',
-                fontFamily: "'Outfit', sans-serif"
+                fontFamily: "'Outfit', sans-serif",
+                flexShrink: 0,
+                whiteSpace: 'nowrap'
               }}
               onMouseEnter={(e) => {
                 e.currentTarget.style.transform = 'scale(1.03)';
@@ -2375,7 +2377,7 @@ export default function App() {
               }}>{isMobile ? 'Install' : 'Install App'}</span>
             </button>
           )}
-          <button onClick={() => setDarkMode(!darkMode)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '6px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all .2s', color: dm ? '#ffd43b' : '#666' }} title={dm ? 'Light Mode' : 'Dark Mode'}>
+          <button onClick={() => setDarkMode(!darkMode)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '6px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all .2s', color: dm ? '#ffd43b' : '#666', flexShrink: 0 }} title={dm ? 'Light Mode' : 'Dark Mode'}>
             {dm ? (
               <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <circle cx="12" cy="12" r="5" fill="#ffd43b" />
@@ -2394,7 +2396,7 @@ export default function App() {
               </svg>
             )}
           </button>
-          <div style={{ display: "flex", background: dm ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.04)', border: `1px solid ${dm ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'}`, backdropFilter: "blur(8px)", borderRadius: "12px", padding: "3px", gap: "3px", overflowX: "auto" }}>
+          <div style={{ display: "flex", background: dm ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.04)', border: `1px solid ${dm ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'}`, backdropFilter: "blur(8px)", borderRadius: "12px", padding: "3px", gap: "3px", overflowX: "auto", minWidth: 0, scrollbarWidth: "none" }}>
             {[["home", "Home"], ["edit", "Edit Studio"], ["cull", "Cull AI"], ["batch", "Batch"], ["account", user.tier === "pro" ? "⭐ Pro" : user.tier === "team" ? "💎 Team" : user.tier === "admin" ? "⚡ Admin" : "Account"]].map(([id, lb]) => {
               const isActive = activeTab === id;
               const isPremiumAccount = id === "account" && user.tier !== "free";
@@ -2418,7 +2420,7 @@ export default function App() {
               return (
                 <button key={id} onClick={() => setActiveTab(id)}
                   style={{ 
-                    padding: isMobile ? "5px 10px" : "6px 12px", 
+                    padding: isMobile ? "5px 9px" : "6px 11px", 
                     fontSize: "12px", 
                     fontWeight: 600, 
                     border: isPremiumAccount ? activeBorder : "none", 
@@ -2437,7 +2439,8 @@ export default function App() {
                     whiteSpace: "nowrap",
                     display: "flex",
                     alignItems: "center",
-                    gap: "6px"
+                    gap: "6px",
+                    flexShrink: 0
                   }}>
                   {getTabIcon(id, isActive, dm)}
                   {!isMobile && <span>{lb}</span>}
@@ -2447,14 +2450,14 @@ export default function App() {
           </div>
           {image && (
             <button onClick={() => setShowExport(true)}
-              style={{ padding: "7px 14px", background: "linear-gradient(135deg,#6c63ff,#a78bfa)", color: "#fff", border: "none", borderRadius: "8px", fontSize: "13px", fontWeight: 700, cursor: "pointer", boxShadow: "0 2px 8px rgba(108,99,255,.3)", flexShrink: 0 }}>
+              style={{ padding: isMobile ? "6px 10px" : "7px 14px", background: "linear-gradient(135deg,#6c63ff,#a78bfa)", color: "#fff", border: "none", borderRadius: "8px", fontSize: isMobile ? "12px" : "13px", fontWeight: 700, cursor: "pointer", boxShadow: "0 2px 8px rgba(108,99,255,.3)", flexShrink: 0, whiteSpace: "nowrap" }}>
               {isMobile ? "↓" : "↓ Export"}
             </button>
           )}
         </div>
       </header>
 
-      <Suspense fallback={<div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "calc(100vh - 52px)" }}><Spin /></div>}>
+      <Suspense fallback={<div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "calc(100dvh - 52px)" }}><Spin /></div>}>
         {!isMobile && (
           activeTab === "home" ? (
             <LandingPage {...{ dm, loadImage, setActiveTab, handleInstallClick, deferredPrompt, isIOS, isInstalled }} onSelectPlan={(plan) => setCheckoutPlan(plan)} />
@@ -2464,17 +2467,17 @@ export default function App() {
           ) : activeTab === "cull" ? (
             <CullPage {...{ dm, cardBg, cardBdr, inputSt, sourceHandle: cullSourceHandle, outputHandle, batchImages: cullImages, selectSourceFolder: selectCullSourceFolder, selectRawSourceFolder, selectOutputFolder, batchLogs, addBatchLog, batchSection, setBatchSection, isMobile, user, setActiveTab, cullResults, setCullResults, groups, setGroups, activeGroupIndex: cullActiveGroupIndex, setActiveGroupIndex: setCullActiveGroupIndex, activeAlternateIndex: cullActiveAlternateIndex, setActiveAlternateIndex: setCullActiveAlternateIndex }} />
           ) : activeTab === "account" ? (
-            <div style={{ display: "flex", justifyContent: "center", minHeight: "calc(100vh - 52px)", overflowY: "auto", background: dm ? "#0a0e17" : "#f3f4f6" }}>
+            <div style={{ display: "flex", justifyContent: "center", minHeight: "calc(100dvh - 52px)", overflowY: "auto", background: dm ? "#0a0e17" : "#f3f4f6" }}>
               <AccountDashboard user={user} onLogin={handleLogin} onLogout={handleLogout} onRenewLease={handleRenewLease} onUpgrade={() => { setActiveTab("home"); setTimeout(() => document.getElementById("pricing-container")?.scrollIntoView({ behavior: "smooth" }), 100); }} dm={dm} />
             </div>
           ) : (
-            <div style={{ display: "flex", height: "calc(100vh - 52px)" }}>
+            <div style={{ display: "flex", height: "calc(100dvh - 52px)", width: "100%", maxWidth: "100vw", overflow: "hidden" }}>
               {image && (
-                <div className="glass-panel" style={{ width: "360px", borderRight: `1px solid ${dm ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'}`, overflowY: "auto", flexShrink: 0 }}>
+                <div className="glass-panel" style={{ width: "clamp(300px, 34vw, 360px)", minWidth: 0, borderRight: `1px solid ${dm ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'}`, overflowY: "auto", overflowX: "hidden", flexShrink: 0 }}>
                   {renderPanel()}
                 </div>
               )}
-              <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: "20px", position: "relative", overflow: "hidden" }}>
+              <div style={{ flex: 1, minWidth: 0, minHeight: 0, display: "flex", alignItems: "center", justifyContent: "center", padding: "20px", position: "relative", overflow: "hidden" }}>
                 <Preview {...{ image: (aiPreviewUrl || beautyPreviewUrl || image), originalImage, dragging, setDragging, loadImage, fileInputRef, imgRef, splitRef, previewRef, activeTab, bgResult, bgMode, showBefore, setShowBefore, showSplit, splitPos, isDragSplit, setIsDragSplit, cssFilter, transformCSS, filters, texts, selText, setSelText, updateText, cropMode, cropBox, setCropBox, cropAspect, isEdited, resetAll, setImage, setBgStatus, setBgSubUrl, setBgResult, isMobile, rotation, flipH, flipV, activeLutData, lutIntensity, lutId, dm, rawLoading, rawProgressMsg, logo, logoScale, logoScalePortrait, logoOpacity, logoPos, logoMargin, logoX, setLogoX, logoY, setLogoY, setLogoPos, filterGroup, chromatic, prism, halation, filmDust, glitter, vhs, lightLeak, heatmap, vibeAudio, hslMixer, curves }} highResImage={image} />
               </div>
             </div>
@@ -2483,34 +2486,34 @@ export default function App() {
 
         {isMobile && (
           activeTab === "home" ? (
-            <div style={{ height: "calc(100vh - 52px)", overflowY: "auto" }}>
+            <div style={{ height: "calc(100dvh - 52px)", overflowY: "auto", overflowX: "hidden" }}>
               <LandingPage {...{ dm, loadImage, setActiveTab, handleInstallClick, deferredPrompt, isIOS, isInstalled }} onSelectPlan={(plan) => setCheckoutPlan(plan)} />
             </div>
           ) : activeTab === "batch" ? (
-            <div style={{ height: "calc(100vh - 52px)", overflowY: "auto" }}>
+            <div style={{ height: "calc(100dvh - 52px)", overflowY: "auto", overflowX: "hidden" }}>
               <BatchPage {...{ dm, cardBg, cardBdr, inputSt, isMobile: true, user, setActiveTab, sourceHandle, outputHandle, batchImages, selectSourceFolder, selectRawSourceFolder, selectOutputFolder, batchResizeMode, setBatchResizeMode, batchResizePreset, setBatchResizePreset, batchCustomW, setBatchCustomW, batchCustomH, setBatchCustomH, batchKeepAspect, setBatchKeepAspect, batchLongEdgePx, setBatchLongEdgePx, batchAutoLevels, setBatchAutoLevels, batchAutoContrast, setBatchAutoContrast, batchSharpen, setBatchSharpen, batchSharpenAmt, setBatchSharpenAmt, batchSharpenRad, setBatchSharpenRad, batchDenoise, setBatchDenoise, batchDenoiseAmt, setBatchDenoiseAmt, batchLogo, setBatchLogo, batchLogoFile, setBatchLogoFile, handleBatchLogoUpload, batchLogoScale, setBatchLogoScale, batchLogoScalePortrait, setBatchLogoScalePortrait, batchLogoOpacity, setBatchLogoOpacity, batchLogoPos, setBatchLogoPos, batchLogoMargin, setBatchLogoMargin, batchOutputFmt, setBatchOutputFmt, batchOutputQ, setBatchOutputQ, batchPrefix, setBatchPrefix, batchSuffix, setBatchSuffix, batchProcessing, batchProgress, batchDone, handleBatchProcess, batchPreviewIdx, batchPreviewOrigUrl, batchPreviewAfterUrl, batchPreviewLoading, batchPreviewSplit, setBatchPreviewSplit, batchPreviewDragging, setBatchPreviewDragging, batchPreviewOpen, setBatchPreviewOpen, generateBatchPreview, filters, setFilters, resetAll, batchFilterGroup, setBatchFilterGroup, calcBatchDims, batchAiUpscale, setBatchAiUpscale, batchAiBeauty, setBatchAiBeauty, batchAiScale, setBatchAiScale, batchAiBeautySmooth, setBatchAiBeautySmooth, batchAiBeautyClarity, setBatchAiBeautyClarity, batchAiBeautyGlow, setBatchAiBeautyGlow, batchAiFaceRestore, setBatchAiFaceRestore, batchAiBeautyUseMask, setBatchAiBeautyUseMask, batchSection, setBatchSection, batchRawFiles, setBatchRawFiles, handleRawBatchProcess, batchLogs, addBatchLog, batchConfirmFirst, setBatchConfirmFirst, batchConfirmData, batchCancelRequested, handleCancelBatch, continueBatchProcess, cancelBatchProcess, batchStats, batchLutId, setBatchLutId, batchLutIntensity, setBatchLutIntensity, batchCustomLutData, setBatchCustomLutData, batchCustomLutName, setBatchCustomLutName, batchFbOptimize, setBatchFbOptimize, importOutputsToCull, batchCullFilter, setBatchCullFilter, batchCullSort, setBatchCullSort, cullResults }} />
             </div>
           ) : activeTab === "cull" ? (
-            <div style={{ height: "calc(100vh - 52px)", overflowY: "auto", padding: "16px" }}>
+            <div style={{ height: "calc(100dvh - 52px)", overflowY: "auto", overflowX: "hidden", padding: "12px" }}>
               <CullPage {...{ dm, cardBg, cardBdr, inputSt, sourceHandle: cullSourceHandle, outputHandle, batchImages: cullImages, selectSourceFolder: selectCullSourceFolder, selectRawSourceFolder, selectOutputFolder, batchLogs, addBatchLog, batchSection, setBatchSection, isMobile: true, user, setActiveTab, cullResults, setCullResults, groups, setGroups, activeGroupIndex: cullActiveGroupIndex, setActiveGroupIndex: setCullActiveGroupIndex, activeAlternateIndex: cullActiveAlternateIndex, setActiveAlternateIndex: setCullActiveAlternateIndex }} />
             </div>
           ) : activeTab === "account" ? (
-            <div style={{ display: "flex", justifyContent: "center", minHeight: "calc(100vh - 52px)", overflowY: "auto", background: dm ? "#0a0e17" : "#f3f4f6" }}>
+            <div style={{ display: "flex", justifyContent: "center", minHeight: "calc(100dvh - 52px)", overflowY: "auto", overflowX: "hidden", background: dm ? "#0a0e17" : "#f3f4f6" }}>
               <AccountDashboard user={user} onLogin={handleLogin} onLogout={handleLogout} onRenewLease={handleRenewLease} onUpgrade={() => { setActiveTab("home"); setTimeout(() => document.getElementById("pricing-container")?.scrollIntoView({ behavior: "smooth" }), 100); }} dm={dm} />
             </div>
           ) : (
-            <div style={{ display: "flex", flexDirection: "column", height: "calc(100vh - 52px)", overflow: "hidden" }}>
+            <div style={{ display: "flex", flexDirection: "column", height: "calc(100dvh - 52px)", width: "100%", maxWidth: "100vw", overflow: "hidden" }}>
               {image ? (
                 <>
-                  <div style={{ height: "42vh", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", position: "relative", borderBottom: `1px solid ${dm ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'}` }}>
+                  <div style={{ height: "42dvh", minWidth: 0, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", padding: "8px 12px 36px", position: "relative", overflow: "hidden", borderBottom: `1px solid ${dm ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'}` }}>
                     <Preview {...{ image: (aiPreviewUrl || beautyPreviewUrl || image), originalImage, dragging, setDragging, loadImage, fileInputRef, imgRef, splitRef, previewRef, activeTab, bgResult, bgMode, showBefore, setShowBefore, showSplit, splitPos, isDragSplit, setIsDragSplit, cssFilter, transformCSS, filters, texts, selText, setSelText, updateText, cropMode, cropBox, setCropBox, cropAspect, isEdited, resetAll, setImage, setBgStatus, setBgSubUrl, setBgResult, isMobile, rotation, flipH, flipV, activeLutData, lutIntensity, lutId, dm, rawLoading, rawProgressMsg, logo, logoScale, logoScalePortrait, logoOpacity, logoPos, logoMargin, logoX, setLogoX, logoY, setLogoY, setLogoPos, filterGroup, chromatic, prism, halation, filmDust, glitter, vhs, lightLeak, heatmap, vibeAudio, hslMixer, curves }} highResImage={image} />
                   </div>
-                  <div className="glass-panel" style={{ flex: 1, overflowY: "auto", WebkitOverflowScrolling: "touch", borderTop: `1px solid ${dm ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'}` }}>
+                  <div className="glass-panel" style={{ flex: 1, minWidth: 0, overflowY: "auto", overflowX: "hidden", WebkitOverflowScrolling: "touch", borderTop: `1px solid ${dm ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'}` }}>
                     {renderPanel(true)}
                   </div>
                 </>
               ) : (
-                <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: "16px", position: "relative", overflow: "hidden" }}>
+                <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", justifyContent: "center", padding: "16px", position: "relative", overflow: "hidden" }}>
                   <Preview {...{ image: (aiPreviewUrl || beautyPreviewUrl || image), originalImage, dragging, setDragging, loadImage, fileInputRef, imgRef, splitRef, previewRef, activeTab, bgResult, bgMode, showBefore, setShowBefore, showSplit, splitPos, isDragSplit, setIsDragSplit, cssFilter, transformCSS, filters, texts, selText, setSelText, updateText, cropMode, cropBox, setCropBox, cropAspect, isEdited, resetAll, setImage, setBgStatus, setBgSubUrl, setBgResult, isMobile, rotation, flipH, flipV, activeLutData, lutIntensity, lutId, dm, rawLoading, rawProgressMsg, logo, logoScale, logoScalePortrait, logoOpacity, logoPos, logoMargin, logoX, setLogoX, logoY, setLogoY, setLogoPos, filterGroup, chromatic, prism, halation, filmDust, glitter, vhs, lightLeak, heatmap, vibeAudio, hslMixer, curves }} highResImage={image} />
                 </div>
               )}

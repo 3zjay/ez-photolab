@@ -113,7 +113,7 @@ export function EditPanel({
             </div>
 
             {/* Top Sub-tab Switcher */}
-            <div style={{ display: "flex", gap: "2px", background: dm ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.04)', border: `1px solid ${dm ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'}`, padding: "3px", borderRadius: "10px" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "4px", background: dm ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.04)', border: `1px solid ${dm ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'}`, padding: "4px", borderRadius: "10px" }}>
                 {[
                     { id: "grade", label: "🎛️ Adjust" },
                     { id: "aesthetics", label: "⚡ Aesthetics" },
@@ -126,13 +126,15 @@ export function EditPanel({
                     return (
                         <button key={tab.id} onClick={() => setSubTab(tab.id)}
                             style={{
-                                flex: 1, padding: "8px 2px", fontSize: "11px", fontWeight: 700, border: "none", cursor: "pointer", fontFamily: "inherit",
+                                width: "100%", minWidth: 0, padding: "8px 4px", fontSize: "11px", fontWeight: 700, border: "none", cursor: "pointer", fontFamily: "inherit",
                                 background: active ? (dm ? '#333' : '#fff') : 'transparent',
                                 color: active ? "#6c63ff" : dm ? "#a1a1aa" : "#666677",
                                 borderRadius: "8px",
                                 boxShadow: active ? "0 2px 6px rgba(0,0,0,.08)" : "none",
                                 transition: "all .18s",
-                                whiteSpace: "nowrap"
+                                whiteSpace: "nowrap",
+                                overflow: "hidden",
+                                textOverflow: "ellipsis"
                             }}>
                             {tab.label}
                         </button>
@@ -320,17 +322,28 @@ export function EditPanel({
 
                         {/* Filter Presets Grid */}
                         {styleType === 'preset' && (
-                            <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", paddingBottom: "12px" }}>
-                                {PRESETS.map(p => (
-                                    <button key={p.name} onClick={() => {
-                                        setFilters({ ...DEFAULT_FILTERS, ...p.values });
-                                        setLutId('none');
-                                    }}
-                                        style={{ flexShrink: 0, padding: "8px 12px", border: `1.5px solid ${cardBdr}`, background: dm ? '#2a2a2a' : '#fff', borderRadius: "10px", textAlign: "center", cursor: "pointer", transition: "all .18s", fontFamily: "inherit", minWidth: "70px" }}>
-                                        <div style={{ fontSize: "18px", marginBottom: "2px" }}>{p.icon}</div>
-                                        <div style={{ fontSize: "10px", fontWeight: 600, color: dm ? '#aaa' : '#666' }}>{p.name}</div>
-                                    </button>
-                                ))}
+                            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "8px", paddingBottom: "12px" }}>
+                                {PRESETS.map(p => {
+                                    const active = lutId === 'none' && Object.keys(p.values).every(k => filters[k] === p.values[k]);
+                                    return (
+                                        <button key={p.name} onClick={() => {
+                                            setFilters({ ...DEFAULT_FILTERS, ...p.values });
+                                            setLutId('none');
+                                        }}
+                                            style={{
+                                                width: "100%", minWidth: 0, padding: "10px 6px",
+                                                border: `1.5px solid ${active ? '#6c63ff' : cardBdr}`,
+                                                background: active ? (dm ? '#1e1a3a' : '#faf9ff') : (dm ? '#2a2a2a' : '#fff'),
+                                                borderRadius: "10px", textAlign: "center", cursor: "pointer",
+                                                transition: "all .18s", fontFamily: "inherit",
+                                                display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "3px",
+                                                boxShadow: active ? "0 0 12px rgba(108,99,255,.2)" : "none"
+                                            }}>
+                                            <div style={{ fontSize: "18px", lineHeight: 1.1 }}>{p.icon}</div>
+                                            <div style={{ fontSize: "10px", fontWeight: 700, color: active ? '#6c63ff' : (dm ? '#aaa' : '#666'), lineHeight: 1.2, wordBreak: "break-word" }}>{p.name}</div>
+                                        </button>
+                                    );
+                                })}
                             </div>
                         )}
 
@@ -338,14 +351,14 @@ export function EditPanel({
                         {styleType === 'lut' && (
                             <div style={{ display: "flex", flexDirection: "column", gap: "12px", paddingBottom: "12px" }}>
                                 <div style={{ padding: "14px", background: cardBg, border: `1.5px solid ${cardBdr}`, borderRadius: "12px", display: "flex", flexDirection: "column", gap: "12px" }}>
-                                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                                        <SL>Color Lookup (LUT)</SL>
-                                        <span style={{ fontSize: "10px", fontWeight: 700, padding: "2px 8px", background: "#f0fff4", color: "#16a34a", borderRadius: "20px", border: "1px solid #86efac", marginBottom: "8px" }}>FREE • In-Browser</span>
+                                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px", flexWrap: "wrap" }}>
+                                        <SL style={{ marginBottom: 0 }}>Color Lookup (LUT)</SL>
+                                        <span style={{ fontSize: "10px", fontWeight: 700, padding: "2px 8px", background: "#f0fff4", color: "#16a34a", borderRadius: "20px", border: "1px solid #86efac" }}>FREE • In-Browser</span>
                                     </div>
                                     <p style={{ fontSize: "11px", color: "#aaa", lineHeight: 1.5, margin: 0 }}>Apply professional film simulations and cinematic color grades. Select a built-in look or upload your own .cube file.</p>
 
                                     {/* Tab/Pack Selector */}
-                                    <div style={{ display: "flex", gap: "4px", background: dm ? '#2a2a2a' : '#f2f2f8', padding: "3px", borderRadius: "8px", alignSelf: "flex-start", flexWrap: "wrap" }}>
+                                    <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "4px", background: dm ? '#2a2a2a' : '#f2f2f8', padding: "4px", borderRadius: "8px", width: "100%" }}>
                                         {[
                                             { id: "all", label: "⚡ All" },
                                             { id: "arena", label: "🏟️ Arena" },
@@ -358,12 +371,15 @@ export function EditPanel({
                                             return (
                                                 <button key={tab.id} onClick={() => setLutTab(tab.id)}
                                                     style={{
-                                                        padding: "5px 10px", fontSize: "11px", fontWeight: 600, border: "none", cursor: "pointer", fontFamily: "inherit",
+                                                        width: "100%", minWidth: 0, padding: "6px 4px", fontSize: "11px", fontWeight: 600, border: "none", cursor: "pointer", fontFamily: "inherit",
                                                         background: active ? (dm ? '#444' : '#fff') : 'transparent',
                                                         color: active ? "#6c63ff" : dm ? "#ccc" : "#666",
                                                         borderRadius: "6px",
                                                         boxShadow: active ? "0 1px 3px rgba(0,0,0,.1)" : "none",
-                                                        transition: "all .15s"
+                                                        transition: "all .15s",
+                                                        whiteSpace: "nowrap",
+                                                        overflow: "hidden",
+                                                        textOverflow: "ellipsis"
                                                     }}>
                                                     {tab.label}
                                                 </button>
@@ -372,7 +388,7 @@ export function EditPanel({
                                     </div>
 
                                     {lutTab !== 'all' && (
-                                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "2px", width: "100%" }}>
+                                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "2px", width: "100%", flexWrap: "wrap", gap: "6px" }}>
                                             <span style={{ fontSize: "11px", color: dm ? "#aaa" : "#555", fontWeight: 600 }}>
                                                 {lutTab === 'arena' && "🏟️ Arena Pack (6 LUTs)"}
                                                 {lutTab === 'action' && "🏈 Action Pack (6 LUTs)"}
@@ -390,7 +406,7 @@ export function EditPanel({
                                         </div>
                                     )}
 
-                                    <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                                    <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "8px" }}>
                                         {LUT_PRESETS.filter(p => {
                                             if (p.id === 'none') return true;
                                             if (lutTab === 'all') return true;
@@ -403,31 +419,33 @@ export function EditPanel({
                                                     setFilters(DEFAULT_FILTERS);
                                                 }}
                                                     style={{
-                                                        flexShrink: 0, padding: "10px 12px", minWidth: "78px",
+                                                        width: "100%", minWidth: 0, minHeight: "64px", padding: "8px 6px",
                                                         border: `1.5px solid ${active ? '#6c63ff' : cardBdr}`,
                                                         background: active ? (dm ? '#1e1a3a' : '#faf9ff') : dm ? '#252525' : '#fff',
                                                         borderRadius: "10px", textAlign: "center", cursor: "pointer",
                                                         transition: "all .18s", fontFamily: "inherit",
+                                                        display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "4px",
                                                         boxShadow: active ? "0 0 12px rgba(108,99,255,.2)" : "none"
                                                     }}>
-                                                    <div style={{ fontSize: "20px", marginBottom: "3px" }}>{p.icon}</div>
-                                                    <div style={{ fontSize: "10px", fontWeight: 700, color: active ? '#6c63ff' : dm ? '#aaa' : '#666' }}>{p.name}</div>
+                                                    <div style={{ fontSize: "18px", lineHeight: 1.1 }}>{p.icon}</div>
+                                                    <div style={{ fontSize: "10px", fontWeight: 700, color: active ? '#6c63ff' : dm ? '#aaa' : '#666', lineHeight: 1.2, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", wordBreak: "break-word" }}>{p.name}</div>
                                                 </button>
                                             );
                                         })}
                                         <button
                                             onClick={() => document.getElementById('cube-upload-input')?.click()}
                                             style={{
-                                                flexShrink: 0, padding: "10px 12px", minWidth: "78px",
+                                                width: "100%", minWidth: 0, minHeight: "64px", padding: "8px 6px",
                                                 border: `1.5px dashed ${lutId === 'custom' ? '#6c63ff' : cardBdr}`,
                                                 background: lutId === 'custom' ? (dm ? '#1e1a3a' : '#faf9ff') : dm ? '#252525' : '#fff',
                                                 borderRadius: "10px", textAlign: "center", cursor: "pointer",
                                                 transition: "all .18s", fontFamily: "inherit",
+                                                display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "4px",
                                                 boxShadow: lutId === 'custom' ? "0 0 12px rgba(108,99,255,.2)" : "none"
                                             }}>
-                                            <div style={{ fontSize: "20px", marginBottom: "3px" }}>📂</div>
-                                            <div style={{ fontSize: "10px", fontWeight: 700, color: lutId === 'custom' ? '#6c63ff' : dm ? '#aaa' : '#666' }}>
-                                                {customLutName ? customLutName.slice(0, 10) : 'Upload .cube'}
+                                            <div style={{ fontSize: "18px", lineHeight: 1.1 }}>📂</div>
+                                            <div style={{ fontSize: "10px", fontWeight: 700, color: lutId === 'custom' ? '#6c63ff' : dm ? '#aaa' : '#666', lineHeight: 1.2, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", wordBreak: "break-word" }}>
+                                                {customLutName ? customLutName.slice(0, 12) : 'Upload .cube'}
                                             </div>
                                         </button>
                                         <input id="cube-upload-input" type="file" accept=".cube" style={{ display: "none" }} onChange={handleCubeUpload} />
@@ -460,7 +478,7 @@ export function EditPanel({
                                                 flexDirection: "column",
                                                 gap: "6px"
                                             }}>
-                                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
                                                     <span style={{ fontSize: "12px", fontWeight: 800, color: dm ? "#f3f4f6" : "#1f2937", display: "flex", alignItems: "center", gap: "6px" }}>
                                                         <span>{activePreset.icon}</span>
                                                         <span>{activePreset.name}</span>
@@ -484,7 +502,7 @@ export function EditPanel({
                                                 <p style={{ fontSize: "11px", color: dm ? "#bbb" : "#4b5563", margin: 0, lineHeight: 1.4 }}>
                                                     {activePreset.description}
                                                 </p>
-                                                <div style={{ display: "flex", alignItems: "center", gap: "4px", marginTop: "2px" }}>
+                                                <div style={{ display: "flex", alignItems: "center", gap: "4px", marginTop: "2px", flexWrap: "wrap" }}>
                                                     <span style={{ fontSize: "10px", fontWeight: 700, color: "#6c63ff" }}>Best for:</span>
                                                     <span style={{ fontSize: "10px", color: dm ? "#999" : "#666", fontWeight: 600 }}>{activePreset.bestFor}</span>
                                                 </div>
@@ -536,7 +554,7 @@ export function EditPanel({
 
                     <div>
                         {/* Sliders Group Switcher */}
-                        <div style={{ display: "flex", flexWrap: "wrap", gap: "4px", marginBottom: "14px", background: dm ? '#2a2a2a' : '#f2f2f8', padding: "4px", borderRadius: "10px" }}>
+                        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "4px", marginBottom: "14px", background: dm ? '#2a2a2a' : '#f2f2f8', padding: "4px", borderRadius: "10px" }}>
                             {[
                                 { key: "basic", label: "☀️ Light" },
                                 { key: "hsl", label: "🎨 Color" },
@@ -546,7 +564,7 @@ export function EditPanel({
                                 { key: "style", label: "🌌 Vignette" }
                             ].map(g => (
                                 <button key={g.key} onClick={() => setFilterGroup(g.key)}
-                                    style={{ flex: "1 1 auto", padding: "6px 8px", fontSize: "11px", fontWeight: filterGroup === g.key ? 700 : 500, border: "none", cursor: "pointer", fontFamily: "inherit", background: filterGroup === g.key ? (dm ? '#444' : '#fff') : 'transparent', color: filterGroup === g.key ? "#6c63ff" : (dm ? "#aaa" : "#666"), borderRadius: "8px", boxShadow: filterGroup === g.key ? "0 1px 4px rgba(0,0,0,.08)" : "none", transition: "all .18s", whiteSpace: "nowrap" }}>
+                                    style={{ width: "100%", minWidth: 0, padding: "7px 4px", fontSize: "11px", fontWeight: filterGroup === g.key ? 700 : 500, border: "none", cursor: "pointer", fontFamily: "inherit", background: filterGroup === g.key ? (dm ? '#444' : '#fff') : 'transparent', color: filterGroup === g.key ? "#6c63ff" : (dm ? "#aaa" : "#666"), borderRadius: "8px", boxShadow: filterGroup === g.key ? "0 1px 4px rgba(0,0,0,.08)" : "none", transition: "all .18s", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                                     {g.label}
                                 </button>
                             ))}

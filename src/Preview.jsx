@@ -6,7 +6,7 @@ import { RAW_EXTENSIONS } from "./rawProcessor";
 import { ModernImageUploadIcon } from "./components/ui/common";
 
 export function Preview({ image, originalImage, dragging, setDragging, loadImage, fileInputRef, imgRef, splitRef, activeTab, bgResult, bgMode, showBefore, setShowBefore, showSplit, splitPos, isDragSplit, setIsDragSplit, cssFilter, transformCSS, filters, texts, selText, setSelText, updateText, cropMode, cropBox, setCropBox, cropAspect, isEdited, resetAll, setImage, setBgStatus, setBgSubUrl, setBgResult, isMobile, rotation, flipH, flipV, activeLutData, lutIntensity, lutId, dm, rawLoading, rawProgressMsg, logo, logoScale, logoScalePortrait, logoOpacity, logoPos, logoMargin, logoX, setLogoX, logoY, setLogoY, setLogoPos, filterGroup, highResImage, chromatic, prism, halation, filmDust, glitter, vhs, lightLeak, heatmap, vibeAudio, hslMixer, curves }) {
-  const maxH = isMobile ? "40vh" : "calc(100vh - 120px)";
+  const maxH = isMobile ? "calc(42dvh - 56px)" : "calc(100dvh - 140px)";
   const activeLut = (lutId && lutId !== 'none') ? (lutId === 'custom'
       ? { name: 'Custom LUT', description: 'User-uploaded custom 3D LUT curve configuration.', bestFor: 'Custom grading workflows', tier: 'premium', icon: '📂' }
       : LUT_PRESETS.find(p => p.id === lutId)) : null;
@@ -279,74 +279,35 @@ export function Preview({ image, originalImage, dragging, setDragging, loadImage
 
   return (
     <>
-      {activeTab === "edit" && (activeLut || activePreset) && (
+      {activeTab === "edit" && !effectiveShowBefore && (activeLut || activePreset) && (
         <div className="glass-panel" style={{
           position: "absolute",
           top: "12px",
           left: "12px",
           zIndex: 30,
-          maxWidth: isMobile ? "180px" : "280px",
-          background: dm ? "rgba(30, 30, 40, 0.75)" : "rgba(255, 255, 255, 0.85)",
+          maxWidth: isMobile ? "155px" : "240px",
+          background: dm ? "rgba(20, 24, 35, 0.85)" : "rgba(255, 255, 255, 0.9)",
           backdropFilter: "blur(16px)",
           WebkitBackdropFilter: "blur(16px)",
-          border: `1px solid ${dm ? "rgba(255, 255, 255, 0.08)" : "rgba(108, 99, 255, 0.15)"}`,
-          borderRadius: "12px",
-          padding: "10px 12px",
-          boxShadow: "0 8px 32px rgba(0, 0, 0, 0.25)",
+          border: `1px solid ${dm ? "rgba(255, 255, 255, 0.1)" : "rgba(108, 99, 255, 0.2)"}`,
+          borderRadius: "20px",
+          padding: "5px 11px",
+          boxShadow: "0 4px 16px rgba(0, 0, 0, 0.2)",
           display: "flex",
-          flexDirection: "column",
-          gap: "4px",
+          alignItems: "center",
+          gap: "6px",
           pointerEvents: "none",
           animation: "fadeIn 0.2s ease"
         }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
-            <span style={{ fontSize: "12px", fontWeight: 800, color: dm ? "#f3f4f6" : "#1f2937", display: "flex", alignItems: "center", gap: "6px" }}>
-              <span>{activeLut ? activeLut.icon : (activePreset?.icon || "🎨")}</span>
-              <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: "90px" }}>
-                {activeLut ? activeLut.name : activePreset?.name}
-              </span>
+          <span style={{ fontSize: "13px", lineHeight: 1 }}>{activeLut ? activeLut.icon : (activePreset?.icon || "🎨")}</span>
+          <span style={{ fontSize: "11px", fontWeight: 700, color: dm ? "#f3f4f6" : "#1f2937", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+            {activeLut ? activeLut.name : activePreset?.name}
+          </span>
+          {activeLut && (
+            <span style={{ fontSize: "10px", fontWeight: 800, color: "#a78bfa", flexShrink: 0 }}>
+              {Math.round(lutIntensity * 100)}%
             </span>
-            {activeLut?.tier === 'premium' && (
-              <span style={{
-                fontSize: "8px",
-                fontWeight: 800,
-                padding: "2px 5px",
-                background: "linear-gradient(135deg, #06b6d4 0%, #6c63ff 100%)",
-                color: "#fff",
-                borderRadius: "5px",
-                textTransform: "uppercase",
-                letterSpacing: "0.05em",
-                boxShadow: "0 2px 5px rgba(108,99,255,0.25)",
-                whiteSpace: "nowrap"
-              }}>
-                💎 Premium Look
-              </span>
-            )}
-            {!activeLut && activePreset && (
-              <span style={{
-                fontSize: "8px",
-                fontWeight: 800,
-                padding: "2px 5px",
-                background: dm ? "#3b3b4f" : "#e8e8f8",
-                color: dm ? "#a78bfa" : "#6c63ff",
-                borderRadius: "5px",
-                textTransform: "uppercase",
-                letterSpacing: "0.05em",
-                whiteSpace: "nowrap"
-              }}>
-                Preset
-              </span>
-            )}
-          </div>
-          <p style={{ fontSize: "10px", color: dm ? "#ccc" : "#4b5563", margin: 0, lineHeight: 1.3, display: isMobile ? "none" : "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
-            {activeLut ? activeLut.description : `Preset color values applied: ${Object.keys(activePreset.values).join(', ')}`}
-          </p>
-          <div style={{ display: isMobile ? "none" : "flex", alignItems: "center", gap: "4px", marginTop: "2px" }}>
-            <span style={{ fontSize: "9px", fontWeight: 700, color: "#6c63ff" }}>Best for:</span>
-            <span style={{ fontSize: "9px", color: dm ? "#aaa" : "#666", fontWeight: 600 }}>
-              {activeLut ? activeLut.bestFor : "Unified tone styles"}
-            </span>
-          </div>
+          )}
         </div>
       )}
 
@@ -367,9 +328,9 @@ export function Preview({ image, originalImage, dragging, setDragging, loadImage
           boxShadow: "0 8px 24px rgba(0,0,0,0.2)"
         }}>
           {[
-            { id: "after", label: "✨ After" },
-            { id: "before", label: "📷 Before" },
-            { id: "split", label: "↔️ Split" }
+            { id: "after", label: isMobile ? "✨" : "✨ After", title: "After" },
+            { id: "before", label: isMobile ? "📷" : "📷 Before", title: "Before" },
+            { id: "split", label: isMobile ? "↔️" : "↔️ Split", title: "Split" }
           ].map(btn => {
             const isActive = (btn.id === "before" && effectiveShowBefore) ||
                              (btn.id === "split" && effectiveShowSplit) ||
@@ -377,6 +338,7 @@ export function Preview({ image, originalImage, dragging, setDragging, loadImage
             return (
               <button
                 key={btn.id}
+                title={btn.title}
                 onClick={() => {
                   if (btn.id === "before") {
                     setViewMode("before");
@@ -390,7 +352,7 @@ export function Preview({ image, originalImage, dragging, setDragging, loadImage
                   }
                 }}
                 style={{
-                  padding: "5px 11px",
+                  padding: isMobile ? "5px 9px" : "5px 11px",
                   fontSize: "11px",
                   fontWeight: isActive ? 700 : 500,
                   border: "none",
@@ -413,7 +375,7 @@ export function Preview({ image, originalImage, dragging, setDragging, loadImage
 
       {effectiveShowBefore && (
         <div style={{ position: "absolute", top: "12px", left: "12px", zIndex: 30, padding: "5px 12px", background: "rgba(239, 68, 68, 0.9)", backdropFilter: "blur(8px)", borderRadius: "20px", fontSize: "11px", fontWeight: 800, color: "#fff", letterSpacing: "0.5px", boxShadow: "0 4px 14px rgba(239,68,68,0.35)" }}>
-          📷 ORIGINAL UNTOUCHED
+          {isMobile ? "📷 ORIGINAL" : "📷 ORIGINAL UNTOUCHED"}
         </div>
       )}
 
@@ -430,6 +392,10 @@ export function Preview({ image, originalImage, dragging, setDragging, loadImage
           position: "relative",
           maxWidth: "100%",
           maxHeight: maxH,
+          minWidth: 0,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
           lineHeight: 0,
           borderRadius: "14px",
           overflow: "hidden",
@@ -441,19 +407,19 @@ export function Preview({ image, originalImage, dragging, setDragging, loadImage
         {activeTab === "tools" && bgResult ? (
           <>
             {bgMode === "transparent" && <div className="checker" style={{ position: "absolute", inset: 0 }} />}
-            <img src={bgResult} alt="result" style={{ maxWidth: "100%", maxHeight: maxH, width: "auto", height: "auto", display: "block", position: "relative" }} />
+            <img src={bgResult} alt="result" style={{ maxWidth: "100%", maxHeight: maxH, width: "auto", height: "auto", objectFit: "contain", display: "block", position: "relative" }} />
           </>
         ) : effectiveShowSplit ? (
           <>
-            <div style={{ position: "relative", lineHeight: 0 }}>
+            <div style={{ position: "relative", lineHeight: 0, maxWidth: "100%", maxHeight: maxH }}>
               <img ref={imgRef} src={image} alt="after"
-                style={{ maxWidth: "100%", maxHeight: maxH, width: "auto", height: "auto", display: "block", filter: isCanvasNeeded ? 'none' : cssFilter, transform: transformCSS, visibility: isCanvasNeeded ? 'hidden' : 'visible' }} />
+                style={{ maxWidth: "100%", maxHeight: maxH, width: "auto", height: "auto", objectFit: "contain", display: "block", filter: isCanvasNeeded ? 'none' : cssFilter, transform: transformCSS, visibility: isCanvasNeeded ? 'hidden' : 'visible' }} />
               <canvas ref={lutCanvasRef} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none", display: isCanvasNeeded ? 'block' : 'none', transform: transformCSS }} />
             </div>
             {filters.temperature !== 0 && <div style={{ position: "absolute", inset: 0, background: tempColor, mixBlendMode: "overlay", pointerEvents: "none", clipPath: `inset(0 ${100 - splitPos}% 0 0)` }} />}
             {filters.vignette > 0 && <div style={{ position: "absolute", inset: 0, background: `radial-gradient(ellipse at center,transparent 38%,rgba(0,0,0,${filters.vignette / 100}) 100%)`, pointerEvents: "none", clipPath: `inset(0 ${100 - splitPos}% 0 0)` }} />}
             <div style={{ position: "absolute", inset: 0, clipPath: `inset(0 0 0 ${splitPos}%)` }}>
-              <img src={originalImage || image} alt="before" style={{ maxWidth: "100%", maxHeight: maxH, width: "auto", height: "auto", display: "block", filter: "none", transform: "none" }} />
+              <img src={originalImage || image} alt="before" style={{ maxWidth: "100%", maxHeight: maxH, width: "auto", height: "auto", objectFit: "contain", display: "block", filter: "none", transform: "none" }} />
             </div>
             <div onMouseDown={e => { e.preventDefault(); e.stopPropagation(); setIsDragSplit(true); }} onTouchStart={e => { e.preventDefault(); e.stopPropagation(); setIsDragSplit(true); }}
               style={{ position: "absolute", top: 0, bottom: 0, left: `${splitPos}%`, transform: "translateX(-50%)", width: "44px", zIndex: 20, display: "flex", alignItems: "center", justifyContent: "center", cursor: isDragSplit ? "grabbing" : "ew-resize" }}>
@@ -469,9 +435,9 @@ export function Preview({ image, originalImage, dragging, setDragging, loadImage
           </>
         ) : (
           <>
-            <div ref={containerRef} style={{ position: "relative", lineHeight: 0 }}>
+            <div ref={containerRef} style={{ position: "relative", lineHeight: 0, maxWidth: "100%", maxHeight: maxH }}>
               <img ref={imgRef} src={effectiveShowBefore ? (originalImage || image) : image} alt="photo"
-                style={{ maxWidth: "100%", maxHeight: maxH, width: "auto", height: "auto", display: "block", filter: effectiveShowBefore || activeTab === "tools" ? "none" : (isCanvasNeeded ? 'none' : cssFilter), transition: "filter .08s ease", transform: effectiveShowBefore ? "none" : transformCSS, visibility: isCanvasNeeded && !effectiveShowBefore ? 'hidden' : 'visible' }} />
+                style={{ maxWidth: "100%", maxHeight: maxH, width: "auto", height: "auto", objectFit: "contain", display: "block", filter: effectiveShowBefore || activeTab === "tools" ? "none" : (isCanvasNeeded ? 'none' : cssFilter), transition: "filter .08s ease", transform: effectiveShowBefore ? "none" : transformCSS, visibility: isCanvasNeeded && !effectiveShowBefore ? 'hidden' : 'visible' }} />
               {/* LUT, HSL, and Curves Preview Canvas */}
               <canvas ref={lutCanvasRef} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none", display: isCanvasNeeded && !effectiveShowBefore ? 'block' : 'none', transform: effectiveShowBefore ? "none" : transformCSS }} />
               {!effectiveShowBefore && activeTab === "edit" && filters.temperature !== 0 && <div style={{ position: "absolute", inset: 0, background: tempColor, mixBlendMode: "overlay", pointerEvents: "none" }} />}
@@ -554,7 +520,7 @@ export function Preview({ image, originalImage, dragging, setDragging, loadImage
           </>
         )}
       </div>
-      {image && dimensions.w > 0 && !showSplit && !cropMode && (
+      {!isMobile && image && dimensions.w > 0 && !showSplit && !cropMode && (
         <div style={{
           position: "absolute",
           bottom: "12px",
@@ -593,14 +559,14 @@ export function Preview({ image, originalImage, dragging, setDragging, loadImage
         </div>
       )}
 
-      <div style={{ position: "absolute", bottom: "12px", left: "50%", transform: "translateX(-50%)", display: "flex", gap: "8px", zIndex: 30 }}>
+      <div style={{ position: "absolute", bottom: isMobile ? "8px" : "12px", left: "50%", transform: "translateX(-50%)", display: "flex", gap: "8px", zIndex: 30, whiteSpace: "nowrap" }}>
         <button onClick={() => { setImage(null); setBgStatus("idle"); setBgSubUrl(null); setBgResult(null); }}
-          style={{ background: dm ? "#1e2230" : "#fff", color: dm ? "#cbd5e1" : "#555", padding: "6px 14px", border: dm ? "1.5px solid #3f445a" : "1.5px solid #e2e8f0", borderRadius: "8px", fontSize: "12px", fontWeight: 600, cursor: "pointer", boxShadow: "0 2px 8px rgba(0,0,0,.12)" }}>
+          style={{ background: dm ? "#1e2230" : "#fff", color: dm ? "#cbd5e1" : "#555", padding: isMobile ? "5px 11px" : "6px 14px", border: dm ? "1.5px solid #3f445a" : "1.5px solid #e2e8f0", borderRadius: "8px", fontSize: isMobile ? "11px" : "12px", fontWeight: 600, cursor: "pointer", boxShadow: "0 2px 8px rgba(0,0,0,.12)" }}>
           ← New Photo
         </button>
         {isEdited && resetAll && (
           <button onClick={resetAll}
-            style={{ background: "rgba(239, 68, 68, 0.95)", color: "#ffffff", padding: "6px 14px", border: "none", borderRadius: "8px", fontSize: "12px", fontWeight: 700, cursor: "pointer", boxShadow: "0 2px 10px rgba(239, 68, 68, 0.35)", display: "flex", alignItems: "center", gap: "5px" }}>
+            style={{ background: "rgba(239, 68, 68, 0.95)", color: "#ffffff", padding: isMobile ? "5px 11px" : "6px 14px", border: "none", borderRadius: "8px", fontSize: isMobile ? "11px" : "12px", fontWeight: 700, cursor: "pointer", boxShadow: "0 2px 10px rgba(239, 68, 68, 0.35)", display: "flex", alignItems: "center", gap: "5px" }}>
             <span>🔄</span> Reset Edits
           </button>
         )}
