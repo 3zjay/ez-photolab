@@ -253,7 +253,7 @@ export default function App() {
   const [bgResult, setBgResult] = useState(null);
 
   // Photoroom AI Studio Scene, Shadow, Outline & Subject Placement State
-  const [bgScene, setBgScene] = useState("minimal_podium");
+  const [bgScene, setBgScene] = useState("podium_light");
   const [bgCustomUrl, setBgCustomUrl] = useState(null);
   const [bgShadowType, setBgShadowType] = useState("contact");
   const [bgShadowOpacity, setBgShadowOpacity] = useState(55);
@@ -267,6 +267,7 @@ export default function App() {
   const [bgSubjectY, setBgSubjectY] = useState(0);
   const [eraseMode, setEraseMode] = useState(false);
   const [eraseHistory, setEraseHistory] = useState([]);
+  const [maskVersion, setMaskVersion] = useState(0);
 
   // Single Editor Logo / Watermark State
   const [logo, setLogo] = useState(null);
@@ -553,7 +554,9 @@ export default function App() {
   const [aiBeautyUseMask, setAiBeautyUseMask] = useState(true);
   const [beautyPreviewUrl, setBeautyPreviewUrl] = useState(null);
   const lowResCanvasRef = useRef(null);
+  const lowResSourceRef = useRef(null);
   const skinMaskRef = useRef(null);
+  const skinMaskCheckedRef = useRef(false);
 
   // PhotoLab AI Studio states
   const [accentAi, setAccentAi] = useState(0);
@@ -561,6 +564,7 @@ export default function App() {
   
   const [structureAi, setStructureAi] = useState(0);
   const faceOvalMaskRef = useRef(null);
+  const faceOvalCheckedRef = useRef(false);
   
   const [skyMode, setSkyMode] = useState('none');
   const [skyOpacity, setSkyOpacity] = useState(100);
@@ -577,6 +581,8 @@ export default function App() {
   const depthMapRef = useRef(null);
   
   const [aiPreviewUrl, setAiPreviewUrl] = useState(null);
+  const preCanvasImageRef = useRef(null);
+  const maskLastPtRef = useRef(null);
 
   // AI Face Restore (fal.ai)
   const [aiFaceRestoreStatus, setAiFaceRestoreStatus] = useState('idle');
@@ -615,21 +621,18 @@ export default function App() {
     document.body.setAttribute('data-dark', darkMode ? 'true' : 'false');
   }, [darkMode]);
 
-  // Clear AI cache and preview when base image changes
+  const activeBaseImage = (bgStatus === "done" && bgResult) ? bgResult : image;
+
+  // Clear AI mask cache and recompute Accent AI offsets when base image changes
   useEffect(() => {
     lowResCanvasRef.current = null;
+    lowResSourceRef.current = null;
     skinMaskRef.current = null;
+    skinMaskCheckedRef.current = false;
     faceOvalMaskRef.current = null;
+    faceOvalCheckedRef.current = false;
     skyMaskRef.current = null;
     depthMapRef.current = null;
-    setBeautyPreviewUrl(null);
-    setAiPreviewUrl(null);
-    setAccentOffsets(null);
-    setAccentAi(0);
-    setStructureAi(0);
-    setSkyMode('none');
-    setRelightNear(0);
-    setRelightFar(0);
     setSkyMaskStatus('idle');
     setSkyMaskLog('');
     setDepthMapStatus('idle');
@@ -646,12 +649,16 @@ export default function App() {
       }).catch(e => {
         console.error("Accent AI image load failed:", e);
       });
+    } else {
+      setAccentOffsets(null);
+      setBeautyPreviewUrl(null);
+      setAiPreviewUrl(null);
     }
   }, [image]);
 
-  // Compute AI preview dynamically when sliders change
+  // Compute AI preview dynamically when sliders or base composite change
   useEffect(() => {
-    if (!image) {
+    if (!activeBaseImage) {
       setBeautyPreviewUrl(null);
       setAiPreviewUrl(null);
       return;
@@ -665,70 +672,81 @@ export default function App() {
       return;
     }
 
+    let cancelled = false;
+
     const updatePreview = async () => {
-      if (!lowResCanvasRef.current) {
-        const srcImg = await loadImageFromSrc(image);
+      if (!lowResCanvasRef.current || lowResSourceRef.current !== activeBaseImage) {
+        const srcImg = await loadImageFromSrc(activeBaseImage);
+        if (cancelled) return;
         const maxDim = 1000;
-        const scale = Math.min(1, maxDim / Math.max(srcImg.naturalWidth, srcImg.naturalHeight));
-        const W = Math.round(srcImg.naturalWidth * scale);
-        const H = Math.round(srcImg.naturalHeight * scale);
+        const scale = Math.min(1, maxDim / Math.max(srcImg.naturalWidth || 1, srcImg.naturalHeight || 1));
+        const W = Math.max(1, Math.round(srcImg.naturalWidth * scale));
+        const H = Math.max(1, Math.round(srcImg.naturalHeight * scale));
 
         const canvas = document.createElement('canvas');
         canvas.width = W; canvas.height = H;
         const ctx = canvas.getContext('2d');
         ctx.drawImage(srcImg, 0, 0, W, H);
         lowResCanvasRef.current = canvas;
-        skinMaskRef.current = null;
-        faceOvalMaskRef.current = null;
-        skyMaskRef.current = null;
-        depthMapRef.current = null;
+        lowResSourceRef.current = activeBaseImage;
       }
 
       const canvas = lowResCanvasRef.current;
       const W = canvas.width, H = canvas.height;
 
-      // 1. Generate masks if active and missing
-      if (aiBeautyUseMask && !skinMaskRef.current && isBeautyActive) {
-        skinMaskRef.current = await createSkinMask(canvas);
+      // 1. Generate fast face/skin masks once per image (wrapped in try/catch)
+      if (aiBeautyUseMask && !skinMaskRef.current && !skinMaskCheckedRef.current && isBeautyActive) {
+        skinMaskCheckedRef.current = true;
+        try {
+          skinMaskRef.current = await createSkinMask(canvas);
+        } catch (e) {
+          console.warn("Skin mask fallback:", e);
+        }
       }
 
-      if (structureAi > 0 && !faceOvalMaskRef.current) {
+      if (structureAi > 0 && !faceOvalMaskRef.current && !faceOvalCheckedRef.current) {
+        faceOvalCheckedRef.current = true;
         try {
           faceOvalMaskRef.current = await createFaceOvalMask(canvas);
         } catch (e) {
-          console.error("Structure AI face mask failed:", e);
+          console.warn("Structure AI face mask fallback:", e);
         }
       }
 
+      // Kick off heavy neural sky/depth segmentation in background without blocking immediate preview render
       if (skyMode !== 'none' && !skyMaskRef.current && skyMaskStatus === 'idle') {
         setSkyMaskStatus('loading');
-        setSkyMaskLog('Detecting sky boundaries...');
-        try {
-          const mask = await segmentSky(canvas, msg => setSkyMaskLog(msg));
-          skyMaskRef.current = mask;
-          setSkyMaskStatus('done');
-          setSkyMaskLog('');
-        } catch (e) {
-          console.error("Sky segmentation failed:", e);
-          setSkyMaskStatus('error');
-          setSkyMaskLog('Sky detection failed: ' + e.message);
-        }
+        setSkyMaskLog('Refining sky mask with AI…');
+        segmentSky(canvas, msg => setSkyMaskLog(msg))
+          .then(mask => {
+            skyMaskRef.current = mask;
+            setSkyMaskStatus('done');
+            setSkyMaskLog('');
+          })
+          .catch(e => {
+            console.warn("Sky segmentation fallback active:", e);
+            setSkyMaskStatus('done');
+            setSkyMaskLog('');
+          });
       }
 
       if ((relightNear !== 0 || relightFar !== 0) && !depthMapRef.current && depthMapStatus === 'idle') {
         setDepthMapStatus('loading');
-        setDepthMapLog('Analyzing depth coordinates...');
-        try {
-          const map = await estimateDepth(canvas, msg => setDepthMapLog(msg));
-          depthMapRef.current = map;
-          setDepthMapStatus('done');
-          setDepthMapLog('');
-        } catch (e) {
-          console.error("Depth estimation failed:", e);
-          setDepthMapStatus('error');
-          setDepthMapLog('Depth estimation failed: ' + e.message);
-        }
+        setDepthMapLog('Refining 3D depth map…');
+        estimateDepth(canvas, msg => setDepthMapLog(msg))
+          .then(map => {
+            depthMapRef.current = map;
+            setDepthMapStatus('done');
+            setDepthMapLog('');
+          })
+          .catch(e => {
+            console.warn("Depth estimation fallback active:", e);
+            setDepthMapStatus('done');
+            setDepthMapLog('');
+          });
       }
+
+      if (cancelled) return;
 
       // 2. Perform pipeline blending on a temp canvas
       const tempCanvas = document.createElement('canvas');
@@ -747,17 +765,19 @@ export default function App() {
         await applyStructureAi(tempCanvas, tempCtx, W, H, structureAi, faceOvalMaskRef.current);
       }
 
-      // C. Run Sky Replacement AI
-      if (skyMode !== 'none' && skyMaskRef.current) {
+      // C. Run Sky Replacement AI (uses neural skyMaskRef if ready, or instant horizon sky fallback)
+      if (skyMode !== 'none') {
         await applySkyReplacement(tempCanvas, tempCtx, W, H, skyMode, skyMaskRef.current, customSkyUrl, skyOpacity / 100, skyLightMatch / 100);
       }
 
-      // D. Run Relight AI
-      if ((relightNear !== 0 || relightFar !== 0) && depthMapRef.current) {
+      // D. Run Relight AI (uses neural depthMapRef if ready, or instant center-foreground depth fallback)
+      if (relightNear !== 0 || relightFar !== 0) {
         applyRelight(tempCanvas, tempCtx, W, H, depthMapRef.current, relightNear, relightFar);
       }
 
-      const previewUrl = tempCanvas.toDataURL('image/jpeg', 0.9);
+      if (cancelled) return;
+
+      const previewUrl = tempCanvas.toDataURL('image/png');
       if (isBeautyActive && !isPhotoLabAiActive) {
         setBeautyPreviewUrl(previewUrl);
         setAiPreviewUrl(null);
@@ -769,11 +789,14 @@ export default function App() {
 
     const timer = setTimeout(() => {
       updatePreview().catch(err => console.error("Error updating AI preview:", err));
-    }, 120);
+    }, 60);
 
-    return () => clearTimeout(timer);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
   }, [
-    image, aiBeautySmooth, aiBeautyClarity, aiBeautyGlow, aiBeautyUseMask,
+    activeBaseImage, aiBeautySmooth, aiBeautyClarity, aiBeautyGlow, aiBeautyUseMask,
     structureAi, skyMode, skyOpacity, skyLightMatch, customSkyUrl,
     relightNear, relightFar, skyMaskStatus, depthMapStatus
   ]);
@@ -880,6 +903,8 @@ export default function App() {
     const isRaw = file.name && file.name.match(RAW_REGEX);
     if (!isImage && !isRaw) return;
 
+    preCanvasImageRef.current = null;
+
     if (isRaw) {
       setRawLoading(true);
       setRawProgressMsg("Initializing RAW parser...");
@@ -923,6 +948,14 @@ export default function App() {
             setBgSubUrl(null);
             setBgResult(null);
             setEraseHistory([]);
+            setAccentAi(0);
+            setStructureAi(0);
+            setSkyMode('none');
+            setRelightNear(0);
+            setRelightFar(0);
+            setAiBeautySmooth(0);
+            setAiBeautyClarity(0);
+            setAiBeautyGlow(0);
             setSplitPos(50);
             setShowBefore(false);
           } else {
@@ -963,6 +996,14 @@ export default function App() {
         setBgSubUrl(null);
         setBgResult(null);
         setEraseHistory([]);
+        setAccentAi(0);
+        setStructureAi(0);
+        setSkyMode('none');
+        setRelightNear(0);
+        setRelightFar(0);
+        setAiBeautySmooth(0);
+        setAiBeautyClarity(0);
+        setAiBeautyGlow(0);
         setSplitPos(50);
         setShowBefore(false);
       };
@@ -971,6 +1012,7 @@ export default function App() {
   };
 
   const resetAll = () => {
+    preCanvasImageRef.current = null;
     setFilters(DEFAULT_FILTERS);
     setHslMixer(DEFAULT_HSL_MIXER);
     setCurves({
@@ -998,6 +1040,9 @@ export default function App() {
     setCustomSkyUrl(null);
     setRelightNear(0);
     setRelightFar(0);
+    setAiBeautySmooth(0);
+    setAiBeautyClarity(0);
+    setAiBeautyGlow(0);
     setSkyMaskStatus('idle');
     setSkyMaskLog('');
     setDepthMapStatus('idle');
@@ -1033,6 +1078,7 @@ export default function App() {
 
   const revertAi = useCallback(() => {
     if (originalImage) {
+      preCanvasImageRef.current = null;
       setImage(originalImage);
       setAiUpscaleResult(null);
       setAiFaceRestoreResult(null);
@@ -1040,45 +1086,52 @@ export default function App() {
   }, [originalImage]);
 
   const applyAiBaseImage = useCallback((url) => {
+    preCanvasImageRef.current = null;
     setImage(url);
   }, []);
 
+  const cropSingleImageUrl = async (url, box, rot, fH, fV) => {
+    const img = await loadImageFromSrc(url);
+    const W = img.naturalWidth, H = img.naturalHeight;
+    const rotCanvas = document.createElement("canvas");
+    rotCanvas.width = W;
+    rotCanvas.height = H;
+    const rCtx = rotCanvas.getContext("2d");
+    rCtx.save();
+    rCtx.translate(W / 2, H / 2);
+    if (rot) rCtx.rotate((rot * Math.PI) / 180);
+    rCtx.scale(fH ? -1 : 1, fV ? -1 : 1);
+    rCtx.drawImage(img, -W / 2, -H / 2, W, H);
+    rCtx.restore();
+
+    const sx = Math.round((box.x / 100) * W);
+    const sy = Math.round((box.y / 100) * H);
+    const sw = Math.max(1, Math.round((box.w / 100) * W));
+    const sh = Math.max(1, Math.round((box.h / 100) * H));
+
+    const c = document.createElement("canvas");
+    c.width = sw;
+    c.height = sh;
+    const ctx = c.getContext("2d");
+    ctx.drawImage(rotCanvas, sx, sy, sw, sh, 0, 0, sw, sh);
+    return c.toDataURL("image/png");
+  };
+
   const applyCrop = async () => {
-    const src = (bgStatus === "done" && bgResult) ? bgResult : image;
-    if (!src) return;
+    if (!image) return;
     try {
-      const img = await loadImageFromSrc(src);
-      const W = img.naturalWidth, H = img.naturalHeight;
-      // First bake any active rotation/flip onto a full-size source canvas
-      const rotCanvas = document.createElement("canvas");
-      rotCanvas.width = W;
-      rotCanvas.height = H;
-      const rCtx = rotCanvas.getContext("2d");
-      rCtx.save();
-      rCtx.translate(W / 2, H / 2);
-      if (rotation) rCtx.rotate((rotation * Math.PI) / 180);
-      rCtx.scale(flipH ? -1 : 1, flipV ? -1 : 1);
-      rCtx.drawImage(img, -W / 2, -H / 2, W, H);
-      rCtx.restore();
-
-      const sx = Math.round((cropBox.x / 100) * W);
-      const sy = Math.round((cropBox.y / 100) * H);
-      const sw = Math.max(1, Math.round((cropBox.w / 100) * W));
-      const sh = Math.max(1, Math.round((cropBox.h / 100) * H));
-
-      const c = document.createElement("canvas");
-      c.width = sw;
-      c.height = sh;
-      const ctx = c.getContext("2d");
-      ctx.drawImage(rotCanvas, sx, sy, sw, sh, 0, 0, sw, sh);
-      const croppedUrl = c.toDataURL("image/png");
-      setImage(croppedUrl);
+      preCanvasImageRef.current = null;
+      const croppedMain = await cropSingleImageUrl(image, cropBox, rotation, flipH, flipV);
+      if (bgStatus === "done" && bgSubUrl) {
+        const croppedSub = await cropSingleImageUrl(bgSubUrl, cropBox, rotation, flipH, flipV);
+        const croppedRes = bgResult ? await cropSingleImageUrl(bgResult, cropBox, rotation, flipH, flipV) : croppedMain;
+        setBgSubUrl(croppedSub);
+        setBgResult(croppedRes);
+      }
+      setImage(croppedMain);
       setRotation(0);
       setFlipH(false);
       setFlipV(false);
-      if (bgStatus === "done") {
-        setBgResult(croppedUrl);
-      }
       setCropMode(false);
       setCropBox({ x: 0, y: 0, w: 100, h: 100 });
     } catch (e) {
@@ -1087,10 +1140,28 @@ export default function App() {
   };
 
   const applyCanvasPreset = async (preset, paddingPct = 8, fillMode = "color", fillColor = "#ffffff") => {
-    const src = (bgStatus === "done" && bgResult) ? bgResult : image;
-    if (!src || !preset?.w || !preset?.h) return;
+    if (!image || !preset) return;
     try {
-      const img = await loadImageFromSrc(src);
+      // Save un-padded snapshot on first Smart Canvas Resize so switching templates/margins is non-destructive
+      if (!preCanvasImageRef.current) {
+        preCanvasImageRef.current = {
+          image,
+          bgStatus,
+          bgSubUrl,
+          bgResult
+        };
+      }
+      const snap = preCanvasImageRef.current;
+      if (preset.id === "original" || !preset.w || !preset.h) {
+        setImage(snap.image);
+        setBgStatus(snap.bgStatus);
+        setBgSubUrl(snap.bgSubUrl);
+        setBgResult(snap.bgResult);
+        return;
+      }
+
+      const baseSrc = (snap.bgStatus === "done" && snap.bgResult) ? snap.bgResult : snap.image;
+      const img = await loadImageFromSrc(baseSrc);
       const targetW = preset.w;
       const targetH = preset.h;
       const c = document.createElement("canvas");
@@ -1125,10 +1196,27 @@ export default function App() {
 
       ctx.drawImage(img, drawX, drawY, drawW, drawH);
       const resizedUrl = c.toDataURL("image/png");
-      setImage(resizedUrl);
-      if (bgStatus === "done") {
+
+      if (snap.bgStatus === "done" && snap.bgSubUrl) {
+        const subImg = await loadImageFromSrc(snap.bgSubUrl);
+        const subCanvas = document.createElement("canvas");
+        subCanvas.width = targetW;
+        subCanvas.height = targetH;
+        const sCtx = subCanvas.getContext("2d");
+        sCtx.imageSmoothingEnabled = true;
+        sCtx.imageSmoothingQuality = "high";
+        sCtx.drawImage(subImg, drawX, drawY, drawW, drawH);
+        const resizedSubUrl = subCanvas.toDataURL("image/png");
+        setBgSubUrl(resizedSubUrl);
         setBgResult(resizedUrl);
+        if (fillMode === "color" && bgMode === "transparent") {
+          setBgMode("color");
+          setBgColor(fillColor || "#ffffff");
+        } else if (fillMode === "transparent" && bgMode === "color") {
+          setBgMode("transparent");
+        }
       }
+      setImage(resizedUrl);
       setCropMode(false);
       setCropBox({ x: 0, y: 0, w: 100, h: 100 });
     } catch (e) {
@@ -2285,6 +2373,8 @@ export default function App() {
       ctx.fillStyle = '#000000';
       ctx.fillRect(0, 0, mc.width, mc.height);
       setAiMaskReady(false);
+      maskLastPtRef.current = null;
+      setMaskVersion(v => v + 1);
     }
     if (clearResult) {
       setAiRemoveResult(null);
@@ -2294,7 +2384,10 @@ export default function App() {
   }, []);
 
   const drawMask = useCallback((e, containerEl) => {
-    if (!maskDrawingRef.current) return;
+    if (!maskDrawingRef.current) {
+      maskLastPtRef.current = null;
+      return;
+    }
     let mc = maskCanvasRef.current;
     const img = imgRef.current;
     if (!mc) return;
@@ -2314,18 +2407,42 @@ export default function App() {
     const clientY = e.touches ? e.touches[0].clientY : e.clientY;
     const x = (clientX - rect.left) * scaleX;
     const y = (clientY - rect.top) * scaleY;
+    const r = Math.max(4, (aiRemoveBrush / 2) * scaleX);
+
     ctx.fillStyle = '#ffffff';
-    ctx.beginPath();
-    ctx.arc(x, y, Math.max(4, (aiRemoveBrush / 2) * scaleX), 0, Math.PI * 2);
-    ctx.fill();
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = r * 2;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+
+    const isStart = e.type === 'mousedown' || e.type === 'touchstart' || !maskLastPtRef.current;
+    if (isStart) {
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.fill();
+    } else {
+      ctx.beginPath();
+      ctx.moveTo(maskLastPtRef.current.x, maskLastPtRef.current.y);
+      ctx.lineTo(x, y);
+      ctx.stroke();
+    }
+    maskLastPtRef.current = { x, y };
     setAiMaskReady(true);
+    setMaskVersion(v => v + 1);
   }, [aiRemoveBrush]);
 
   const handleUndoErase = useCallback(() => {
     setEraseHistory(prev => {
       if (prev.length === 0) return prev;
       const last = prev[prev.length - 1];
-      setImage(last);
+      if (typeof last === 'object' && last !== null) {
+        setImage(last.image);
+        setBgStatus(last.bgStatus || 'idle');
+        setBgSubUrl(last.bgSubUrl || null);
+        setBgResult(last.bgResult || null);
+      } else {
+        setImage(last);
+      }
       return prev.slice(0, -1);
     });
   }, []);
@@ -2388,9 +2505,19 @@ export default function App() {
       const outCanvas = inpaintCanvasLocal(tmpCanvas, mc);
       const resultDataUrl = outCanvas.toDataURL('image/png');
 
-      setEraseHistory(prev => [...prev.slice(-9), image]);
+      preCanvasImageRef.current = null;
+      setEraseHistory(prev => [...prev.slice(-9), { image, bgStatus, bgSubUrl, bgResult }]);
       setImage(resultDataUrl);
-      if (bgStatus === 'done') {
+      if (bgStatus === 'done' && bgSubUrl) {
+        // Also inpaint or erase masked area on cutout subject so buildBgComposite stays in sync
+        const subImg = await loadImageFromSrc(bgSubUrl);
+        const subCanvas = document.createElement('canvas');
+        subCanvas.width = subImg.naturalWidth;
+        subCanvas.height = subImg.naturalHeight;
+        const sCtx = subCanvas.getContext('2d');
+        sCtx.drawImage(subImg, 0, 0);
+        const outSubCanvas = inpaintCanvasLocal(subCanvas, mc);
+        setBgSubUrl(outSubCanvas.toDataURL('image/png'));
         setBgResult(resultDataUrl);
       }
 
@@ -2398,7 +2525,9 @@ export default function App() {
       const mCtx = mc.getContext('2d');
       mCtx.fillStyle = '#000000';
       mCtx.fillRect(0, 0, mc.width, mc.height);
+      maskLastPtRef.current = null;
       setAiMaskReady(false);
+      setMaskVersion(v => v + 1);
       setAiRemoveStatus('done');
       setAiRemoveLog('✓ Object erased! Paint another area or click Undo.');
     } catch (e) {
@@ -2406,7 +2535,7 @@ export default function App() {
       setAiRemoveStatus('error');
       setAiRemoveLog(e?.message || 'Magic Retouch failed.');
     }
-  }, [aiMaskReady, claidApiKey, image, bgStatus, bgResult]);
+  }, [aiMaskReady, claidApiKey, image, bgStatus, bgSubUrl, bgResult]);
 
   const applyUpscalePipeline = async (sourceCanvas, scale, onProgress) => {
     const natW = sourceCanvas.width;
@@ -2504,7 +2633,7 @@ export default function App() {
       {activeTab === "edit" && (
         <EditPanel {...{
           // Color & LUTs / Grading props
-          filters, setFilters, filterGroup, setFilterGroup, hslMixer, setHslMixer, curves, setCurves, isEdited, resetAll, revertAi, dm, cardBdr, cardBg, image, imgRef, runBrowserUpscale, aiUpscaleStatus, aiUpscaleLog, aiUpscaleProgress, aiUpscaleResult, aiUpscaleResultSize, applyAiResult, saveFile, aiScale, setAiScale, aiBeautySmooth, setAiBeautySmooth, aiBeautyClarity, setAiBeautyClarity, aiBeautyGlow, setAiBeautyGlow, aiBeautyUseMask, setAiBeautyUseMask, runFalFaceRestore, aiFaceRestoreStatus, aiFaceRestoreLog, aiFaceRestoreResult, lutId, setLutId, lutIntensity, setLutIntensity, customLutData, setCustomLutData, customLutName, setCustomLutName, user, logo, setLogo, logoFile, setLogoFile, logoScale, setLogoScale, logoScalePortrait, setLogoScalePortrait, logoOpacity, setLogoOpacity, logoPos, setLogoPos, logoMargin, setLogoMargin, handleLogoUpload, logoX, setLogoX, logoY, setLogoY,
+          filters, setFilters, filterGroup, setFilterGroup, hslMixer, setHslMixer, curves, setCurves, isEdited, resetAll, revertAi, dm, cardBdr, cardBg, image: activeBaseImage, imgRef, runBrowserUpscale, aiUpscaleStatus, aiUpscaleLog, aiUpscaleProgress, aiUpscaleResult, aiUpscaleResultSize, applyAiResult, saveFile, aiScale, setAiScale, aiBeautySmooth, setAiBeautySmooth, aiBeautyClarity, setAiBeautyClarity, aiBeautyGlow, setAiBeautyGlow, aiBeautyUseMask, setAiBeautyUseMask, runFalFaceRestore, aiFaceRestoreStatus, aiFaceRestoreLog, aiFaceRestoreResult, lutId, setLutId, lutIntensity, setLutIntensity, customLutData, setCustomLutData, customLutName, setCustomLutName, user, logo, setLogo, logoFile, setLogoFile, logoScale, setLogoScale, logoScalePortrait, setLogoScalePortrait, logoOpacity, setLogoOpacity, logoPos, setLogoPos, logoMargin, setLogoMargin, handleLogoUpload, logoX, setLogoX, logoY, setLogoY,
           
           // Adjust / Crop & Marketplace Resize props
           setRotation, setFlipH, setFlipV, rotation, flipH, flipV, cropMode, setCropMode, cropBox, setCropBox, cropAspect, setCropAspect, applyCrop, applyCanvasPreset,
@@ -2536,7 +2665,7 @@ export default function App() {
   );
 
   const previewProps = {
-    image: (aiPreviewUrl || beautyPreviewUrl || image),
+    image: (aiPreviewUrl || beautyPreviewUrl || activeBaseImage),
     originalImage, dragging, setDragging, loadImage, fileInputRef, imgRef, splitRef, previewRef,
     activeTab, bgResult, bgMode, bgStatus, showBefore, setShowBefore, showSplit, splitPos,
     isDragSplit, setIsDragSplit, cssFilter, transformCSS, filters, texts, selText, setSelText,
@@ -2547,7 +2676,8 @@ export default function App() {
     filterGroup, chromatic, prism, halation, filmDust, glitter, vhs, lightLeak, heatmap, vibeAudio,
     hslMixer, curves,
     eraseMode, aiRemoveBrush, maskCanvasRef, maskDrawingRef, drawMask, aiMaskReady, handleAiRemove, aiRemoveStatus,
-    highResImage: image
+    maskVersion,
+    highResImage: activeBaseImage
   };
 
   return (

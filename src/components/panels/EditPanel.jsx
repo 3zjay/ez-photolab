@@ -64,7 +64,9 @@ export function EditPanel({
         } else if (subTab !== "crop" && cropMode) {
             setCropMode(false);
         }
-        if (subTab !== "ai" && setEraseMode) {
+        if (subTab === "ai" && image && setEraseMode) {
+            setEraseMode(true);
+        } else if (subTab !== "ai" && setEraseMode) {
             setEraseMode(false);
         }
     }, [subTab, image]);
@@ -1010,134 +1012,140 @@ export function EditPanel({
                             </div>
 
                             {/* ── STEP 3: PHOTOROOM AI SHADOWS, OUTLINE & SUBJECT TRANSFORM ── */}
-                            {bgStatus === "done" && (
-                                <div style={{ padding: "14px", background: cardBg, border: `1.5px solid ${cardBdr}`, borderRadius: "12px", display: "flex", flexDirection: "column", gap: "12px", animation: "fadein .25s" }}>
+                            <div style={{ padding: "14px", background: cardBg, border: `1.5px solid ${cardBdr}`, borderRadius: "12px", display: "flex", flexDirection: "column", gap: "12px", animation: "fadein .25s" }}>
+                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                                     <SL style={{ margin: 0 }}>3. AI Shadows, Sticker Outline & Placement</SL>
-
-                                    {/* AI Shadow Preset Selector */}
-                                    <div>
-                                        <span style={{ fontSize: "10.5px", fontWeight: 700, color: "#aaa", textTransform: "uppercase", letterSpacing: ".05em", display: "block", marginBottom: "6px" }}>
-                                            AI Studio Shadow
-                                        </span>
-                                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
-                                            {PHOTOROOM_SHADOWS.map(sh => {
-                                                const active = bgShadowType === sh.id;
-                                                return (
-                                                    <button
-                                                        key={sh.id}
-                                                        onClick={() => setBgShadowType(sh.id)}
-                                                        style={{
-                                                            padding: "8px",
-                                                            borderRadius: "8px",
-                                                            border: `1.5px solid ${active ? "#6c63ff" : cardBdr}`,
-                                                            background: active ? (dm ? "#1e1a3a" : "#faf9ff") : (dm ? "#1e1e1e" : "#fff"),
-                                                            color: active ? "#6c63ff" : (dm ? "#ddd" : "#333"),
-                                                            cursor: "pointer",
-                                                            fontFamily: "inherit",
-                                                            textAlign: "left",
-                                                            display: "flex",
-                                                            flexDirection: "column",
-                                                            gap: "2px"
-                                                        }}
-                                                    >
-                                                        <span style={{ fontSize: "11.5px", fontWeight: 800 }}>{sh.icon} {sh.name}</span>
-                                                        <span style={{ fontSize: "9.5px", color: dm ? "#9ca3af" : "#666" }}>{sh.desc}</span>
-                                                    </button>
-                                                );
-                                            })}
-                                        </div>
-                                    </div>
-
-                                    {bgShadowType !== "none" && (
-                                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", padding: "10px", background: dm ? "#1e1e1e" : "#fff", borderRadius: "10px", border: `1px solid ${cardBdr}` }}>
-                                            <div>
-                                                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "3px" }}>
-                                                    <span style={{ fontSize: "11px", color: dm ? "#ccc" : "#555" }}>Intensity</span>
-                                                    <span style={{ fontSize: "11px", fontWeight: 700, color: "#6c63ff" }}>{bgShadowOpacity}%</span>
-                                                </div>
-                                                <SmoothSlider min={10} max={95} step={5} value={bgShadowOpacity} defaultValue={55} onChange={setBgShadowOpacity} />
-                                            </div>
-                                            <div>
-                                                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "3px" }}>
-                                                    <span style={{ fontSize: "11px", color: dm ? "#ccc" : "#555" }}>Softness</span>
-                                                    <span style={{ fontSize: "11px", fontWeight: 700, color: "#6c63ff" }}>{bgShadowBlur}px</span>
-                                                </div>
-                                                <SmoothSlider min={2} max={60} step={2} value={bgShadowBlur} defaultValue={24} onChange={setBgShadowBlur} />
-                                            </div>
-                                            <div>
-                                                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "3px" }}>
-                                                    <span style={{ fontSize: "11px", color: dm ? "#ccc" : "#555" }}>Light Angle X</span>
-                                                    <span style={{ fontSize: "11px", fontWeight: 700, color: "#6c63ff" }}>{bgShadowX}</span>
-                                                </div>
-                                                <SmoothSlider min={-40} max={40} step={2} value={bgShadowX} defaultValue={0} onChange={setBgShadowX} />
-                                            </div>
-                                            <div>
-                                                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "3px" }}>
-                                                    <span style={{ fontSize: "11px", color: dm ? "#ccc" : "#555" }}>Shadow Drop Y</span>
-                                                    <span style={{ fontSize: "11px", fontWeight: 700, color: "#6c63ff" }}>{bgShadowY}</span>
-                                                </div>
-                                                <SmoothSlider min={-30} max={50} step={2} value={bgShadowY} defaultValue={12} onChange={setBgShadowY} />
-                                            </div>
-                                        </div>
+                                    {bgStatus !== "done" && (
+                                        <span style={{ fontSize: "10px", color: "#a78bfa", fontWeight: 700 }}>Auto-isolates on edit</span>
                                     )}
+                                </div>
 
-                                    {/* Cutout Sticker Outline */}
-                                    <div style={{ display: "grid", gridTemplateColumns: "1fr 72px", gap: "10px", alignItems: "end" }}>
-                                        <div>
-                                            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
-                                                <span style={{ fontSize: "12px", fontWeight: 600, color: dm ? "#ccc" : "#555" }}>🏷️ Cutout Sticker Outline</span>
-                                                <span style={{ fontSize: "12px", fontWeight: 700, color: "#6c63ff" }}>{bgOutlineWidth}px</span>
-                                            </div>
-                                            <SmoothSlider min={0} max={20} step={1} value={bgOutlineWidth} defaultValue={0} onChange={setBgOutlineWidth} />
-                                        </div>
-                                        <input
-                                            type="color"
-                                            value={bgOutlineColor}
-                                            onChange={e => setBgOutlineColor(e.target.value)}
-                                            style={{ width: "100%", height: "32px", border: `1px solid ${cardBdr}`, borderRadius: "8px", cursor: "pointer" }}
-                                            title="Sticker Outline Color"
-                                        />
-                                    </div>
-
-                                    {/* Subject Scale & Offset */}
-                                    <div style={{ borderTop: `1px solid ${cardBdr}`, paddingTop: "10px", display: "flex", flexDirection: "column", gap: "8px" }}>
-                                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                                            <span style={{ fontSize: "11px", fontWeight: 700, color: "#aaa", textTransform: "uppercase", letterSpacing: ".05em" }}>Subject Scale & Position</span>
-                                            {(bgSubjectScale !== 100 || bgSubjectX !== 0 || bgSubjectY !== 0) && (
+                                {/* AI Shadow Preset Selector */}
+                                <div>
+                                    <span style={{ fontSize: "10.5px", fontWeight: 700, color: "#aaa", textTransform: "uppercase", letterSpacing: ".05em", display: "block", marginBottom: "6px" }}>
+                                        AI Studio Shadow
+                                    </span>
+                                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
+                                        {PHOTOROOM_SHADOWS.map(sh => {
+                                            const active = bgShadowType === sh.id;
+                                            return (
                                                 <button
-                                                    onClick={() => { setBgSubjectScale(100); setBgSubjectX(0); setBgSubjectY(0); }}
-                                                    style={{ background: "none", border: "none", color: "#6c63ff", fontSize: "10.5px", fontWeight: 700, cursor: "pointer" }}
+                                                    key={sh.id}
+                                                    onClick={() => {
+                                                        setBgShadowType(sh.id);
+                                                        if (bgStatus !== "done" && bgStatus !== "loading") handleRemoveBg();
+                                                    }}
+                                                    style={{
+                                                        padding: "8px",
+                                                        borderRadius: "8px",
+                                                        border: `1.5px solid ${active ? "#6c63ff" : cardBdr}`,
+                                                        background: active ? (dm ? "#1e1a3a" : "#faf9ff") : (dm ? "#1e1e1e" : "#fff"),
+                                                        color: active ? "#6c63ff" : (dm ? "#ddd" : "#333"),
+                                                        cursor: "pointer",
+                                                        fontFamily: "inherit",
+                                                        textAlign: "left",
+                                                        display: "flex",
+                                                        flexDirection: "column",
+                                                        gap: "2px"
+                                                    }}
                                                 >
-                                                    ↺ Reset Position
+                                                    <span style={{ fontSize: "11.5px", fontWeight: 800 }}>{sh.icon} {sh.name}</span>
+                                                    <span style={{ fontSize: "9.5px", color: dm ? "#9ca3af" : "#666" }}>{sh.desc}</span>
                                                 </button>
-                                            )}
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+
+                                {bgShadowType !== "none" && (
+                                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", padding: "10px", background: dm ? "#1e1e1e" : "#fff", borderRadius: "10px", border: `1px solid ${cardBdr}` }}>
+                                        <div>
+                                            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "3px" }}>
+                                                <span style={{ fontSize: "11px", color: dm ? "#ccc" : "#555" }}>Intensity</span>
+                                                <span style={{ fontSize: "11px", fontWeight: 700, color: "#6c63ff" }}>{bgShadowOpacity}%</span>
+                                            </div>
+                                            <SmoothSlider min={10} max={95} step={5} value={bgShadowOpacity} defaultValue={55} onChange={v => { setBgShadowOpacity(v); if (bgStatus !== "done" && bgStatus !== "loading") handleRemoveBg(); }} />
                                         </div>
                                         <div>
                                             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "3px" }}>
-                                                <span style={{ fontSize: "11.5px", color: dm ? "#ccc" : "#555" }}>Subject Scale</span>
-                                                <span style={{ fontSize: "11.5px", fontWeight: 700, color: "#6c63ff" }}>{bgSubjectScale}%</span>
+                                                <span style={{ fontSize: "11px", color: dm ? "#ccc" : "#555" }}>Softness</span>
+                                                <span style={{ fontSize: "11px", fontWeight: 700, color: "#6c63ff" }}>{bgShadowBlur}px</span>
                                             </div>
-                                            <SmoothSlider min={45} max={135} step={1} value={bgSubjectScale} defaultValue={100} onChange={setBgSubjectScale} />
+                                            <SmoothSlider min={2} max={60} step={2} value={bgShadowBlur} defaultValue={24} onChange={v => { setBgShadowBlur(v); if (bgStatus !== "done" && bgStatus !== "loading") handleRemoveBg(); }} />
                                         </div>
-                                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
-                                            <div>
-                                                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "3px" }}>
-                                                    <span style={{ fontSize: "11.5px", color: dm ? "#ccc" : "#555" }}>Move X</span>
-                                                    <span style={{ fontSize: "11.5px", fontWeight: 700, color: "#6c63ff" }}>{bgSubjectX > 0 ? `+${bgSubjectX}` : bgSubjectX}%</span>
-                                                </div>
-                                                <SmoothSlider min={-40} max={40} step={1} value={bgSubjectX} defaultValue={0} onChange={setBgSubjectX} />
+                                        <div>
+                                            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "3px" }}>
+                                                <span style={{ fontSize: "11px", color: dm ? "#ccc" : "#555" }}>Light Angle X</span>
+                                                <span style={{ fontSize: "11px", fontWeight: 700, color: "#6c63ff" }}>{bgShadowX}</span>
                                             </div>
-                                            <div>
-                                                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "3px" }}>
-                                                    <span style={{ fontSize: "11.5px", color: dm ? "#ccc" : "#555" }}>Move Y</span>
-                                                    <span style={{ fontSize: "11.5px", fontWeight: 700, color: "#6c63ff" }}>{bgSubjectY > 0 ? `+${bgSubjectY}` : bgSubjectY}%</span>
-                                                </div>
-                                                <SmoothSlider min={-40} max={40} step={1} value={bgSubjectY} defaultValue={0} onChange={setBgSubjectY} />
+                                            <SmoothSlider min={-40} max={40} step={2} value={bgShadowX} defaultValue={0} onChange={v => { setBgShadowX(v); if (bgStatus !== "done" && bgStatus !== "loading") handleRemoveBg(); }} />
+                                        </div>
+                                        <div>
+                                            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "3px" }}>
+                                                <span style={{ fontSize: "11px", color: dm ? "#ccc" : "#555" }}>Shadow Drop Y</span>
+                                                <span style={{ fontSize: "11px", fontWeight: 700, color: "#6c63ff" }}>{bgShadowY}</span>
                                             </div>
+                                            <SmoothSlider min={-30} max={50} step={2} value={bgShadowY} defaultValue={12} onChange={v => { setBgShadowY(v); if (bgStatus !== "done" && bgStatus !== "loading") handleRemoveBg(); }} />
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Cutout Sticker Outline */}
+                                <div style={{ display: "grid", gridTemplateColumns: "1fr 72px", gap: "10px", alignItems: "end" }}>
+                                    <div>
+                                        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
+                                            <span style={{ fontSize: "12px", fontWeight: 600, color: dm ? "#ccc" : "#555" }}>🏷️ Cutout Sticker Outline</span>
+                                            <span style={{ fontSize: "12px", fontWeight: 700, color: "#6c63ff" }}>{bgOutlineWidth}px</span>
+                                        </div>
+                                        <SmoothSlider min={0} max={20} step={1} value={bgOutlineWidth} defaultValue={0} onChange={v => { setBgOutlineWidth(v); if (bgStatus !== "done" && bgStatus !== "loading") handleRemoveBg(); }} />
+                                    </div>
+                                    <input
+                                        type="color"
+                                        value={bgOutlineColor}
+                                        onChange={e => { setBgOutlineColor(e.target.value); if (bgStatus !== "done" && bgStatus !== "loading") handleRemoveBg(); }}
+                                        style={{ width: "100%", height: "32px", border: `1px solid ${cardBdr}`, borderRadius: "8px", cursor: "pointer" }}
+                                        title="Sticker Outline Color"
+                                    />
+                                </div>
+
+                                {/* Subject Scale & Offset */}
+                                <div style={{ borderTop: `1px solid ${cardBdr}`, paddingTop: "10px", display: "flex", flexDirection: "column", gap: "8px" }}>
+                                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                        <span style={{ fontSize: "11px", fontWeight: 700, color: "#aaa", textTransform: "uppercase", letterSpacing: ".05em" }}>Subject Scale & Position</span>
+                                        {(bgSubjectScale !== 100 || bgSubjectX !== 0 || bgSubjectY !== 0) && (
+                                            <button
+                                                onClick={() => { setBgSubjectScale(100); setBgSubjectX(0); setBgSubjectY(0); }}
+                                                style={{ background: "none", border: "none", color: "#6c63ff", fontSize: "10.5px", fontWeight: 700, cursor: "pointer" }}
+                                            >
+                                                ↺ Reset Position
+                                            </button>
+                                        )}
+                                    </div>
+                                    <div>
+                                        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "3px" }}>
+                                            <span style={{ fontSize: "11.5px", color: dm ? "#ccc" : "#555" }}>Subject Scale</span>
+                                            <span style={{ fontSize: "11.5px", fontWeight: 700, color: "#6c63ff" }}>{bgSubjectScale}%</span>
+                                        </div>
+                                        <SmoothSlider min={45} max={135} step={1} value={bgSubjectScale} defaultValue={100} onChange={v => { setBgSubjectScale(v); if (bgStatus !== "done" && bgStatus !== "loading") handleRemoveBg(); }} />
+                                    </div>
+                                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+                                        <div>
+                                            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "3px" }}>
+                                                <span style={{ fontSize: "11.5px", color: dm ? "#ccc" : "#555" }}>Move X</span>
+                                                <span style={{ fontSize: "11.5px", fontWeight: 700, color: "#6c63ff" }}>{bgSubjectX > 0 ? `+${bgSubjectX}` : bgSubjectX}%</span>
+                                            </div>
+                                            <SmoothSlider min={-40} max={40} step={1} value={bgSubjectX} defaultValue={0} onChange={v => { setBgSubjectX(v); if (bgStatus !== "done" && bgStatus !== "loading") handleRemoveBg(); }} />
+                                        </div>
+                                        <div>
+                                            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "3px" }}>
+                                                <span style={{ fontSize: "11.5px", color: dm ? "#ccc" : "#555" }}>Move Y</span>
+                                                <span style={{ fontSize: "11.5px", fontWeight: 700, color: "#6c63ff" }}>{bgSubjectY > 0 ? `+${bgSubjectY}` : bgSubjectY}%</span>
+                                            </div>
+                                            <SmoothSlider min={-40} max={40} step={1} value={bgSubjectY} defaultValue={0} onChange={v => { setBgSubjectY(v); if (bgStatus !== "done" && bgStatus !== "loading") handleRemoveBg(); }} />
                                         </div>
                                     </div>
                                 </div>
-                            )}
+                            </div>
 
                             {/* ── STEP 4: NEURAL SCENE LIGHTING, STRUCTURE & SKY AI ── */}
                             <div style={{ padding: "14px", background: cardBg, border: `1.5px solid ${cardBdr}`, borderRadius: "12px", display: "flex", flexDirection: "column", gap: "14px" }}>
@@ -1232,7 +1240,7 @@ export function EditPanel({
                                             <span>{skyMaskLog}</span>
                                         </div>
                                     )}
-                                    {skyMode !== 'none' && skyMaskStatus === 'done' && (
+                                    {skyMode !== 'none' && (
                                         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
                                             <div>
                                                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>

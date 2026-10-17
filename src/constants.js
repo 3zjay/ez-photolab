@@ -394,8 +394,17 @@ export const FB_MODES = [
   { id:"story",     label:"Story/Reel",    desc:"1080 × 1920",  w:1080, h:1920  },
 ];
 
-export const FONTS = ["System","Serif","Mono","Impact","Georgia","Arial Black"];
-export const FONT_MAP = { System:"-apple-system,sans-serif", Serif:"Georgia,serif", Mono:"'Courier New',monospace", Impact:"Impact,sans-serif", Georgia:"Georgia,serif", "Arial Black":"'Arial Black',sans-serif" };
+export const FONTS = ["Montserrat", "Outfit", "System", "Serif", "Mono", "Impact", "Georgia", "Arial Black"];
+export const FONT_MAP = {
+  Montserrat: "'Plus Jakarta Sans', -apple-system, sans-serif",
+  Outfit: "'Outfit', -apple-system, sans-serif",
+  System: "-apple-system, BlinkMacSystemFont, sans-serif",
+  Serif: "Georgia, 'Times New Roman', serif",
+  Mono: "'Courier New', monospace",
+  Impact: "Impact, 'Arial Black', sans-serif",
+  Georgia: "Georgia, serif",
+  "Arial Black": "'Arial Black', Impact, sans-serif"
+};
 export const BG_COLORS = [
   "#ffffff", "#f8fafc", "#f3f4f6", "#faf6f0", "#fef3c7", "#fce7f3",
   "#ede9fe", "#e0f2fe", "#ecfdf5", "#18181b", "#0f172a", "#000000",
@@ -403,14 +412,14 @@ export const BG_COLORS = [
 ];
 
 export const PHOTOROOM_SCENES = [
-  { id: "podium_light", name: "Minimal Studio Podium", icon: "🏛️", desc: "Clean cyclorama studio wall + soft tabletop horizon" },
-  { id: "sunbeam_wall", name: "Sunlight Window", icon: "🌤️", desc: "Warm cream backdrop with diagonal window sunbeams" },
-  { id: "marble_luxury", name: "Luxury Gallery", icon: "🤍", desc: "Bright architectural marble & soft floor reflection" },
-  { id: "wood_table", name: "Oak Tabletop", icon: "🪵", desc: "Warm natural wood table surface + soft studio wall" },
-  { id: "botanical_bokeh", name: "Garden Bokeh", icon: "🌿", desc: "Sunlit organic outdoor greenery depth-of-field" },
-  { id: "golden_sunset", name: "Golden Hour Glow", icon: "🌅", desc: "Warm amber studio horizon & soft rim bloom" },
-  { id: "neon_cyber", name: "Cyber Neon Studio", icon: "⚡", desc: "Dark obsidian floor with cyan & magenta rim lights" },
-  { id: "spotlight_dark", name: "Dramatic Spotlight", icon: "🎭", desc: "Dark studio stage with overhead radial key light" }
+  { id: "podium_light", name: "Minimal Studio Podium", icon: "🏛️", desc: "Clean cyclorama studio wall + soft tabletop horizon", preview: "linear-gradient(180deg, #f8fafc 0%, #cbd5e1 100%)" },
+  { id: "sunbeam_wall", name: "Sunlight Window", icon: "🌤️", desc: "Warm cream backdrop with diagonal window sunbeams", preview: "linear-gradient(135deg, #fdfbf7 0%, #d8cbb8 100%)" },
+  { id: "marble_luxury", name: "Luxury Gallery", icon: "🤍", desc: "Bright architectural marble & soft floor reflection", preview: "linear-gradient(135deg, #ffffff 0%, #e5e7eb 100%)" },
+  { id: "wood_table", name: "Oak Tabletop", icon: "🪵", desc: "Warm natural wood table surface + soft studio wall", preview: "linear-gradient(180deg, #ece3d5 0%, #9c6b3b 100%)" },
+  { id: "botanical_bokeh", name: "Garden Bokeh", icon: "🌿", desc: "Sunlit organic outdoor greenery depth-of-field", preview: "linear-gradient(135deg, #d9f99d 0%, #4ade80 100%)" },
+  { id: "golden_sunset", name: "Golden Hour Glow", icon: "🌅", desc: "Warm amber studio horizon & soft rim bloom", preview: "linear-gradient(180deg, #fed7aa 0%, #f59e0b 100%)" },
+  { id: "neon_cyber", name: "Cyber Neon Studio", icon: "⚡", desc: "Dark obsidian floor with cyan & magenta rim lights", preview: "linear-gradient(135deg, #06b6d4 0%, #111827 50%, #ec4899 100%)" },
+  { id: "spotlight_dark", name: "Dramatic Spotlight", icon: "🎭", desc: "Dark studio stage with overhead radial key light", preview: "radial-gradient(circle, #475569 0%, #090d16 100%)" }
 ];
 
 export const PHOTOROOM_SHADOWS = [
@@ -433,18 +442,18 @@ export const PHOTOROOM_CANVAS_PRESETS = [
 
 export const PHOTOROOM_BADGE_PRESETS = [
   { id: "sale_50", label: "🔥 SALE -50%", content: "SALE -50%", color: "#ffffff", bgColor: "#ef4444", font: "Impact", fontSize: 42, bold: true, bgEnabled: true, bgRadius: 12, stroke: false },
-  { id: "new_arrival", label: "✨ NEW ARRIVAL", content: "NEW ARRIVAL", color: "#ffffff", bgColor: "#111827", font: "System", fontSize: 34, bold: true, bgEnabled: true, bgRadius: 999, stroke: false },
-  { id: "best_seller", label: "⭐ BEST SELLER", content: "★ BEST SELLER", color: "#111827", bgColor: "#facc15", font: "System", fontSize: 34, bold: true, bgEnabled: true, bgRadius: 10, stroke: false },
-  { id: "limited", label: "💎 LIMITED EDITION", content: "LIMITED EDITION", color: "#ffffff", bgColor: "#6c63ff", font: "System", fontSize: 32, bold: true, bgEnabled: true, bgRadius: 8, stroke: false },
-  { id: "free_ship", label: "🚚 FREE SHIPPING", content: "FREE SHIPPING", color: "#ffffff", bgColor: "#16a34a", font: "System", fontSize: 32, bold: true, bgEnabled: true, bgRadius: 999, stroke: false },
+  { id: "new_arrival", label: "✨ NEW ARRIVAL", content: "NEW ARRIVAL", color: "#ffffff", bgColor: "#111827", font: "Montserrat", fontSize: 34, bold: true, bgEnabled: true, bgRadius: 999, stroke: false },
+  { id: "best_seller", label: "⭐ BEST SELLER", content: "★ BEST SELLER", color: "#111827", bgColor: "#facc15", font: "Montserrat", fontSize: 34, bold: true, bgEnabled: true, bgRadius: 10, stroke: false },
+  { id: "limited", label: "💎 LIMITED EDITION", content: "LIMITED EDITION", color: "#ffffff", bgColor: "#6c63ff", font: "Montserrat", fontSize: 32, bold: true, bgEnabled: true, bgRadius: 8, stroke: false },
+  { id: "free_ship", label: "🚚 FREE SHIPPING", content: "FREE SHIPPING", color: "#ffffff", bgColor: "#16a34a", font: "Montserrat", fontSize: 32, bold: true, bgEnabled: true, bgRadius: 999, stroke: false },
   { id: "price_tag", label: "💲 $49.99 Tag", content: "$49.99", color: "#ffffff", bgColor: "#0f172a", font: "Arial Black", fontSize: 52, bold: true, bgEnabled: true, bgRadius: 16, stroke: false }
 ];
 
 export const PHOTOROOM_TEXT_PRESETS = [
-  { id: "headline", label: "Bold Headline", content: "STUDIO COLLECTION", color: "#ffffff", bgColor: "#000000", font: "Impact", fontSize: 64, bold: true, italic: false, stroke: true, bgEnabled: false, bgRadius: 10 },
-  { id: "editorial", label: "Editorial Serif", content: "Autumn / Winter", color: "#ffffff", bgColor: "#111827", font: "Georgia", fontSize: 52, bold: false, italic: true, stroke: true, bgEnabled: false, bgRadius: 8 },
-  { id: "pill_callout", label: "Pill Callout", content: "Tap to Customize", color: "#111827", bgColor: "#ffffff", font: "System", fontSize: 36, bold: true, italic: false, stroke: false, bgEnabled: true, bgRadius: 999 },
-  { id: "minimal_wm", label: "Minimal Caption", content: "@YOURBRAND", color: "#ffffff", bgColor: "#000000", font: "Mono", fontSize: 28, bold: true, italic: false, stroke: true, bgEnabled: false, bgRadius: 6 }
+  { id: "headline", name: "Bold Headline", label: "Bold Headline", content: "STUDIO COLLECTION", color: "#ffffff", bgColor: "#000000", font: "Impact", fontSize: 64, bold: true, italic: false, stroke: true, bgEnabled: false, bgRadius: 10 },
+  { id: "editorial", name: "Editorial Serif", label: "Editorial Serif", content: "Autumn / Winter", color: "#ffffff", bgColor: "#111827", font: "Georgia", fontSize: 52, bold: false, italic: true, stroke: true, bgEnabled: false, bgRadius: 8 },
+  { id: "pill_callout", name: "Pill Callout", label: "Pill Callout", content: "Tap to Customize", color: "#111827", bgColor: "#ffffff", font: "Montserrat", fontSize: 36, bold: true, italic: false, stroke: false, bgEnabled: true, bgRadius: 999 },
+  { id: "minimal_wm", name: "Minimal Caption", label: "Minimal Caption", content: "@YOURBRAND", color: "#ffffff", bgColor: "#000000", font: "Mono", fontSize: 28, bold: true, italic: false, stroke: true, bgEnabled: false, bgRadius: 6 }
 ];
 
 export const BATCH_RESIZE_PRESETS = [

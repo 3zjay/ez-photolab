@@ -225,19 +225,24 @@ export function AdjustPanel({
                 <div style={{ padding: "14px", background: cardBg, border: `1.5px solid ${cardBdr}`, borderRadius: "12px", display: "flex", flexDirection: "column", gap: "12px" }}>
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                         <SL style={{ margin: 0 }}>Photoroom Marketplace Templates</SL>
-                        <span style={{ fontSize: "10px", fontWeight: 700, padding: "2px 7px", background: "rgba(108,99,255,0.12)", color: "#6c63ff", borderRadius: "10px" }}>SMART FIT</span>
+                        <span style={{ fontSize: "10px", fontWeight: 700, padding: "2px 7px", background: "rgba(108,99,255,0.12)", color: "#6c63ff", borderRadius: "10px" }}>LIVE FIT</span>
                     </div>
                     <p style={{ fontSize: "11px", color: dm ? "#aaa" : "#666", margin: 0, lineHeight: 1.45 }}>
-                        Automatically fits and centers your product or portrait onto exact e-commerce and social media canvas dimensions without stretching.
+                        Click any marketplace or social template below to immediately preview and fit your photo onto exact canvas dimensions.
                     </p>
 
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
-                        {PHOTOROOM_CANVAS_PRESETS.filter(p => p.id !== "original").map(p => {
+                        {PHOTOROOM_CANVAS_PRESETS.map(p => {
                             const active = selectedPreset === p.id;
                             return (
                                 <button
                                     key={p.id}
-                                    onClick={() => setSelectedPreset(p.id)}
+                                    onClick={() => {
+                                        setSelectedPreset(p.id);
+                                        if (applyCanvasPreset) {
+                                            applyCanvasPreset(p, canvasPadding, canvasFillMode, canvasFillColor);
+                                        }
+                                    }}
                                     style={{
                                         padding: "10px",
                                         borderRadius: "10px",
@@ -270,7 +275,19 @@ export function AdjustPanel({
                             <span style={{ fontSize: "12px", fontWeight: 600, color: dm ? "#ccc" : "#555" }}>Subject Margin / Breathing Room</span>
                             <span style={{ fontSize: "12px", fontWeight: 700, color: "#6c63ff" }}>{canvasPadding}%</span>
                         </div>
-                        <SmoothSlider min={0} max={35} step={1} value={canvasPadding} defaultValue={8} onChange={setCanvasPadding} />
+                        <SmoothSlider
+                            min={0}
+                            max={35}
+                            step={1}
+                            value={canvasPadding}
+                            defaultValue={8}
+                            onChange={val => {
+                                setCanvasPadding(val);
+                                if (applyCanvasPreset && activePresetObj && activePresetObj.id !== "original") {
+                                    applyCanvasPreset(activePresetObj, val, canvasFillMode, canvasFillColor);
+                                }
+                            }}
+                        />
                     </div>
 
                     {/* Canvas Fill Background */}
@@ -286,7 +303,12 @@ export function AdjustPanel({
                             ].map(f => (
                                 <button
                                     key={f.id}
-                                    onClick={() => setCanvasFillMode(f.id)}
+                                    onClick={() => {
+                                        setCanvasFillMode(f.id);
+                                        if (applyCanvasPreset && activePresetObj && activePresetObj.id !== "original") {
+                                            applyCanvasPreset(activePresetObj, canvasPadding, f.id, canvasFillColor);
+                                        }
+                                    }}
                                     style={{
                                         flex: 1,
                                         padding: "7px 4px",
@@ -310,7 +332,12 @@ export function AdjustPanel({
                                 {BG_COLORS.slice(0, 10).map(c => (
                                     <div
                                         key={c}
-                                        onClick={() => setCanvasFillColor(c)}
+                                        onClick={() => {
+                                            setCanvasFillColor(c);
+                                            if (applyCanvasPreset && activePresetObj && activePresetObj.id !== "original") {
+                                                applyCanvasPreset(activePresetObj, canvasPadding, canvasFillMode, c);
+                                            }
+                                        }}
                                         style={{
                                             width: "24px",
                                             height: "24px",
@@ -324,21 +351,29 @@ export function AdjustPanel({
                                 <input
                                     type="color"
                                     value={canvasFillColor}
-                                    onChange={e => setCanvasFillColor(e.target.value)}
+                                    onChange={e => {
+                                        const c = e.target.value;
+                                        setCanvasFillColor(c);
+                                        if (applyCanvasPreset && activePresetObj && activePresetObj.id !== "original") {
+                                            applyCanvasPreset(activePresetObj, canvasPadding, canvasFillMode, c);
+                                        }
+                                    }}
                                     style={{ width: "32px", height: "26px", border: `1px solid ${cardBdr}`, borderRadius: "6px", cursor: "pointer", marginLeft: "auto" }}
                                 />
                             </div>
                         )}
                     </div>
 
-                    <AB
-                        onClick={() => applyCanvasPreset && applyCanvasPreset(activePresetObj, canvasPadding, canvasFillMode, canvasFillColor)}
-                        color="purple"
-                        textColor="#fff"
-                        style={{ width: "100%", padding: "11px", fontSize: "12.5px" }}
-                    >
-                        ✓ Resize Canvas to {activePresetObj.w} × {activePresetObj.h} px
-                    </AB>
+                    {activePresetObj.id !== "original" && (
+                        <AB
+                            onClick={() => applyCanvasPreset && applyCanvasPreset(activePresetObj, canvasPadding, canvasFillMode, canvasFillColor)}
+                            color="purple"
+                            textColor="#fff"
+                            style={{ width: "100%", padding: "11px", fontSize: "12.5px" }}
+                        >
+                            ✓ Apply {activePresetObj.w} × {activePresetObj.h} px Canvas
+                        </AB>
+                    )}
                 </div>
             )}
         </div>

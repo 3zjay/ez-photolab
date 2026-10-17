@@ -1,6 +1,15 @@
 import { useState, useRef, useEffect } from "react";
 import { FONT_MAP, PRESETS, LUT_PRESETS } from "./constants";
-import { apply3DLut, applyCurves, applyHslMixer } from "./utils";
+import {
+  apply3DLut,
+  applyCurves,
+  applyHslMixer,
+  applyChromaticAberration,
+  applyPrismRefraction,
+  applyFilmDust,
+  applyGlitterSparkles,
+  applyThermalHeatmap
+} from "./utils";
 import { RAW_EXTENSIONS } from "./rawProcessor";
 import { ModernImageUploadIcon } from "./components/ui/common";
 
@@ -14,7 +23,8 @@ export function Preview({
   logo, logoScale, logoScalePortrait, logoOpacity, logoPos, logoMargin, logoX, setLogoX, logoY, setLogoY, setLogoPos,
   filterGroup, highResImage, chromatic, prism, halation, filmDust, glitter, vhs, lightLeak, heatmap, vibeAudio,
   hslMixer, curves,
-  eraseMode, aiRemoveBrush, maskCanvasRef, maskDrawingRef, drawMask, aiMaskReady, handleAiRemove, aiRemoveStatus
+  eraseMode, aiRemoveBrush, maskCanvasRef, maskDrawingRef, drawMask, aiMaskReady, handleAiRemove, aiRemoveStatus,
+  maskVersion
 }) {
   const maxH = isMobile ? "calc(42dvh - 56px)" : "calc(100dvh - 140px)";
   const activeLut = (lutId && lutId !== 'none') ? (lutId === 'custom'
@@ -28,8 +38,8 @@ export function Preview({
   const [dragTxt, setDragTxt] = useState(null);
   const [draggingLogo, setDraggingLogo] = useState(false);
   const [cropDrag, setCropDrag] = useState(null);
-  const [viewMode, setViewMode] = useState("auto"); // "auto" | "after" | "before" | "split"
-  const [isHoldingBefore, setIsHoldingBefore] = useState(false);
+  const [viewMode, setViewMode] = useState("after"); // "after" | "before" | "split"
+  const [imgLoadTick, setImgLoadTick] = useState(0);
 
   const containerRef = useRef(null);
   const lutCanvasRef = useRef(null);
@@ -40,13 +50,14 @@ export function Preview({
 
   const isHslModified = hslMixer && Object.values(hslMixer).some(v => v.hue !== 0 || v.sat !== 0 || v.lum !== 0);
   const isCurvesModified = curves && Object.values(curves).some(pts => pts.some(p => (p.x === 0 && p.y !== 0) || (p.x === 255 && p.y !== 255) || (p.x !== 0 && p.x !== 255)));
-  const isLutActive = activeLutData && lutId !== 'none';
+  const isLutActive = Boolean(activeLutData && lutId !== 'none');
+  const isAestheticsCanvasFx = (chromatic > 0 || prism > 0 || filmDust > 0 || glitter > 0 || heatmap > 0);
 
-  const effectiveShowBefore = showBefore || viewMode === "before" || isHoldingBefore;
-  const effectiveShowSplit = !cropMode && !eraseMode && activeTab === "edit" && (viewMode === "split" || (viewMode === "auto" && showSplit && !effectiveShowBefore));
+  const effectiveShowBefore = showBefore || viewMode === "before";
+  const effectiveShowSplit = !cropMode && !eraseMode && activeTab === "edit" && viewMode === "split" && !effectiveShowBefore;
 
-  // Effective displayed image source (uses Photoroom cutout/scene composite when active)
-  const displaySrc = (bgStatus === "done" && bgResult) ? bgResult : image;
+  // App.jsx passes (aiPreviewUrl || beautyPreviewUrl || activeBaseImage) as `image`
+  const displaySrc = image;
 
   useEffect(() => {
     const src = highResImage || displaySrc;
@@ -66,8 +77,8 @@ export function Preview({
     img.onload = () => setOrigDimensions({ w: img.naturalWidth, h: img.naturalHeight });
   }, [originalImage]);
 
-  // Render LUT, HSL, and Curves preview onto a canvas overlay
-  const isCanvasNeeded = (isLutActive || isHslModified || isCurvesModified) && displaySrc && !effectiveShowBefore && activeTab === 'edit';
+  // Render LUT, HSL, Curves, and Prequel Aesthetics pixel FX onto canvas overlay
+  const isCanvasNeeded = Boolean((isLutActive || isHslModified || isCurvesModified || isAestheticsCanvasFx) && displaySrc && !effectiveShowBefore && activeTab === 'edit');
 
   useEffect(() => {
     if (!isCanvasNeeded) {
@@ -86,10 +97,10 @@ export function Preview({
       const natH = imgEl.naturalHeight;
       if (!natW || !natH) return;
 
-      const maxPrev = 1600;
+      const maxPrev = 1400;
       const scale = Math.min(1, maxPrev / Math.max(natW, natH));
-      const pW = Math.round(natW * scale);
-      const pH = Math.round(natH * scale);
+      const pW = Math.max(1, Math.round(natW * scale));
+      const pH = Math.max(1, Math.round(natH * scale));
 
       canvas.width = pW;
       canvas.height = pH;
@@ -99,14 +110,26 @@ export function Preview({
       ctx.drawImage(imgEl, 0, 0, pW, pH);
       ctx.filter = 'none';
 
-      const imgData = ctx.getImageData(0, 0, pW, pH);
-      if (isCurvesModified) applyCurves(imgData, curves);
-      if (isHslModified) applyHslMixer(imgData, hslMixer);
-      if (isLutActive) apply3DLut(imgData, activeLutData.data, activeLutData.size, lutIntensity);
-      ctx.putImageData(imgData, 0, 0);
-    }, 50);
+      if (isCurvesModified || isHslModified || isLutActive) {
+        const imgData = ctx.getImageData(0, 0, pW, pH);
+        if (isCurvesModified) applyCurves(imgData, curves);
+        if (isHslModified) applyHslMixer(imgData, hslMixer);
+        if (isLutActive) apply3DLut(imgData, activeLutData.data, activeLutData.size, lutIntensity);
+        ctx.putImageData(imgData, 0, 0);
+      }
+
+      if (chromatic > 0) applyChromaticAberration(ctx, pW, pH, chromatic);
+      if (prism > 0) applyPrismRefraction(canvas, ctx, pW, pH, prism);
+      if (heatmap > 0) applyThermalHeatmap(ctx, pW, pH, heatmap);
+      if (filmDust > 0) applyFilmDust(ctx, pW, pH, filmDust);
+      if (glitter > 0) applyGlitterSparkles(ctx, pW, pH, glitter);
+    }, 35);
     return () => clearTimeout(timer);
-  }, [isCanvasNeeded, isLutActive, isHslModified, isCurvesModified, activeLutData, lutIntensity, lutId, displaySrc, cssFilter, effectiveShowBefore, activeTab, hslMixer, curves]);
+  }, [
+    isCanvasNeeded, isLutActive, isHslModified, isCurvesModified, isAestheticsCanvasFx,
+    activeLutData, lutIntensity, lutId, displaySrc, cssFilter, effectiveShowBefore,
+    activeTab, hslMixer, curves, chromatic, prism, filmDust, glitter, heatmap, imgLoadTick
+  ]);
 
   // Sync on-canvas Magic Eraser mask preview with maskCanvasRef
   const syncPreviewMask = () => {
@@ -126,7 +149,7 @@ export function Preview({
     if (eraseMode) {
       syncPreviewMask();
     }
-  }, [eraseMode, aiMaskReady]);
+  }, [eraseMode, aiMaskReady, maskVersion, displaySrc]);
 
   // Interactive Text / Badge / Graphic Layer Dragging (Mouse + Touch)
   const startDragText = (e, id) => {
@@ -199,12 +222,14 @@ export function Preview({
 
       let { x, y, w, h } = b;
       const t = cropDrag.type;
+      const rightEdge = b.x + b.w;
+      const bottomEdge = b.y + b.h;
 
       if (t.includes("e")) {
-        w = Math.max(minSize, Math.min(100 - x, b.w + dx));
+        w = Math.max(minSize, Math.min(100 - b.x, b.w + dx));
       }
       if (t.includes("s")) {
-        h = Math.max(minSize, Math.min(100 - y, b.h + dy));
+        h = Math.max(minSize, Math.min(100 - b.y, b.h + dy));
       }
       if (t.includes("w")) {
         const maxDx = b.w - minSize;
@@ -226,7 +251,6 @@ export function Preview({
         const imgH = imgRef.current?.naturalHeight || rect.height || 1;
         const imgAspect = imgW / imgH;
         const targetAspect = aw / ah;
-        // In percentage coordinates: (w / h) * imgAspect = targetAspect => h = w * (imgAspect / targetAspect)
         const pctRatio = targetAspect / imgAspect; // w / h = pctRatio
 
         if (t === "n" || t === "s") {
@@ -234,12 +258,22 @@ export function Preview({
           if (x + w > 100) {
             w = 100 - x;
             h = w / pctRatio;
+            if (t === "n") y = bottomEdge - h;
           }
         } else {
           h = w / pctRatio;
-          if (y + h > 100) {
+          if (t.includes("n")) {
+            y = bottomEdge - h;
+            if (y < 0) {
+              y = 0;
+              h = bottomEdge;
+              w = h * pctRatio;
+              if (t.includes("w")) x = rightEdge - w;
+            }
+          } else if (y + h > 100) {
             h = 100 - y;
             w = h * pctRatio;
+            if (t.includes("w")) x = rightEdge - w;
           }
         }
       }
@@ -481,9 +515,9 @@ export function Preview({
           boxShadow: "0 8px 24px rgba(0,0,0,0.2)"
         }}>
           {[
-            { id: "after", label: isMobile ? "✨" : "✨ After", title: "After" },
-            { id: "before", label: isMobile ? "📷" : "📷 Before", title: "Before" },
-            { id: "split", label: isMobile ? "↔️" : "↔️ Split", title: "Split" }
+            { id: "after", label: isMobile ? "✨" : "✨ After", title: "After (Live Edited View)" },
+            { id: "before", label: isMobile ? "📷" : "📷 Before", title: "Before (Original Photo)" },
+            { id: "split", label: isMobile ? "↔️" : "↔️ Split", title: "Split Before/After Comparison" }
           ].map(btn => {
             const isActive = (btn.id === "before" && effectiveShowBefore) ||
                              (btn.id === "split" && effectiveShowSplit) ||
@@ -564,11 +598,6 @@ export function Preview({
       )}
 
       <div ref={splitRef}
-        onMouseDown={(e) => { if (e.target.tagName !== 'BUTTON' && !cropMode && !eraseMode && !dragTxt) setIsHoldingBefore(true); }}
-        onMouseUp={() => setIsHoldingBefore(false)}
-        onMouseLeave={() => setIsHoldingBefore(false)}
-        onTouchStart={(e) => { if (e.target.tagName !== 'BUTTON' && !cropMode && !eraseMode && !dragTxt) setIsHoldingBefore(true); }}
-        onTouchEnd={() => setIsHoldingBefore(false)}
         style={{
           position: "relative",
           maxWidth: "100%",
@@ -585,265 +614,289 @@ export function Preview({
           userSelect: "none"
         }}
       >
-        {effectiveShowSplit ? (
-          <>
-            <div style={{ position: "relative", lineHeight: 0, maxWidth: "100%", maxHeight: maxH }}>
-              {bgStatus === "done" && bgMode === "transparent" && <div className="checker" style={{ position: "absolute", inset: 0 }} />}
-              <img ref={imgRef} src={displaySrc} alt="after"
-                style={{ maxWidth: "100%", maxHeight: maxH, width: "auto", height: "auto", objectFit: "contain", display: "block", position: "relative", filter: isCanvasNeeded ? 'none' : cssFilter, transform: transformCSS, visibility: isCanvasNeeded ? 'hidden' : 'visible' }} />
-              <canvas ref={lutCanvasRef} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none", display: isCanvasNeeded ? 'block' : 'none', transform: transformCSS }} />
-            </div>
-            {filters.temperature !== 0 && <div style={{ position: "absolute", inset: 0, background: tempColor, mixBlendMode: "overlay", pointerEvents: "none", clipPath: `inset(0 ${100 - splitPos}% 0 0)` }} />}
-            {filters.vignette > 0 && <div style={{ position: "absolute", inset: 0, background: `radial-gradient(ellipse at center,transparent 38%,rgba(0,0,0,${filters.vignette / 100}) 100%)`, pointerEvents: "none", clipPath: `inset(0 ${100 - splitPos}% 0 0)` }} />}
-            <div style={{ position: "absolute", inset: 0, clipPath: `inset(0 0 0 ${splitPos}%)` }}>
-              <img src={originalImage || image} alt="before" style={{ maxWidth: "100%", maxHeight: maxH, width: "auto", height: "auto", objectFit: "contain", display: "block", filter: "none", transform: "none" }} />
-            </div>
-            <div onMouseDown={e => { e.preventDefault(); e.stopPropagation(); setIsDragSplit(true); }} onTouchStart={e => { e.preventDefault(); e.stopPropagation(); setIsDragSplit(true); }}
-              style={{ position: "absolute", top: 0, bottom: 0, left: `${splitPos}%`, transform: "translateX(-50%)", width: "44px", zIndex: 20, display: "flex", alignItems: "center", justifyContent: "center", cursor: isDragSplit ? "grabbing" : "ew-resize" }}>
-              <div style={{ width: "2px", height: "100%", background: "#fff", boxShadow: "0 0 6px rgba(0,0,0,.5)" }} />
-              <div style={{ position: "absolute", width: "36px", height: "36px", borderRadius: "50%", background: "#fff", boxShadow: "0 2px 12px rgba(0,0,0,.25)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "14px", color: "#6c63ff", fontWeight: 700 }}>⇄</div>
-            </div>
-            <div style={{ position: "absolute", bottom: "12px", left: "12px", padding: "3px 10px", background: "rgba(108,99,255,.85)", borderRadius: "20px", fontSize: "11px", fontWeight: 700, color: "#fff" }}>AFTER</div>
-            <div style={{ position: "absolute", bottom: "12px", right: "12px", padding: "3px 10px", background: "rgba(0,0,0,.5)", borderRadius: "20px", fontSize: "11px", fontWeight: 700, color: "#fff" }}>BEFORE</div>
-            {logo && (
-              <img src={logo.src} style={logoStyles} alt="logo-watermark"
-                onMouseDown={startDragLogo} onTouchStart={startDragLogo} />
-            )}
-          </>
-        ) : (
-          <>
-            <div ref={containerRef} style={{ position: "relative", lineHeight: 0, maxWidth: "100%", maxHeight: maxH }}>
-              {/* Transparency checkerboard when cutout is in transparent mode */}
-              {!effectiveShowBefore && bgStatus === "done" && bgMode === "transparent" && (
-                <div className="checker" style={{ position: "absolute", inset: 0 }} />
-              )}
-              <img ref={imgRef} src={effectiveShowBefore ? (originalImage || image) : displaySrc} alt="photo"
-                style={{ maxWidth: "100%", maxHeight: maxH, width: "auto", height: "auto", objectFit: "contain", display: "block", position: "relative", filter: effectiveShowBefore ? "none" : (isCanvasNeeded ? 'none' : cssFilter), transition: "filter .08s ease", transform: effectiveShowBefore ? "none" : transformCSS, visibility: isCanvasNeeded && !effectiveShowBefore ? 'hidden' : 'visible' }} />
-              {/* LUT, HSL, and Curves Preview Canvas */}
-              <canvas ref={lutCanvasRef} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none", display: isCanvasNeeded && !effectiveShowBefore ? 'block' : 'none', transform: effectiveShowBefore ? "none" : transformCSS }} />
+        <div ref={containerRef} style={{ position: "relative", lineHeight: 0, maxWidth: "100%", maxHeight: maxH }}>
+          {/* Transparency checkerboard when cutout is in transparent mode */}
+          {!effectiveShowBefore && bgStatus === "done" && bgMode === "transparent" && (
+            <div className="checker" style={{ position: "absolute", inset: 0 }} />
+          )}
 
-              {!effectiveShowBefore && activeTab === "edit" && filters.temperature !== 0 && <div style={{ position: "absolute", inset: 0, background: tempColor, mixBlendMode: "overlay", pointerEvents: "none" }} />}
-              {!effectiveShowBefore && activeTab === "edit" && filters.fade > 0 && <div style={{ position: "absolute", inset: 0, background: `rgba(255,255,255,${filters.fade / 180})`, mixBlendMode: "screen", pointerEvents: "none" }} />}
-              {!effectiveShowBefore && activeTab === "edit" && filters.vignette > 0 && <div style={{ position: "absolute", inset: 0, background: `radial-gradient(ellipse at center,transparent 38%,rgba(0,0,0,${filters.vignette / 100}) 100%)`, pointerEvents: "none" }} />}
-              {!effectiveShowBefore && activeTab === "edit" && filters.grain > 0 && (
-                <div style={{ position: "absolute", inset: 0, pointerEvents: "none", mixBlendMode: "overlay", opacity: 0.4, backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E")` }} />
-              )}
+          <img
+            ref={imgRef}
+            src={effectiveShowBefore ? (originalImage || displaySrc) : displaySrc}
+            alt="photo"
+            onLoad={() => setImgLoadTick(t => t + 1)}
+            style={{
+              maxWidth: "100%",
+              maxHeight: maxH,
+              width: "auto",
+              height: "auto",
+              objectFit: "contain",
+              display: "block",
+              position: "relative",
+              filter: effectiveShowBefore ? "none" : (isCanvasNeeded ? "none" : cssFilter),
+              transition: "filter .08s ease",
+              transform: effectiveShowBefore ? "none" : transformCSS,
+              visibility: isCanvasNeeded && !effectiveShowBefore ? "hidden" : "visible"
+            }}
+          />
 
-              {/* Prequel Live FX Overlays */}
-              {!effectiveShowBefore && activeTab === "edit" && halation > 0 && (
-                <div style={{ position: "absolute", inset: 0, pointerEvents: "none", zIndex: 4, mixBlendMode: "screen", opacity: halation / 100, background: "radial-gradient(circle at center, rgba(255,180,180,0.5) 0%, rgba(255,120,120,0.2) 60%, transparent 100%)" }} />
-              )}
-              {!effectiveShowBefore && activeTab === "edit" && heatmap > 0 && (
-                <div style={{ position: "absolute", inset: 0, pointerEvents: "none", zIndex: 4, mixBlendMode: "color", opacity: heatmap / 100, filter: `invert(${Math.round(heatmap * 0.8)}%) hue-rotate(${Math.round(heatmap * 2.4)}deg)` }} />
-              )}
-              {!effectiveShowBefore && activeTab === "edit" && lightLeak !== 'none' && (
-                <div style={{
-                  position: "absolute", inset: 0, pointerEvents: "none", zIndex: 5, mixBlendMode: "screen", opacity: 0.8,
-                  background: lightLeak === 'gold' ? 'radial-gradient(circle at 10% 20%, rgba(255, 170, 50, 0.75) 0%, rgba(255, 90, 0, 0.4) 40%, transparent 70%)'
-                            : lightLeak === 'prism' ? 'linear-gradient(135deg, rgba(255,0,128,0.5) 0%, rgba(0,255,200,0.5) 50%, rgba(255,255,0,0.5) 100%)'
-                            : lightLeak === 'red' ? 'radial-gradient(circle at 90% 80%, rgba(255, 30, 60, 0.8) 0%, rgba(200, 0, 0, 0.4) 45%, transparent 70%)'
-                            : 'radial-gradient(circle at 50% 10%, rgba(0, 230, 255, 0.7) 0%, rgba(180, 0, 255, 0.4) 50%, transparent 75%)'
-                }} />
-              )}
-              {!effectiveShowBefore && activeTab === "edit" && vhs && (
-                <div style={{ position: "absolute", inset: 0, pointerEvents: "none", zIndex: 6, display: "flex", flexDirection: "column", justifyContent: "space-between", padding: "16px", color: "#00ff66", fontFamily: "monospace", textShadow: "0 0 6px rgba(0,255,102,0.8)", fontSize: "13px", fontWeight: "bold", background: "repeating-linear-gradient(0deg, rgba(0,0,0,0.12) 0px, rgba(0,0,0,0.12) 1px, transparent 1px, transparent 3px)" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between" }}>
-                    <span>PLAY ▶</span>
-                    <span>SP</span>
-                  </div>
-                  <div style={{ display: "flex", justifyContent: "space-between" }}>
-                    <span>{new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }).toUpperCase()}</span>
-                    <span>VHS HI-FI</span>
-                  </div>
-                </div>
-              )}
-              {!effectiveShowBefore && activeTab === "edit" && vibeAudio !== 'none' && (
-                <div style={{ position: "absolute", bottom: "12px", left: "12px", zIndex: 25, background: "rgba(10,10,20,0.85)", backdropFilter: "blur(12px)", padding: "6px 12px", borderRadius: "20px", border: "1px solid rgba(255,255,255,0.15)", display: "flex", alignItems: "center", gap: "8px", boxShadow: "0 4px 16px rgba(0,0,0,0.4)", pointerEvents: "none" }}>
-                  <span style={{ fontSize: "14px" }}>🎵</span>
-                  <span style={{ fontSize: "11px", fontWeight: 700, color: "#a78bfa" }}>Vibe: {vibeAudio.toUpperCase()}</span>
-                  <div style={{ display: "flex", alignItems: "flex-end", gap: "2px", height: "12px" }}>
-                    {[1, 2, 3, 4].map(i => (
-                      <div key={i} style={{ width: "3px", height: `${6 + (i * 2)}px`, background: "#06b6d4", borderRadius: "2px" }} />
-                    ))}
-                  </div>
-                </div>
-              )}
+          {/* LUT, HSL, Curves, and Aesthetics Pixel FX Preview Canvas */}
+          <canvas
+            ref={lutCanvasRef}
+            style={{
+              position: "absolute",
+              inset: 0,
+              width: "100%",
+              height: "100%",
+              pointerEvents: "none",
+              display: isCanvasNeeded && !effectiveShowBefore ? "block" : "none",
+              transform: effectiveShowBefore ? "none" : transformCSS
+            }}
+          />
 
-              {/* Photoroom Composition Layers (Text, Promo Badges, Graphic/Sticker Uploads) */}
-              {!effectiveShowBefore && texts.filter(t => t.visible !== false).map(t => (
-                <div
-                  key={t.id}
-                  onMouseDown={e => startDragText(e, t.id)}
-                  onTouchStart={e => startDragText(e, t.id)}
-                  onClick={e => { e.stopPropagation(); setSelText(t.id); }}
+          {!effectiveShowBefore && activeTab === "edit" && filters.temperature !== 0 && (
+            <div style={{ position: "absolute", inset: 0, background: tempColor, mixBlendMode: "overlay", pointerEvents: "none" }} />
+          )}
+          {!effectiveShowBefore && activeTab === "edit" && filters.fade > 0 && (
+            <div style={{ position: "absolute", inset: 0, background: `rgba(255,255,255,${filters.fade / 180})`, mixBlendMode: "screen", pointerEvents: "none" }} />
+          )}
+          {!effectiveShowBefore && activeTab === "edit" && filters.vignette > 0 && (
+            <div style={{ position: "absolute", inset: 0, background: `radial-gradient(ellipse at center,transparent 38%,rgba(0,0,0,${filters.vignette / 100}) 100%)`, pointerEvents: "none" }} />
+          )}
+          {!effectiveShowBefore && activeTab === "edit" && filters.grain > 0 && (
+            <div style={{ position: "absolute", inset: 0, pointerEvents: "none", mixBlendMode: "overlay", opacity: Math.min(0.85, (filters.grain / 100) * 0.75), backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E")` }} />
+          )}
+
+          {/* Prequel Live FX Overlays */}
+          {!effectiveShowBefore && activeTab === "edit" && halation > 0 && (
+            <div style={{ position: "absolute", inset: 0, pointerEvents: "none", zIndex: 4, mixBlendMode: "screen", opacity: halation / 100, background: "radial-gradient(circle at center, rgba(255,180,180,0.5) 0%, rgba(255,120,120,0.2) 60%, transparent 100%)" }} />
+          )}
+          {!effectiveShowBefore && activeTab === "edit" && lightLeak !== 'none' && (
+            <div style={{
+              position: "absolute", inset: 0, pointerEvents: "none", zIndex: 5, mixBlendMode: "screen", opacity: 0.8,
+              background: lightLeak === 'gold' ? 'radial-gradient(circle at 10% 20%, rgba(255, 170, 50, 0.75) 0%, rgba(255, 90, 0, 0.4) 40%, transparent 70%)'
+                        : lightLeak === 'prism' ? 'linear-gradient(135deg, rgba(255,0,128,0.5) 0%, rgba(0,255,200,0.5) 50%, rgba(255,255,0,0.5) 100%)'
+                        : lightLeak === 'red' ? 'radial-gradient(circle at 90% 80%, rgba(255, 30, 60, 0.8) 0%, rgba(200, 0, 0, 0.4) 45%, transparent 70%)'
+                        : 'radial-gradient(circle at 50% 10%, rgba(0, 230, 255, 0.7) 0%, rgba(180, 0, 255, 0.4) 50%, transparent 75%)'
+            }} />
+          )}
+          {!effectiveShowBefore && activeTab === "edit" && vhs && (
+            <div style={{ position: "absolute", inset: 0, pointerEvents: "none", zIndex: 6, display: "flex", flexDirection: "column", justifyContent: "space-between", padding: "16px", color: "#00ff66", fontFamily: "monospace", textShadow: "0 0 6px rgba(0,255,102,0.8)", fontSize: "13px", fontWeight: "bold", background: "repeating-linear-gradient(0deg, rgba(0,0,0,0.12) 0px, rgba(0,0,0,0.12) 1px, transparent 1px, transparent 3px)" }}>
+              <div style={{ display: "flex", justifyContent: "space-between" }}>
+                <span>PLAY ▶</span>
+                <span>SP</span>
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between" }}>
+                <span>{new Date().toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }).toUpperCase()}</span>
+                <span>VHS HI-FI</span>
+              </div>
+            </div>
+          )}
+          {!effectiveShowBefore && activeTab === "edit" && vibeAudio !== 'none' && (
+            <div style={{ position: "absolute", bottom: "12px", left: "12px", zIndex: 25, background: "rgba(10,10,20,0.85)", backdropFilter: "blur(12px)", padding: "6px 12px", borderRadius: "20px", border: "1px solid rgba(255,255,255,0.15)", display: "flex", alignItems: "center", gap: "8px", boxShadow: "0 4px 16px rgba(0,0,0,0.4)", pointerEvents: "none" }}>
+              <span style={{ fontSize: "14px" }}>🎵</span>
+              <span style={{ fontSize: "11px", fontWeight: 700, color: "#a78bfa" }}>Vibe: {vibeAudio.toUpperCase()}</span>
+              <div style={{ display: "flex", alignItems: "flex-end", gap: "2px", height: "12px" }}>
+                {[1, 2, 3, 4].map(i => (
+                  <div key={i} style={{ width: "3px", height: `${6 + (i * 2)}px`, background: "#06b6d4", borderRadius: "2px" }} />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Photoroom Composition Layers (Text, Promo Badges, Graphic/Sticker Uploads) */}
+          {!effectiveShowBefore && texts.filter(t => t.visible !== false).map(t => (
+            <div
+              key={t.id}
+              onMouseDown={e => startDragText(e, t.id)}
+              onTouchStart={e => startDragText(e, t.id)}
+              onClick={e => { e.stopPropagation(); setSelText(t.id); }}
+              style={{
+                position: "absolute",
+                left: `${t.x}%`,
+                top: `${t.y}%`,
+                transform: `translate(-50%, -50%) rotate(${t.rotation || 0}deg)`,
+                opacity: t.opacity !== undefined ? t.opacity : 1,
+                cursor: dragTxt && dragTxt.id === t.id ? "grabbing" : "grab",
+                userSelect: "none",
+                touchAction: "none",
+                fontFamily: FONT_MAP[t.font] || FONT_MAP.System,
+                fontSize: `clamp(11px, ${t.fontSize / 16}vw, ${Math.round(t.fontSize * 0.55)}px)`,
+                fontWeight: t.bold ? "800" : "500",
+                fontStyle: t.italic ? "italic" : "normal",
+                color: t.color,
+                background: t.bgEnabled ? (t.bgColor || "#ef4444") : "transparent",
+                borderRadius: t.bgEnabled ? `${t.bgRadius !== undefined ? t.bgRadius : 12}px` : "4px",
+                padding: t.bgEnabled ? "5px 12px" : "4px 6px",
+                textShadow: t.stroke ? "0 0 8px rgba(0,0,0,.85), 1px 1px 2px rgba(0,0,0,.7)" : (t.shadow !== false && !t.bgEnabled ? "0 2px 8px rgba(0,0,0,0.45)" : "none"),
+                boxShadow: t.bgEnabled && t.shadow !== false ? "0 6px 18px rgba(0,0,0,0.28)" : "none",
+                outline: selText === t.id ? "2px dashed #6c63ff" : "none",
+                outlineOffset: "3px",
+                whiteSpace: "nowrap",
+                zIndex: 8
+              }}
+            >
+              {t.type === "graphic" && t.imageSrc ? (
+                <img
+                  src={t.imageSrc}
+                  alt={t.content || "graphic"}
+                  draggable={false}
                   style={{
-                    position: "absolute",
-                    left: `${t.x}%`,
-                    top: `${t.y}%`,
-                    transform: `translate(-50%, -50%) rotate(${t.rotation || 0}deg)`,
-                    opacity: t.opacity !== undefined ? t.opacity : 1,
-                    cursor: dragTxt && dragTxt.id === t.id ? "grabbing" : "grab",
-                    userSelect: "none",
-                    touchAction: "none",
-                    fontFamily: FONT_MAP[t.font] || FONT_MAP.System,
-                    fontSize: `clamp(11px, ${t.fontSize / 16}vw, ${Math.round(t.fontSize * 0.55)}px)`,
-                    fontWeight: t.bold ? "800" : "500",
-                    fontStyle: t.italic ? "italic" : "normal",
-                    color: t.color,
-                    background: t.bgEnabled ? (t.bgColor || "#ef4444") : "transparent",
-                    borderRadius: t.bgEnabled ? `${t.bgRadius !== undefined ? t.bgRadius : 12}px` : "4px",
-                    padding: t.bgEnabled ? "5px 12px" : "4px 6px",
-                    textShadow: t.stroke ? "0 0 8px rgba(0,0,0,.85), 1px 1px 2px rgba(0,0,0,.7)" : (t.shadow !== false && !t.bgEnabled ? "0 2px 8px rgba(0,0,0,0.45)" : "none"),
-                    boxShadow: t.bgEnabled && t.shadow !== false ? "0 6px 18px rgba(0,0,0,0.28)" : "none",
-                    outline: selText === t.id ? "2px dashed #6c63ff" : "none",
-                    outlineOffset: "3px",
-                    whiteSpace: "nowrap",
-                    zIndex: 8
+                    width: `clamp(36px, ${t.fontSize / 7}vw, ${t.fontSize * 1.4}px)`,
+                    height: "auto",
+                    display: "block",
+                    pointerEvents: "none",
+                    filter: t.shadow !== false ? "drop-shadow(0 4px 12px rgba(0,0,0,0.3))" : "none"
                   }}
-                >
-                  {t.type === "graphic" && t.imageSrc ? (
-                    <img
-                      src={t.imageSrc}
-                      alt={t.content || "graphic"}
-                      draggable={false}
+                />
+              ) : (
+                t.content
+              )}
+            </div>
+          ))}
+
+          {/* Logo / Corner Watermark */}
+          {logo && !effectiveShowBefore && (
+            <img src={logo.src} style={logoStyles} alt="logo-watermark"
+              onMouseDown={startDragLogo} onTouchStart={startDragLogo} />
+          )}
+
+          {/* Split Comparison Overlay (Only when user selects ↔️ Split) */}
+          {effectiveShowSplit && (
+            <>
+              <div style={{ position: "absolute", inset: 0, clipPath: `inset(0 0 0 ${splitPos}%)`, zIndex: 16, pointerEvents: "none" }}>
+                <img src={originalImage || displaySrc} alt="before" style={{ width: "100%", height: "100%", objectFit: "contain", display: "block", filter: "none", transform: "none" }} />
+              </div>
+              <div
+                onMouseDown={e => { e.preventDefault(); e.stopPropagation(); setIsDragSplit(true); }}
+                onTouchStart={e => { e.preventDefault(); e.stopPropagation(); setIsDragSplit(true); }}
+                style={{ position: "absolute", top: 0, bottom: 0, left: `${splitPos}%`, transform: "translateX(-50%)", width: "44px", zIndex: 20, display: "flex", alignItems: "center", justifyContent: "center", cursor: isDragSplit ? "grabbing" : "ew-resize" }}
+              >
+                <div style={{ width: "2px", height: "100%", background: "#fff", boxShadow: "0 0 6px rgba(0,0,0,.5)" }} />
+                <div style={{ position: "absolute", width: "36px", height: "36px", borderRadius: "50%", background: "#fff", boxShadow: "0 2px 12px rgba(0,0,0,.25)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "14px", color: "#6c63ff", fontWeight: 700 }}>⇄</div>
+              </div>
+              <div style={{ position: "absolute", bottom: "12px", left: "12px", zIndex: 19, padding: "3px 10px", background: "rgba(108,99,255,.85)", borderRadius: "20px", fontSize: "11px", fontWeight: 700, color: "#fff", pointerEvents: "none" }}>AFTER</div>
+              <div style={{ position: "absolute", bottom: "12px", right: "12px", zIndex: 19, padding: "3px 10px", background: "rgba(0,0,0,.55)", borderRadius: "20px", fontSize: "11px", fontWeight: 700, color: "#fff", pointerEvents: "none" }}>BEFORE</div>
+            </>
+          )}
+
+          {/* On-Canvas Magic Retouch Brush Overlay */}
+          {eraseMode && !cropMode && (
+            <div
+              style={{
+                position: "absolute",
+                inset: 0,
+                zIndex: 18,
+                cursor: "crosshair",
+                touchAction: "none"
+              }}
+              onMouseDown={e => {
+                e.stopPropagation();
+                if (maskDrawingRef) maskDrawingRef.current = true;
+                if (drawMask) drawMask(e, e.currentTarget);
+                syncPreviewMask();
+              }}
+              onMouseMove={e => {
+                if (!maskDrawingRef?.current) return;
+                e.stopPropagation();
+                if (drawMask) drawMask(e, e.currentTarget);
+                syncPreviewMask();
+              }}
+              onMouseUp={() => { if (maskDrawingRef) maskDrawingRef.current = false; }}
+              onMouseLeave={() => { if (maskDrawingRef) maskDrawingRef.current = false; }}
+              onTouchStart={e => {
+                e.stopPropagation();
+                if (e.cancelable) e.preventDefault();
+                if (maskDrawingRef) maskDrawingRef.current = true;
+                if (drawMask) drawMask(e, e.currentTarget);
+                syncPreviewMask();
+              }}
+              onTouchMove={e => {
+                e.stopPropagation();
+                if (e.cancelable) e.preventDefault();
+                if (drawMask) drawMask(e, e.currentTarget);
+                syncPreviewMask();
+              }}
+              onTouchEnd={() => { if (maskDrawingRef) maskDrawingRef.current = false; }}
+            >
+              <canvas
+                ref={previewMaskRef}
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  width: "100%",
+                  height: "100%",
+                  opacity: 0.55,
+                  mixBlendMode: "screen",
+                  pointerEvents: "none"
+                }}
+              />
+            </div>
+          )}
+
+          {/* Interactive 8-Handle Crop Box Overlay */}
+          {cropMode && (
+            <div style={{ position: "absolute", inset: 0, zIndex: 22, touchAction: "none" }}>
+              <div
+                onMouseDown={e => startCropDrag(e, "move")}
+                onTouchStart={e => startCropDrag(e, "move")}
+                style={{
+                  position: "absolute",
+                  left: `${cropBox.x}%`,
+                  top: `${cropBox.y}%`,
+                  width: `${cropBox.w}%`,
+                  height: `${cropBox.h}%`,
+                  border: "2px solid #ffffff",
+                  boxShadow: "0 0 0 9999px rgba(0, 0, 0, 0.58)",
+                  cursor: cropDrag?.type === "move" ? "grabbing" : "move",
+                  touchAction: "none"
+                }}
+              >
+                {/* Rule of Thirds Grid */}
+                <div style={{ position: "absolute", inset: 0, display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gridTemplateRows: "1fr 1fr 1fr", pointerEvents: "none" }}>
+                  {Array(9).fill(0).map((_, i) => <div key={i} style={{ border: "0.5px solid rgba(255,255,255,.35)" }} />)}
+                </div>
+
+                {/* 8 Interactive Resize Handles (Larger hit targets for touch & mouse) */}
+                {[
+                  { top: "-8px", left: "-8px", c: "nw" },
+                  { top: "-8px", left: "calc(50% - 8px)", c: "n" },
+                  { top: "-8px", right: "-8px", c: "ne" },
+                  { top: "calc(50% - 8px)", left: "-8px", c: "w" },
+                  { top: "calc(50% - 8px)", right: "-8px", c: "e" },
+                  { bottom: "-8px", left: "-8px", c: "sw" },
+                  { bottom: "-8px", left: "calc(50% - 8px)", c: "s" },
+                  { bottom: "-8px", right: "-8px", c: "se" }
+                ].map(h => {
+                  const { c, ...pos } = h;
+                  return (
+                    <div
+                      key={c}
+                      onMouseDown={e => startCropDrag(e, c)}
+                      onTouchStart={e => startCropDrag(e, c)}
                       style={{
-                        width: `clamp(36px, ${t.fontSize / 7}vw, ${t.fontSize * 1.4}px)`,
-                        height: "auto",
-                        display: "block",
-                        pointerEvents: "none",
-                        filter: t.shadow !== false ? "drop-shadow(0 4px 12px rgba(0,0,0,0.3))" : "none"
+                        position: "absolute",
+                        ...pos,
+                        width: "16px",
+                        height: "16px",
+                        background: "#6c63ff",
+                        border: "2.5px solid #ffffff",
+                        borderRadius: "4px",
+                        cursor: `${c}-resize`,
+                        boxShadow: "0 2px 6px rgba(0,0,0,0.4)",
+                        touchAction: "none",
+                        zIndex: 25
                       }}
                     />
-                  ) : (
-                    t.content
-                  )}
-                </div>
-              ))}
-
-              {/* On-Canvas Magic Retouch Brush Overlay */}
-              {eraseMode && !cropMode && (
-                <div
-                  style={{
-                    position: "absolute",
-                    inset: 0,
-                    zIndex: 18,
-                    cursor: "crosshair",
-                    touchAction: "none"
-                  }}
-                  onMouseDown={e => {
-                    e.stopPropagation();
-                    if (maskDrawingRef) maskDrawingRef.current = true;
-                    if (drawMask) drawMask(e, e.currentTarget);
-                    syncPreviewMask();
-                  }}
-                  onMouseMove={e => {
-                    if (!maskDrawingRef?.current) return;
-                    e.stopPropagation();
-                    if (drawMask) drawMask(e, e.currentTarget);
-                    syncPreviewMask();
-                  }}
-                  onMouseUp={() => { if (maskDrawingRef) maskDrawingRef.current = false; }}
-                  onMouseLeave={() => { if (maskDrawingRef) maskDrawingRef.current = false; }}
-                  onTouchStart={e => {
-                    e.stopPropagation();
-                    if (e.cancelable) e.preventDefault();
-                    if (maskDrawingRef) maskDrawingRef.current = true;
-                    if (drawMask) drawMask(e, e.currentTarget);
-                    syncPreviewMask();
-                  }}
-                  onTouchMove={e => {
-                    e.stopPropagation();
-                    if (e.cancelable) e.preventDefault();
-                    if (drawMask) drawMask(e, e.currentTarget);
-                    syncPreviewMask();
-                  }}
-                  onTouchEnd={() => { if (maskDrawingRef) maskDrawingRef.current = false; }}
-                >
-                  <canvas
-                    ref={previewMaskRef}
-                    style={{
-                      position: "absolute",
-                      inset: 0,
-                      width: "100%",
-                      height: "100%",
-                      opacity: 0.55,
-                      mixBlendMode: "screen",
-                      pointerEvents: "none"
-                    }}
-                  />
-                </div>
-              )}
-
-              {/* Interactive 8-Handle Crop Box Overlay */}
-              {cropMode && (
-                <div style={{ position: "absolute", inset: 0, zIndex: 22, touchAction: "none" }}>
-                  <div
-                    onMouseDown={e => startCropDrag(e, "move")}
-                    onTouchStart={e => startCropDrag(e, "move")}
-                    style={{
-                      position: "absolute",
-                      left: `${cropBox.x}%`,
-                      top: `${cropBox.y}%`,
-                      width: `${cropBox.w}%`,
-                      height: `${cropBox.h}%`,
-                      border: "2px solid #ffffff",
-                      boxShadow: "0 0 0 9999px rgba(0, 0, 0, 0.58)",
-                      cursor: cropDrag?.type === "move" ? "grabbing" : "move",
-                      touchAction: "none"
-                    }}
-                  >
-                    {/* Rule of Thirds Grid */}
-                    <div style={{ position: "absolute", inset: 0, display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gridTemplateRows: "1fr 1fr 1fr", pointerEvents: "none" }}>
-                      {Array(9).fill(0).map((_, i) => <div key={i} style={{ border: "0.5px solid rgba(255,255,255,.35)" }} />)}
-                    </div>
-
-                    {/* 8 Interactive Resize Handles (Larger hit targets for touch & mouse) */}
-                    {[
-                      { top: "-8px", left: "-8px", c: "nw" },
-                      { top: "-8px", left: "calc(50% - 8px)", c: "n" },
-                      { top: "-8px", right: "-8px", c: "ne" },
-                      { top: "calc(50% - 8px)", left: "-8px", c: "w" },
-                      { top: "calc(50% - 8px)", right: "-8px", c: "e" },
-                      { bottom: "-8px", left: "-8px", c: "sw" },
-                      { bottom: "-8px", left: "calc(50% - 8px)", c: "s" },
-                      { bottom: "-8px", right: "-8px", c: "se" }
-                    ].map(h => {
-                      const { c, ...pos } = h;
-                      return (
-                        <div
-                          key={c}
-                          onMouseDown={e => startCropDrag(e, c)}
-                          onTouchStart={e => startCropDrag(e, c)}
-                          style={{
-                            position: "absolute",
-                            ...pos,
-                            width: "16px",
-                            height: "16px",
-                            background: "#6c63ff",
-                            border: "2.5px solid #ffffff",
-                            borderRadius: "4px",
-                            cursor: `${c}-resize`,
-                            boxShadow: "0 2px 6px rgba(0,0,0,0.4)",
-                            touchAction: "none",
-                            zIndex: 25
-                          }}
-                        />
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {logo && !effectiveShowBefore && (
-                <img src={logo.src} style={logoStyles} alt="logo-watermark"
-                  onMouseDown={startDragLogo} onTouchStart={startDragLogo} />
-              )}
+                  );
+                })}
+              </div>
             </div>
-          </>
-        )}
+          )}
+        </div>
       </div>
 
-      {!isMobile && image && dimensions.w > 0 && !showSplit && !cropMode && (
+      {!isMobile && image && dimensions.w > 0 && !effectiveShowSplit && !cropMode && (
         <div style={{
           position: "absolute",
           bottom: "12px",

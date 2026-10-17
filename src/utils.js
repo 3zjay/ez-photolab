@@ -100,23 +100,29 @@ export function calcBatchDims(natW, natH, mode, preset, customW, customH, keepAs
 
 // ── CSS filter from state ─────────────────────────────────────────────────────
 export function toCSSFilter(f) {
-  const ev = 1 + (f.exposure || 0)/100;
-  const bv = ((f.brightness || 100)/100)*ev;
-  const hlAdj = (f.highlights || 0) > 0 ? 1 + f.highlights*0.002 : 1 + (f.highlights || 0)*0.003;
-  const shAdj = (f.shadows || 0) > 0 ? 1 + f.shadows*0.003 : 1 + (f.shadows || 0)*0.002;
-  const wAdj = (f.whites || 0) > 0 ? 1 + f.whites*0.002 : 1 + (f.whites || 0)*0.002;
-  const bAdj = (f.blacks || 0) > 0 ? 1 + f.blacks*0.002 : 1 + (f.blacks || 0)*0.002;
-  const contrastFactor = ((f.contrast || 100)/100) * (f.haze ? (1 + f.haze*0.003) : 1);
-  let s = `brightness(${(bv*hlAdj*shAdj*wAdj*bAdj).toFixed(3)}) contrast(${contrastFactor.toFixed(3)}) saturate(${(((f.saturation || 100)/100) * ((f.vibrance || 100)/100)).toFixed(3)})`;
+  if (!f) return "none";
+  const ev = 1 + (f.exposure ?? 0) / 100;
+  const bv = ((f.brightness ?? 100) / 100) * ev;
+  const hl = f.highlights ?? 0;
+  const sh = f.shadows ?? 0;
+  const wh = f.whites ?? 0;
+  const bl = f.blacks ?? 0;
+  const hlAdj = hl > 0 ? 1 + hl * 0.0022 : 1 + hl * 0.003;
+  const shAdj = sh > 0 ? 1 + sh * 0.003 : 1 + sh * 0.0022;
+  const wAdj = wh > 0 ? 1 + wh * 0.0022 : 1 + wh * 0.0022;
+  const bAdj = bl > 0 ? 1 + bl * 0.0022 : 1 + bl * 0.0022;
+  const contrastFactor = ((f.contrast ?? 100) / 100) * (f.haze ? (1 + f.haze * 0.0035) : 1);
+  const satFactor = Math.max(0, ((f.saturation ?? 100) / 100) * ((f.vibrance ?? 100) / 100));
+  let s = `brightness(${Math.max(0.05, bv * hlAdj * shAdj * wAdj * bAdj).toFixed(3)}) contrast(${Math.max(0.05, contrastFactor).toFixed(3)}) saturate(${satFactor.toFixed(3)})`;
   if (f.hue && f.hue !== 0) s += ` hue-rotate(${f.hue}deg)`;
-  if (f.denoise && f.denoise > 0) s += ` blur(${(f.denoise*0.05).toFixed(2)}px)`;
-  if (f.sharpness && f.sharpness > 0) s += ` contrast(${(1+f.sharpness*0.022).toFixed(3)})`;
-  if (f.clarity && f.clarity > 0) s += ` contrast(${(1+f.clarity*0.016).toFixed(3)})`;
-  if (f.glow && f.glow > 0) s += ` drop-shadow(0 0 ${(f.glow*0.12).toFixed(1)}px rgba(255,255,255,0.45))`;
+  if (f.denoise && f.denoise > 0) s += ` blur(${(f.denoise * 0.05).toFixed(2)}px)`;
+  if (f.sharpness && f.sharpness > 0) s += ` contrast(${(1 + f.sharpness * 0.022).toFixed(3)})`;
+  if (f.clarity && f.clarity !== 0) s += ` contrast(${Math.max(0.4, 1 + f.clarity * 0.016).toFixed(3)})`;
+  if (f.glow && f.glow > 0) s += ` drop-shadow(0 0 ${(f.glow * 0.12).toFixed(1)}px rgba(255,255,255,0.45))`;
   if (f.tint && f.tint !== 0) {
     const tintSign = f.tint > 0 ? 120 : 300;
-    const tintAmt  = Math.abs(f.tint)/400;
-    s += ` sepia(${tintAmt.toFixed(3)}) hue-rotate(${tintSign}deg) sepia(0)`;
+    const tintAmt = Math.abs(f.tint) / 400;
+    s += ` sepia(${tintAmt.toFixed(3)}) hue-rotate(${tintSign}deg) saturate(${(1 + tintAmt * 1.4).toFixed(3)})`;
   }
   return s;
 }
@@ -879,24 +885,24 @@ export function drawPhotoroomScene(ctx, W, H, sceneId = "podium_light") {
   ctx.restore();
 }
 
-export async function renderPhotoroomCutoutComposite(origImg, subImg, opts = {}) {
-  const {
-    mode = "transparent",
-    color = "#ffffff",
-    blur = 14,
-    scene = "podium_light",
-    customBgUrl = null,
-    shadowType = "contact",
-    shadowOpacity = 45,
-    shadowBlur = 24,
-    shadowX = 0,
-    shadowY = 12,
-    outlineWidth = 0,
-    outlineColor = "#ffffff",
-    subjectScale = 1.0,
-    subjectX = 0,
-    subjectY = 0
-  } = opts;
+export function renderPhotoroomCutoutComposite(origImg, subImg, opts = {}) {
+  const mode = opts.mode || "transparent";
+  const color = opts.color || "#ffffff";
+  const blur = opts.blur ?? 14;
+  const sceneId = opts.sceneId || opts.scene || "podium_light";
+  const customBgImg = opts.customBgImg || null;
+  const shadowType = opts.shadowType || "contact";
+  const rawShadowOpacity = opts.shadowOpacity ?? 0.55;
+  const alpha = Math.min(1, Math.max(0, rawShadowOpacity > 1 ? rawShadowOpacity / 100 : rawShadowOpacity));
+  const shadowBlur = opts.shadowBlur ?? 24;
+  const shadowX = opts.shadowX ?? opts.shadowOffsetX ?? 0;
+  const shadowY = opts.shadowY ?? opts.shadowOffsetY ?? 12;
+  const outlineWidth = opts.outlineWidth ?? 0;
+  const outlineColor = opts.outlineColor || "#ffffff";
+  const rawScale = opts.subjectScale ?? 1.0;
+  const subjectScale = rawScale > 2.5 ? rawScale / 100 : rawScale;
+  const subjectX = opts.subjectX ?? 0;
+  const subjectY = opts.subjectY ?? 0;
 
   const W = origImg.naturalWidth || origImg.width;
   const H = origImg.naturalHeight || origImg.height;
@@ -910,24 +916,19 @@ export async function renderPhotoroomCutoutComposite(origImg, subImg, opts = {})
     ctx.fillStyle = color;
     ctx.fillRect(0, 0, W, H);
   } else if (mode === "scene") {
-    drawPhotoroomScene(ctx, W, H, scene);
+    drawPhotoroomScene(ctx, W, H, sceneId);
   } else if (mode === "blur") {
     ctx.save();
     ctx.filter = `blur(${blur}px)`;
     ctx.drawImage(origImg, -30, -30, W + 60, H + 60);
     ctx.restore();
-  } else if (mode === "custom_bg" && customBgUrl) {
-    try {
-      const bgImg = await loadImageFromSrc(customBgUrl);
-      // Cover fit
-      const scale = Math.max(W / bgImg.naturalWidth, H / bgImg.naturalHeight);
-      const bW = bgImg.naturalWidth * scale;
-      const bH = bgImg.naturalHeight * scale;
-      ctx.drawImage(bgImg, (W - bW) / 2, (H - bH) / 2, bW, bH);
-    } catch (e) {
-      ctx.fillStyle = color || "#ffffff";
-      ctx.fillRect(0, 0, W, H);
-    }
+  } else if ((mode === "custom" || mode === "custom_bg") && customBgImg) {
+    const bNatW = customBgImg.naturalWidth || customBgImg.width || W;
+    const bNatH = customBgImg.naturalHeight || customBgImg.height || H;
+    const scale = Math.max(W / bNatW, H / bNatH);
+    const bW = bNatW * scale;
+    const bH = bNatH * scale;
+    ctx.drawImage(customBgImg, (W - bW) / 2, (H - bH) / 2, bW, bH);
   }
 
   // 2. Compute Subject placement & alpha bounding box (for realistic floor contact shadow)
@@ -967,9 +968,7 @@ export async function renderPhotoroomCutoutComposite(origImg, subImg, opts = {})
   const subjectSpanW = Math.max(W * 0.15, ((maxX - minX) / sampleW) * sW);
 
   // 3. Render Photoroom AI Shadow
-  const alpha = Math.min(1, Math.max(0, shadowOpacity / 100));
   if (shadowType === "contact" && alpha > 0) {
-    // Dual-layer grounding contact shadow under the subject's feet/base
     const rxOuter = subjectSpanW * 0.56;
     const ryOuter = Math.max(6, H * 0.032 * (shadowBlur / 24 + 0.4));
 
@@ -986,7 +985,6 @@ export async function renderPhotoroomCutoutComposite(origImg, subImg, opts = {})
     ctx.fill();
     ctx.restore();
 
-    // Tight dark ambient occlusion core right at contact point
     const rxCore = subjectSpanW * 0.34;
     const ryCore = Math.max(3, H * 0.012);
     ctx.save();
@@ -1017,20 +1015,19 @@ export async function renderPhotoroomCutoutComposite(origImg, subImg, opts = {})
     ctx.fill();
     ctx.restore();
   } else if (shadowType === "drop" && alpha > 0) {
-    // Silhouette drop shadow
     const silCanvas = document.createElement("canvas");
     silCanvas.width = W;
     silCanvas.height = H;
     const silCtx = silCanvas.getContext("2d");
-    const offX = Math.round((shadowX / 100) * W * 0.12);
-    const offY = Math.round((shadowY / 100) * H * 0.12);
+    const offX = Math.round((shadowX / 100) * W * 0.14);
+    const offY = Math.round((shadowY / 100) * H * 0.14);
     silCtx.drawImage(subImg, drawX + offX, drawY + offY, sW, sH);
     silCtx.globalCompositeOperation = "source-in";
     silCtx.fillStyle = `rgba(0, 0, 0, ${alpha.toFixed(3)})`;
     silCtx.fillRect(0, 0, W, H);
 
     ctx.save();
-    const scaledBlur = Math.max(2, Math.round((shadowBlur / 1000) * Math.max(W, H)));
+    const scaledBlur = Math.max(2, Math.round((shadowBlur / 800) * Math.max(W, H)));
     ctx.filter = `blur(${scaledBlur}px)`;
     ctx.drawImage(silCanvas, 0, 0);
     ctx.restore();
@@ -1038,7 +1035,7 @@ export async function renderPhotoroomCutoutComposite(origImg, subImg, opts = {})
 
   // 4. Render Sticker / Cutout Outline if enabled
   if (outlineWidth > 0) {
-    const rad = Math.max(2, Math.round((outlineWidth / 1000) * Math.max(W, H)));
+    const rad = Math.max(2, Math.round((outlineWidth / 750) * Math.max(W, H)));
     const sil = document.createElement("canvas");
     sil.width = sW;
     sil.height = sH;
@@ -1082,31 +1079,36 @@ export async function applyBeautyPipeline(canvas, ctx, W, H, smooth, clarity, gl
     targetCtx.drawImage(canvas, 0, 0);
   }
 
-  if (smooth > 0) applyNoiseReduction(targetCanvas, targetCtx, W, H, smooth * 0.5);
-  applyAutoLevels(targetCtx, W, H);
-  targetCtx.globalCompositeOperation = 'overlay';
-  targetCtx.fillStyle = `rgba(255,200,150,${glow * 0.012})`;
-  targetCtx.fillRect(0, 0, W, H);
-  targetCtx.globalCompositeOperation = 'source-over';
+  if (smooth > 0) {
+    applyNoiseReduction(targetCanvas, targetCtx, W, H, smooth * 0.48);
+  }
 
-  if (clarity > 0) applyUnsharpMask(targetCanvas, targetCtx, W, H, clarity * 0.15, 1.2);
+  if (clarity > 0) {
+    applyUnsharpMask(targetCanvas, targetCtx, W, H, clarity * 0.18, 1.3);
+  }
 
   if (glow > 0) {
+    targetCtx.globalCompositeOperation = 'overlay';
+    targetCtx.fillStyle = `rgba(255, 205, 165, ${(glow * 0.018).toFixed(3)})`;
+    targetCtx.fillRect(0, 0, W, H);
+    targetCtx.globalCompositeOperation = 'source-over';
+
     const glowCanvas = document.createElement('canvas');
     glowCanvas.width = W; glowCanvas.height = H;
     const gCtx = glowCanvas.getContext('2d');
-    gCtx.filter = `blur(${Math.round(glow * 3)}px) brightness(1.15)`;
+    gCtx.filter = `blur(${Math.max(2, Math.round(glow * 2.5))}px) brightness(1.12)`;
     gCtx.drawImage(targetCanvas, 0, 0);
     gCtx.filter = 'none';
     targetCtx.globalCompositeOperation = 'screen';
-    targetCtx.globalAlpha = glow * 0.025;
+    targetCtx.globalAlpha = glow * 0.032;
     targetCtx.drawImage(glowCanvas, 0, 0);
-    targetCtx.globalAlpha = 1; targetCtx.globalCompositeOperation = 'source-over';
+    targetCtx.globalAlpha = 1;
+    targetCtx.globalCompositeOperation = 'source-over';
   }
 
   if (maskCanvas) {
     targetCtx.globalCompositeOperation = 'destination-in';
-    targetCtx.drawImage(maskCanvas, 0, 0);
+    targetCtx.drawImage(maskCanvas, 0, 0, W, H);
     targetCtx.globalCompositeOperation = 'source-over';
     ctx.drawImage(targetCanvas, 0, 0);
   }
@@ -1114,22 +1116,23 @@ export async function applyBeautyPipeline(canvas, ctx, W, H, smooth, clarity, gl
 
 export async function applyStructureAi(canvas, ctx, W, H, structureAmt, faceMaskCanvas = null) {
   if (structureAmt <= 0) return;
-  
+
   const tempCanvas = document.createElement('canvas');
   tempCanvas.width = W;
   tempCanvas.height = H;
   const tempCtx = tempCanvas.getContext('2d');
   tempCtx.drawImage(canvas, 0, 0);
-  
-  // Apply a combination of unsharp mask and contrast boost for structure (using a safe 0.015 multiplier to avoid noise)
-  applyUnsharpMask(tempCanvas, tempCtx, W, H, structureAmt * 0.015, 1.4);
-  
+
+  // Dual-band local micro-contrast + fine detail sharpening
+  applyUnsharpMask(tempCanvas, tempCtx, W, H, structureAmt * 0.028, 2.2);
+  applyUnsharpMask(tempCanvas, tempCtx, W, H, structureAmt * 0.014, 0.9);
+
   if (faceMaskCanvas) {
     tempCtx.globalCompositeOperation = 'destination-out';
-    tempCtx.drawImage(faceMaskCanvas, 0, 0);
+    tempCtx.drawImage(faceMaskCanvas, 0, 0, W, H);
     tempCtx.globalCompositeOperation = 'source-over';
   }
-  
+
   ctx.drawImage(tempCanvas, 0, 0);
 }
 
@@ -1139,34 +1142,34 @@ function drawSkyPattern(skyId, W, H) {
   const ctx = c.getContext('2d');
   if (skyId === 'sunset') {
     const g = ctx.createLinearGradient(0, 0, 0, H);
-    g.addColorStop(0, '#2e0854'); // Dark purple
-    g.addColorStop(0.4, '#d85b7b'); // Pink
-    g.addColorStop(0.8, '#ff7e5f'); // Orange
-    g.addColorStop(1, '#feb47b'); // Pale yellow
+    g.addColorStop(0, '#2e0854');
+    g.addColorStop(0.4, '#d85b7b');
+    g.addColorStop(0.8, '#ff7e5f');
+    g.addColorStop(1, '#feb47b');
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, W, H);
   } else if (skyId === 'blue') {
     const g = ctx.createLinearGradient(0, 0, 0, H);
-    g.addColorStop(0, '#1a75ff'); // Deep blue
-    g.addColorStop(0.7, '#66a3ff'); // Sky blue
-    g.addColorStop(1, '#e6f0ff'); // Horizon white
+    g.addColorStop(0, '#1a75ff');
+    g.addColorStop(0.7, '#66a3ff');
+    g.addColorStop(1, '#e6f0ff');
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, W, H);
   } else if (skyId === 'stormy') {
     const g = ctx.createLinearGradient(0, 0, 0, H);
-    g.addColorStop(0, '#1c2833'); // Charcoal
-    g.addColorStop(0.6, '#34495e'); // Slate
-    g.addColorStop(1, '#566573'); // Light grey
+    g.addColorStop(0, '#1c2833');
+    g.addColorStop(0.6, '#34495e');
+    g.addColorStop(1, '#566573');
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, W, H);
   } else if (skyId === 'galaxy') {
     ctx.fillStyle = '#06061a';
     ctx.fillRect(0, 0, W, H);
     ctx.fillStyle = '#ffffff';
-    for (let i = 0; i < 80; i++) {
-      const x = Math.random() * W;
-      const y = Math.random() * H;
-      const r = Math.random() * 1.5;
+    for (let i = 0; i < 90; i++) {
+      const x = ((i * 97) % 100) / 100 * W;
+      const y = ((i * 53) % 100) / 100 * (H * 0.75);
+      const r = (i % 3) * 0.6 + 0.6;
       ctx.beginPath();
       ctx.arc(x, y, r, 0, Math.PI * 2);
       ctx.fill();
@@ -1175,29 +1178,62 @@ function drawSkyPattern(skyId, W, H) {
   return c;
 }
 
-export async function applySkyReplacement(canvas, ctx, W, H, skyId, skyMaskCanvas, customSkyUrl = null, opacity = 1.0, matchIntensity = 0.5) {
-  if (skyId === 'none' || !skyMaskCanvas) return;
-
-  // Calculate the percentage of sky pixels in the mask to avoid replacing ceilings/court lights in indoor photos
-  const maskCtx = skyMaskCanvas.getContext('2d');
-  const maskData = maskCtx.getImageData(0, 0, skyMaskCanvas.width, skyMaskCanvas.height).data;
-  let skyPixels = 0;
-  for (let i = 3; i < maskData.length; i += 4) {
-    if (maskData[i] > 15) skyPixels++;
+function buildFallbackSkyMask(sourceCanvas, W, H) {
+  const m = document.createElement('canvas');
+  m.width = W;
+  m.height = H;
+  const mCtx = m.getContext('2d');
+  // Smooth upper-horizon sky gradient mask weighted by luminance
+  const srcCtx = sourceCanvas.getContext('2d');
+  const srcData = srcCtx.getImageData(0, 0, W, H).data;
+  const outImg = mCtx.createImageData(W, H);
+  const od = outImg.data;
+  const horizonLimit = H * 0.62;
+  for (let y = 0; y < H; y++) {
+    const vWeight = y < horizonLimit ? Math.pow(1 - y / horizonLimit, 1.35) : 0;
+    if (vWeight <= 0.01) continue;
+    for (let x = 0; x < W; x++) {
+      const idx = (y * W + x) * 4;
+      const lum = (0.299 * srcData[idx] + 0.587 * srcData[idx + 1] + 0.114 * srcData[idx + 2]) / 255;
+      // Favor brighter / upper backdrop regions while feathering across the top
+      const lumWeight = 0.45 + 0.55 * lum;
+      const alpha = Math.min(255, Math.max(0, Math.round(vWeight * lumWeight * 235)));
+      od[idx] = 255;
+      od[idx + 1] = 255;
+      od[idx + 2] = 255;
+      od[idx + 3] = alpha;
+    }
   }
-  const skyRatio = skyPixels / (skyMaskCanvas.width * skyMaskCanvas.height);
-  if (skyRatio < 0.045) {
-    // Less than 4.5% of the image is sky - skip replacement to protect gym/indoor pictures
-    return;
+  mCtx.putImageData(outImg, 0, 0);
+  return m;
+}
+
+export async function applySkyReplacement(canvas, ctx, W, H, skyId, skyMaskCanvas, customSkyUrl = null, opacity = 1.0, matchIntensity = 0.5) {
+  if (skyId === 'none') return;
+
+  let activeMask = skyMaskCanvas;
+  if (activeMask) {
+    const maskCtx = activeMask.getContext('2d');
+    const maskData = maskCtx.getImageData(0, 0, activeMask.width, activeMask.height).data;
+    let skyPixels = 0;
+    for (let i = 3; i < maskData.length; i += 4) {
+      if (maskData[i] > 15) skyPixels++;
+    }
+    const skyRatio = skyPixels / (activeMask.width * activeMask.height);
+    if (skyRatio < 0.015) {
+      activeMask = buildFallbackSkyMask(canvas, W, H);
+    }
+  } else {
+    activeMask = buildFallbackSkyMask(canvas, W, H);
   }
 
   // Create a feathered version of the sky mask to smooth horizon replacement boundaries
   const featheredMask = document.createElement('canvas');
   featheredMask.width = W; featheredMask.height = H;
   const fCtx = featheredMask.getContext('2d');
-  const horizonBlur = Math.max(1, Math.round(W * 0.003));
+  const horizonBlur = Math.max(2, Math.round(W * 0.005));
   fCtx.filter = `blur(${horizonBlur}px)`;
-  fCtx.drawImage(skyMaskCanvas, 0, 0, W, H);
+  fCtx.drawImage(activeMask, 0, 0, W, H);
   fCtx.filter = 'none';
 
   const skyBg = document.createElement('canvas');
@@ -1218,7 +1254,7 @@ export async function applySkyReplacement(canvas, ctx, W, H, skyId, skyMaskCanva
     skyCtx.drawImage(pattern, 0, 0, W, H);
   }
 
-  // Mask the sky background with the feathered sky mask (applying opacity)
+  // Mask the sky background with the feathered sky mask
   const maskedSkyBg = document.createElement('canvas');
   maskedSkyBg.width = W; maskedSkyBg.height = H;
   const maskedSkyCtx = maskedSkyBg.getContext('2d');
@@ -1246,14 +1282,14 @@ export async function applySkyReplacement(canvas, ctx, W, H, skyId, skyMaskCanva
     const p = tinyCtx.getImageData(0, 0, 1, 1).data;
     
     fgCtx.globalCompositeOperation = 'source-atop';
-    fgCtx.fillStyle = `rgba(${p[0]}, ${p[1]}, ${p[2]}, ${matchIntensity * 0.12})`;
+    fgCtx.fillStyle = `rgba(${p[0]}, ${p[1]}, ${p[2]}, ${matchIntensity * 0.14})`;
     fgCtx.fillRect(0, 0, W, H);
     fgCtx.globalCompositeOperation = 'source-over';
   }
 
   // Combine background & foreground
   ctx.clearRect(0, 0, W, H);
-  ctx.drawImage(canvas, 0, 0); // Keep original details as fallback
+  ctx.drawImage(canvas, 0, 0);
 
   ctx.save();
   ctx.globalAlpha = opacity;
@@ -1265,17 +1301,27 @@ export async function applySkyReplacement(canvas, ctx, W, H, skyId, skyMaskCanva
 
 export function applyRelight(canvas, ctx, W, H, depthMapCanvas, nearVal, farVal) {
   if (nearVal === 0 && farVal === 0) return;
-  if (!depthMapCanvas) return;
 
   const dCanvas = document.createElement('canvas');
   dCanvas.width = W; dCanvas.height = H;
   const dCtx = dCanvas.getContext('2d');
-  
-  // Apply a soft blur to turn the depth map into a smooth relighting volume gradient
-  const blurRad = Math.max(10, Math.round(Math.min(W, H) * 0.035));
-  dCtx.filter = `blur(${blurRad}px)`;
-  dCtx.drawImage(depthMapCanvas, 0, 0, W, H);
-  dCtx.filter = 'none';
+
+  if (depthMapCanvas) {
+    const blurRad = Math.max(10, Math.round(Math.min(W, H) * 0.035));
+    dCtx.filter = `blur(${blurRad}px)`;
+    dCtx.drawImage(depthMapCanvas, 0, 0, W, H);
+    dCtx.filter = 'none';
+  } else {
+    // Instant center-foreground radial depth map fallback so 3D Relight works immediately
+    dCtx.fillStyle = '#000000';
+    dCtx.fillRect(0, 0, W, H);
+    const rg = dCtx.createRadialGradient(W * 0.5, H * 0.52, Math.min(W, H) * 0.06, W * 0.5, H * 0.52, Math.max(W, H) * 0.56);
+    rg.addColorStop(0, '#ffffff');
+    rg.addColorStop(0.55, '#a0a0a0');
+    rg.addColorStop(1, '#000000');
+    dCtx.fillStyle = rg;
+    dCtx.fillRect(0, 0, W, H);
+  }
 
   const imgData = ctx.getImageData(0, 0, W, H);
   const depthData = dCtx.getImageData(0, 0, W, H);
@@ -1288,7 +1334,7 @@ export function applyRelight(canvas, ctx, W, H, depthMapCanvas, nearVal, farVal)
   for (let i = 0; i < d.length; i += 4) {
     const z = dd[i] / 255; // 0 is far, 1 is near
     const factor = z * nearFactor + (1 - z) * farFactor;
-    const mult = 1 + factor;
+    const mult = Math.max(0.15, 1 + factor * 0.85);
 
     d[i] = Math.min(255, Math.max(0, d[i] * mult));
     d[i+1] = Math.min(255, Math.max(0, d[i+1] * mult));
