@@ -1,134 +1,261 @@
+import { useState } from "react";
 import { SL, Empty, Row, Spin, PBar, AB, SmoothSlider } from "../ui/common";
-import { BG_COLORS } from "../../constants";
 
-export function ToolsPanel({ image, handleRemoveBg, bgStatus, bgProgress, bgSubUrl, bgMode, setBgMode, cardBdr, cardBg, dm, bgColor, setBgColor, bgBlur, setBgBlur, bgResult, saveFile, falApiKey, saveFalKey, claidApiKey, saveClaidKey, aiRemoveBrush, setAiRemoveBrush, toCSSFilter, filters, initMaskCanvas, maskCanvasRef, maskDrawingRef, drawMask, aiMaskReady, handleAiRemove, aiRemoveStatus, aiRemoveLog, aiRemoveResult, applyAiResult }) {
+export function ToolsPanel({
+    image,
+    cardBdr,
+    cardBg,
+    dm,
+    saveFile,
+    claidApiKey,
+    saveClaidKey,
+    aiRemoveBrush,
+    setAiRemoveBrush,
+    toCSSFilter,
+    filters,
+    initMaskCanvas,
+    maskCanvasRef,
+    maskDrawingRef,
+    drawMask,
+    aiMaskReady,
+    handleAiRemove,
+    aiRemoveStatus,
+    aiRemoveLog,
+    aiRemoveResult,
+    applyAiResult,
+    eraseMode,
+    setEraseMode,
+    canUndoErase,
+    handleUndoErase
+}) {
+    const [showCloudConfig, setShowCloudConfig] = useState(false);
+
+    if (!image) return <Empty>Upload a photo first</Empty>;
+
     return (
         <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
-            <div>
-                <SL>Background Removal</SL>
-                <p style={{ fontSize: "12px", color: "#aaa", lineHeight: 1.6, marginBottom: "10px" }}>Runs in your browser — private &amp; free.</p>
-                <AB onClick={handleRemoveBg} disabled={!image || bgStatus === "loading"}
-                    color={bgStatus === "done" ? "#f0fff4" : image ? "purple" : "#f0f0f0"} textColor={bgStatus === "done" ? "#16a34a" : image ? "#fff" : "#bbb"}
-                    style={{ width: "100%", padding: "11px", marginBottom: "6px" }}>
-                    {bgStatus === "loading" ? <Row><Spin />Processing... {bgProgress}%</Row> : bgStatus === "done" ? "✓ Done — Remove Again" : "✂ Remove Background"}
-                </AB>
-                {bgStatus === "loading" && <PBar value={bgProgress} />}
-                {bgStatus === "error" && <p style={{ fontSize: "12px", color: "#ef4444", marginTop: "4px" }}>⚠ Failed — try JPG or PNG</p>}
-                {!image && <Empty>Upload a photo first</Empty>}
-            </div>
-            {bgStatus === "done" && bgSubUrl && (
-                <div style={{ animation: "fadein .3s" }}>
-                    <SL>Background Style</SL>
-                    {[{ id: "transparent", l: "Transparent", i: "◻" }, { id: "color", l: "Solid Color", i: "🎨" }, { id: "blur", l: "Blur Original", i: "✦" }].map(o => (
-                        <button key={o.id} onClick={() => setBgMode(o.id)}
-                            style={{ width: "100%", padding: "10px 12px", marginBottom: "6px", border: `1.5px solid ${bgMode === o.id ? "#6c63ff" : cardBdr}`, background: bgMode === o.id ? cardBg : dm ? '#1e1e1e' : '#fff', borderRadius: "10px", textAlign: "left", cursor: "pointer", display: "flex", alignItems: "center", gap: "10px", transition: "all .18s", fontFamily: "inherit" }}>
-                            <span style={{ fontSize: "15px" }}>{o.i}</span>
-                            <span style={{ fontSize: "13px", fontWeight: 600, color: bgMode === o.id ? "#6c63ff" : dm ? '#ccc' : '#444' }}>{o.l}</span>
-                            {bgMode === o.id && <span style={{ marginLeft: "auto", color: "#6c63ff" }}>✓</span>}
-                        </button>
-                    ))}
-                    {bgMode === "color" && (
-                        <div style={{ padding: "12px", background: cardBg, border: `1.5px solid ${cardBdr}`, borderRadius: "10px", marginBottom: "8px" }}>
-                            <div style={{ display: "flex", gap: "7px", flexWrap: "wrap", marginBottom: "10px" }}>
-                                {BG_COLORS.map(c => <div key={c} onClick={() => setBgColor(c)} style={{ width: "26px", height: "26px", borderRadius: "6px", background: c, border: `2.5px solid ${bgColor === c ? "#6c63ff" : "#ddd"}`, cursor: "pointer", flexShrink: 0 }} />)}
-                            </div>
-                            <input type="color" value={bgColor} onChange={e => setBgColor(e.target.value)} style={{ width: "100%", height: "32px", border: `1.5px solid ${cardBdr}`, borderRadius: "8px", cursor: "pointer" }} />
-                        </div>
-                    )}
-                    {bgMode === "blur" && (
-                        <div style={{ padding: "12px", background: cardBg, border: `1.5px solid ${cardBdr}`, borderRadius: "10px", marginBottom: "8px" }}>
-                            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}>
-                                <span style={{ fontSize: "11px", fontWeight: 600, color: "#aaa", textTransform: "uppercase", letterSpacing: ".06em" }}>Blur</span>
-                                <span style={{ fontSize: "12px", color: "#6c63ff", fontWeight: 600 }}>{bgBlur}px</span>
-                            </div>
-                            <SmoothSlider min={2} max={40} step={1} value={bgBlur} defaultValue={12} onChange={setBgBlur} />
-                        </div>
-                    )}
-                    {bgResult && (<>
-                        <div style={{ position: "relative", borderRadius: "10px", overflow: "hidden", margin: "8px 0", border: "1.5px solid #eee" }}>
-                            {bgMode === "transparent" && <div className="checker" style={{ position: "absolute", inset: 0 }} />}
-                            <img src={bgResult} alt="result" style={{ width: "100%", display: "block", position: "relative" }} />
-                        </div>
-                        <AB onClick={async () => await saveFile(await (await fetch(bgResult)).blob(), "photolab_nobg.png")} color="purple" textColor="#fff" style={{ width: "100%", padding: "11px" }}>↓ Download PNG</AB>
-                    </>)}
+            {/* ── PHOTOROOM MAGIC RETOUCH / OBJECT ERASER ── */}
+            <div style={{ padding: "14px", background: cardBg, border: `1.5px solid ${cardBdr}`, borderRadius: "12px", display: "flex", flexDirection: "column", gap: "12px" }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "6px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                        <span style={{ fontSize: "13.5px", fontWeight: 800, color: dm ? "#f3f4f6" : "#1f2937" }}>🧹 Magic Retouch & Eraser</span>
+                    </div>
+                    <span style={{ fontSize: "9.5px", fontWeight: 800, padding: "2px 8px", background: "#f0fff4", color: "#16a34a", borderRadius: "20px", border: "1px solid #86efac" }}>
+                        FREE • INSTANT ON-DEVICE
+                    </span>
                 </div>
-            )}
 
-            {/* ── OBJECT REMOVAL (Claid.ai — 50 free credits) ── */}
-            {image && (
-                <div style={{ padding: "14px", background: cardBg, border: `1.5px solid ${cardBdr}`, borderRadius: "12px", display: "flex", flexDirection: "column", gap: "10px" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                        <SL>Object Removal — LaMa Inpainting</SL>
-                        <span style={{ fontSize: "10px", fontWeight: 700, padding: "2px 8px", background: "#fff8e7", color: "#b45309", borderRadius: "20px", border: "1px solid #fcd34d", marginBottom: "8px" }}>50 FREE CREDITS</span>
-                    </div>
-                    <div style={{ padding: "10px 12px", background: dm ? '#1e2a10' : '#f0fdf4', border: "1px solid #86efac", borderRadius: "8px", fontSize: "11px", color: dm ? '#86efac' : '#166534', lineHeight: 1.6 }}>
-                        🎁 Sign up free at <strong>claid.ai</strong> → you get <strong>50 free credits</strong> (50 removals). No credit card needed. Get your API key from Settings → API.
-                    </div>
-                    {/* API Keys Configuration */}
-                    <div style={{ padding: "12px", background: dm ? '#1a1a2e' : '#f0f4ff', border: `1px solid ${dm ? '#333' : '#d0d8ff'}`, borderRadius: "10px", display: "flex", flexDirection: "column", gap: "10px" }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                            <span style={{ fontSize: "11px", fontWeight: 700, color: "#6c63ff" }}>⚙ API CONFIGURATION</span>
-                        </div>
+                <p style={{ fontSize: "11px", color: dm ? "#aaa" : "#666", lineHeight: 1.5, margin: 0 }}>
+                    Brush over unwanted objects, blemishes, text, photobombers, or dust spots. Context-aware harmonic inpainting seamlessly reconstructs the background.
+                </p>
 
-                        {/* Claid API Key */}
-                        <div>
-                            <div style={{ fontSize: "11px", fontWeight: 600, color: "#aaa", textTransform: "uppercase", letterSpacing: ".05em", marginBottom: "5px" }}>Claid.ai API Key (Object Removal)</div>
-                            <input type="password" value={claidApiKey} onChange={e => saveClaidKey(e.target.value)}
-                                placeholder="your-claid-api-key"
-                                style={{ width: "100%", padding: "8px 10px", border: `1px solid ${claidApiKey ? '#6c63ff' : cardBdr}`, borderRadius: "8px", fontSize: "12px", fontFamily: "monospace", outline: "none", background: dm ? '#0e0e1a' : '#fff', color: dm ? '#ddd' : '#333' }} />
+                {/* Paint on Main Canvas Toggle */}
+                <button
+                    onClick={() => setEraseMode && setEraseMode(!eraseMode)}
+                    style={{
+                        width: "100%",
+                        padding: "10px 12px",
+                        borderRadius: "10px",
+                        border: `1.5px solid ${eraseMode ? "#f59e0b" : cardBdr}`,
+                        background: eraseMode ? (dm ? "rgba(245, 158, 11, 0.16)" : "#fffbeb") : (dm ? "#1e1e1e" : "#fff"),
+                        color: eraseMode ? "#f59e0b" : (dm ? "#e4e4e7" : "#333"),
+                        fontSize: "12px",
+                        fontWeight: 700,
+                        cursor: "pointer",
+                        fontFamily: "inherit",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        transition: "all .15s"
+                    }}
+                >
+                    <span style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                        <span>🖌️</span>
+                        <span>{eraseMode ? "Painting on Main Canvas (Active)" : "Paint Directly on Main Canvas"}</span>
+                    </span>
+                    <span style={{
+                        fontSize: "10px",
+                        padding: "2px 7px",
+                        borderRadius: "10px",
+                        background: eraseMode ? "#f59e0b" : (dm ? "#333" : "#eee"),
+                        color: eraseMode ? "#fff" : (dm ? "#aaa" : "#666"),
+                        fontWeight: 800
+                    }}>
+                        {eraseMode ? "ON" : "OFF"}
+                    </span>
+                </button>
+
+                {/* Brush Size Slider */}
+                <div>
+                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "5px" }}>
+                        <span style={{ fontSize: "12px", fontWeight: 600, color: dm ? "#ccc" : "#555" }}>Retouch Brush Size</span>
+                        <span style={{ fontSize: "12px", fontWeight: 700, color: "#6c63ff" }}>{aiRemoveBrush}px</span>
+                    </div>
+                    <SmoothSlider min={8} max={120} step={2} value={aiRemoveBrush} defaultValue={36} onChange={setAiRemoveBrush} />
+                </div>
+
+                {/* Mini Interactive Mask Canvas */}
+                <div
+                    style={{
+                        position: "relative",
+                        borderRadius: "10px",
+                        overflow: "hidden",
+                        border: `1.5px solid ${aiMaskReady ? "#f59e0b" : cardBdr}`,
+                        cursor: "crosshair",
+                        lineHeight: 0,
+                        userSelect: "none",
+                        touchAction: "none"
+                    }}
+                    onMouseDown={e => { maskDrawingRef.current = true; drawMask(e, e.currentTarget); }}
+                    onMouseMove={e => drawMask(e, e.currentTarget)}
+                    onMouseUp={() => { maskDrawingRef.current = false; }}
+                    onMouseLeave={() => { maskDrawingRef.current = false; }}
+                    onTouchStart={e => { e.preventDefault(); maskDrawingRef.current = true; drawMask(e, e.currentTarget); }}
+                    onTouchMove={e => { e.preventDefault(); drawMask(e, e.currentTarget); }}
+                    onTouchEnd={() => { maskDrawingRef.current = false; }}
+                >
+                    <img src={image} alt="source" style={{ width: "100%", display: "block", filter: toCSSFilter(filters) }} onLoad={() => initMaskCanvas(false)} />
+                    <canvas
+                        ref={maskCanvasRef}
+                        style={{
+                            position: "absolute",
+                            inset: 0,
+                            width: "100%",
+                            height: "100%",
+                            opacity: 0.55,
+                            mixBlendMode: "screen",
+                            pointerEvents: "none"
+                        }}
+                    />
+                    {aiMaskReady ? (
+                        <div style={{ position: "absolute", top: "8px", left: "8px", padding: "3px 9px", background: "rgba(245,158,11,.92)", borderRadius: "12px", fontSize: "10px", fontWeight: 800, color: "#fff" }}>
+                            ✏ Area Masked — Ready to Erase
                         </div>
-                    </div>
-                    <p style={{ fontSize: "11px", color: "#aaa", lineHeight: 1.5 }}>Paint over the object you want removed. LaMa fills it with context-aware inpainting.</p>
-                    <div>
-                        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "5px" }}>
-                            <span style={{ fontSize: "12px", color: dm ? '#ccc' : '#555' }}>Brush size</span>
-                            <span style={{ fontSize: "12px", fontWeight: 700, color: "#6c63ff" }}>{aiRemoveBrush}px</span>
+                    ) : (
+                        <div style={{ position: "absolute", bottom: "8px", left: "50%", transform: "translateX(-50%)", padding: "4px 10px", background: "rgba(0,0,0,0.65)", backdropFilter: "blur(6px)", borderRadius: "12px", fontSize: "10px", fontWeight: 600, color: "#fff", whiteSpace: "nowrap", pointerEvents: "none" }}>
+                            👆 Paint here or on the main photo
                         </div>
-                        <SmoothSlider min={10} max={120} step={5} value={aiRemoveBrush} defaultValue={40} onChange={setAiRemoveBrush} />
-                    </div>
-                    <div style={{ position: "relative", borderRadius: "8px", overflow: "hidden", border: `1.5px solid ${aiMaskReady ? '#f59e0b' : cardBdr}`, cursor: "crosshair", lineHeight: 0, userSelect: "none", touchAction: "none" }}
-                        onMouseDown={e => { maskDrawingRef.current = true; drawMask(e, e.currentTarget); }}
-                        onMouseMove={e => drawMask(e, e.currentTarget)}
-                        onMouseUp={() => { maskDrawingRef.current = false; }}
-                        onMouseLeave={() => { maskDrawingRef.current = false; }}
-                        onTouchStart={e => { e.preventDefault(); maskDrawingRef.current = true; drawMask(e, e.currentTarget); }}
-                        onTouchMove={e => { e.preventDefault(); drawMask(e, e.currentTarget); }}
-                        onTouchEnd={() => { maskDrawingRef.current = false; }}>
-                        <img src={image} alt="source" style={{ width: "100%", display: "block", filter: toCSSFilter(filters) }} onLoad={initMaskCanvas} />
-                        <canvas ref={maskCanvasRef} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", opacity: 0.5, mixBlendMode: "screen", pointerEvents: "none" }} />
-                        {aiMaskReady && <div style={{ position: "absolute", top: "6px", left: "6px", padding: "3px 8px", background: "rgba(245,158,11,.9)", borderRadius: "12px", fontSize: "10px", fontWeight: 700, color: "#fff" }}>✏ Mask painted</div>}
-                    </div>
-                    <div style={{ display: "flex", gap: "7px" }}>
-                        <button onClick={() => { initMaskCanvas(true); }}
-                            style={{ flex: 1, padding: "9px", border: `1px solid ${cardBdr}`, background: dm ? '#252525' : '#f2f2f8', borderRadius: "9px", fontSize: "12px", fontWeight: 600, color: dm ? '#ccc' : '#666', cursor: "pointer", fontFamily: "inherit" }}>
-                            🗑 Clear
+                    )}
+                </div>
+
+                {/* Action Bar: Clear, Undo, Magic Erase */}
+                <div style={{ display: "flex", gap: "7px" }}>
+                    <button
+                        onClick={() => initMaskCanvas(true)}
+                        style={{
+                            padding: "10px 12px",
+                            border: `1px solid ${cardBdr}`,
+                            background: dm ? "#252525" : "#f2f2f8",
+                            borderRadius: "9px",
+                            fontSize: "12px",
+                            fontWeight: 700,
+                            color: dm ? "#ccc" : "#666",
+                            cursor: "pointer",
+                            fontFamily: "inherit"
+                        }}
+                        title="Clear painted brush mask"
+                    >
+                        🗑 Clear
+                    </button>
+                    {canUndoErase && (
+                        <button
+                            onClick={handleUndoErase}
+                            style={{
+                                padding: "10px 12px",
+                                border: `1px solid ${cardBdr}`,
+                                background: dm ? "#252525" : "#f2f2f8",
+                                borderRadius: "9px",
+                                fontSize: "12px",
+                                fontWeight: 700,
+                                color: "#6c63ff",
+                                cursor: "pointer",
+                                fontFamily: "inherit"
+                            }}
+                            title="Undo last Magic Erase"
+                        >
+                            ↩ Undo
                         </button>
-                        <AB onClick={handleAiRemove}
-                            disabled={aiRemoveStatus === 'loading' || !aiMaskReady || !claidApiKey?.trim()}
-                            color={aiRemoveStatus === 'done' ? '#f0fff4' : 'purple'}
-                            textColor={aiRemoveStatus === 'done' ? '#16a34a' : '#fff'}
-                            style={{ flex: 2, padding: "9px", fontSize: "12px" }}>
-                            {aiRemoveStatus === 'loading' ? <Row><Spin />Removing…</Row>
-                                : aiRemoveStatus === 'done' ? '✓ Done — Paint Again'
-                                    : !claidApiKey?.trim() ? 'Enter Claid.ai key above'
-                                        : '🧹 Remove Object'}
+                    )}
+                    <AB
+                        onClick={handleAiRemove}
+                        disabled={aiRemoveStatus === "loading" || !aiMaskReady}
+                        color={aiRemoveStatus === "done" ? "#f0fff4" : "purple"}
+                        textColor={aiRemoveStatus === "done" ? "#16a34a" : "#fff"}
+                        style={{ flex: 1, padding: "10px", fontSize: "12.5px" }}
+                    >
+                        {aiRemoveStatus === "loading" ? (
+                            <Row><Spin />Inpainting…</Row>
+                        ) : (
+                            "✨ Magic Erase Object"
+                        )}
+                    </AB>
+                </div>
+
+                {aiRemoveLog && (
+                    <p style={{ fontSize: "11px", color: aiRemoveStatus === "error" ? "#ef4444" : "#a78bfa", lineHeight: 1.4, margin: 0 }}>
+                        {aiRemoveLog}
+                    </p>
+                )}
+                {aiRemoveStatus === "loading" && <PBar value={65} />}
+
+                {aiRemoveResult && (
+                    <div style={{ display: "flex", gap: "7px" }}>
+                        <AB onClick={() => applyAiResult(aiRemoveResult)} color={dm ? "#252525" : "#f2f2f8"} textColor={dm ? "#ccc" : "#555"} style={{ flex: 1, padding: "9px", fontSize: "12px" }}>
+                            ← Apply Cloud Result
+                        </AB>
+                        <AB onClick={async () => saveFile(await (await fetch(aiRemoveResult)).blob(), "retouched.jpg")} color="purple" textColor="#fff" style={{ flex: 1, padding: "9px", fontSize: "12px" }}>
+                            ↓ Download
                         </AB>
                     </div>
-                    {aiRemoveLog && <p style={{ fontSize: "11px", color: aiRemoveStatus === 'error' ? '#ef4444' : '#a78bfa', lineHeight: 1.4 }}>{aiRemoveLog}</p>}
-                    {aiRemoveStatus === 'loading' && <PBar value={50} />}
-                    {aiRemoveResult && (
-                        <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                            <div style={{ borderRadius: "8px", overflow: "hidden", border: `1px solid ${cardBdr}` }}>
-                                <img src={aiRemoveResult} alt="result" style={{ width: "100%", display: "block" }} />
+                )}
+
+                {/* Optional Cloud LaMa API Toggle */}
+                <div style={{ borderTop: `1px solid ${cardBdr}`, paddingTop: "8px" }}>
+                    <button
+                        onClick={() => setShowCloudConfig(v => !v)}
+                        style={{
+                            background: "none",
+                            border: "none",
+                            color: dm ? "#9ca3af" : "#64748b",
+                            fontSize: "11px",
+                            fontWeight: 600,
+                            cursor: "pointer",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            width: "100%",
+                            fontFamily: "inherit"
+                        }}
+                    >
+                        <span>☁️ Optional: Claid.ai Cloud LaMa Key {claidApiKey?.trim() ? "(Connected)" : "(Using Local Engine)"}</span>
+                        <span>{showCloudConfig ? "▲" : "▼"}</span>
+                    </button>
+                    {showCloudConfig && (
+                        <div style={{ marginTop: "8px", padding: "10px", background: dm ? "#1a1a2e" : "#f0f4ff", border: `1px solid ${dm ? "#333" : "#d0d8ff"}`, borderRadius: "8px", display: "flex", flexDirection: "column", gap: "6px" }}>
+                            <div style={{ fontSize: "10.5px", color: dm ? "#aaa" : "#555", lineHeight: 1.4 }}>
+                                Leave blank to use the built-in free in-browser Magic Retouch engine, or enter a Claid.ai key for cloud LaMa inpainting.
                             </div>
-                            <div style={{ display: "flex", gap: "7px" }}>
-                                <AB onClick={() => applyAiResult(aiRemoveResult)} color={dm ? '#252525' : '#f2f2f8'} textColor={dm ? '#ccc' : '#555'} style={{ flex: 1, padding: "9px", fontSize: "12px" }}>← Apply to Editor</AB>
-                                <AB onClick={async () => saveFile(await (await fetch(aiRemoveResult)).blob(), 'removed.jpg')} color="purple" textColor="#fff" style={{ flex: 1, padding: "9px", fontSize: "12px" }}>↓ Download</AB>
-                            </div>
+                            <input
+                                type="password"
+                                value={claidApiKey}
+                                onChange={e => saveClaidKey(e.target.value)}
+                                placeholder="Optional Claid.ai API key"
+                                style={{
+                                    width: "100%",
+                                    padding: "7px 10px",
+                                    border: `1px solid ${claidApiKey ? "#6c63ff" : cardBdr}`,
+                                    borderRadius: "6px",
+                                    fontSize: "11.5px",
+                                    fontFamily: "monospace",
+                                    outline: "none",
+                                    background: dm ? "#0e0e1a" : "#fff",
+                                    color: dm ? "#ddd" : "#333"
+                                }}
+                            />
                         </div>
                     )}
                 </div>
-            )}
+            </div>
         </div>
-    )
+    );
 }

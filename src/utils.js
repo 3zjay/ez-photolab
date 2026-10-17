@@ -568,16 +568,83 @@ export async function renderFinal(
     if (prequelFx.vhs) applyVhsOverlay(canvas, ctx, W, H, true);
   }
 
-  // Text overlays
-  texts.forEach(t => {
-    if (!t.content.trim()) return;
-    const sz = Math.round(t.fontSize * (W / 800));
+  // Text, Badge & Graphic Layers
+  for (const t of texts) {
+    if (t.visible === false) continue;
+    const x = (t.x / 100) * W;
+    const y = (t.y / 100) * H;
+    const layerOpacity = typeof t.opacity === 'number' ? t.opacity : 1;
+    const layerRot = ((t.rotation || 0) * Math.PI) / 180;
+
+    if (t.type === 'graphic' && t.imageSrc) {
+      try {
+        const gImg = await loadImageFromSrc(t.imageSrc);
+        const gW = Math.round(((t.fontSize || 80) / 400) * W);
+        const gH = Math.round((gImg.naturalHeight / (gImg.naturalWidth || 1)) * gW);
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.rotate(layerRot);
+        ctx.globalAlpha = layerOpacity;
+        if (t.shadow) {
+          ctx.shadowColor = 'rgba(0,0,0,0.35)';
+          ctx.shadowBlur = Math.max(4, W * 0.01);
+          ctx.shadowOffsetY = Math.max(2, W * 0.004);
+        }
+        ctx.drawImage(gImg, -gW / 2, -gH / 2, gW, gH);
+        ctx.restore();
+      } catch (e) {
+        console.warn('Graphic layer load failed:', e);
+      }
+      continue;
+    }
+
+    if (!t.content || !t.content.trim()) continue;
+    const sz = Math.round((t.fontSize || 48) * (W / 800));
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(layerRot);
+    ctx.globalAlpha = layerOpacity;
     ctx.font = `${t.bold ? 'bold ' : ''}${t.italic ? 'italic ' : ''}${sz}px ${FONT_MAP[t.font] || FONT_MAP.System}`;
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    const x = t.x / 100 * W, y = t.y / 100 * H;
-    if (t.stroke) { ctx.strokeStyle = 'rgba(0,0,0,0.6)'; ctx.lineWidth = sz * 0.08; ctx.strokeText(t.content, x, y); }
-    ctx.fillStyle = t.color; ctx.fillText(t.content, x, y);
-  });
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+
+    if (t.bgEnabled) {
+      const metrics = ctx.measureText(t.content);
+      const padX = Math.round(sz * 0.45);
+      const padY = Math.round(sz * 0.28);
+      const boxW = metrics.width + padX * 2;
+      const boxH = sz + padY * 2;
+      const rad = Math.min(boxH / 2, Math.round((t.bgRadius ?? 12) * (W / 800)));
+      ctx.save();
+      if (t.shadow !== false) {
+        ctx.shadowColor = 'rgba(0,0,0,0.28)';
+        ctx.shadowBlur = Math.max(6, W * 0.012);
+        ctx.shadowOffsetY = Math.max(2, W * 0.004);
+      }
+      ctx.fillStyle = t.bgColor || '#111827';
+      ctx.beginPath();
+      if (ctx.roundRect) {
+        ctx.roundRect(-boxW / 2, -boxH / 2, boxW, boxH, rad);
+      } else {
+        ctx.rect(-boxW / 2, -boxH / 2, boxW, boxH);
+      }
+      ctx.fill();
+      ctx.restore();
+    } else if (t.shadow) {
+      ctx.shadowColor = 'rgba(0,0,0,0.6)';
+      ctx.shadowBlur = Math.max(4, sz * 0.15);
+      ctx.shadowOffsetY = Math.max(1, sz * 0.04);
+    }
+
+    if (t.stroke) {
+      ctx.strokeStyle = 'rgba(0,0,0,0.65)';
+      ctx.lineWidth = sz * 0.08;
+      ctx.strokeText(t.content, 0, 0);
+    }
+    ctx.fillStyle = t.color || '#ffffff';
+    ctx.fillText(t.content, 0, 0);
+    ctx.restore();
+  }
 
   // Logo watermark overlay
   if (logo) {
@@ -611,6 +678,391 @@ export async function renderFinal(
   }
 
   return { canvas, W, H };
+}
+
+export function drawPhotoroomScene(ctx, W, H, sceneId = "podium_light") {
+  const horizonY = Math.round(H * 0.72);
+  ctx.save();
+
+  if (sceneId === "podium_light") {
+    const wall = ctx.createLinearGradient(0, 0, 0, horizonY);
+    wall.addColorStop(0, "#f8fafc");
+    wall.addColorStop(1, "#e2e8f0");
+    ctx.fillStyle = wall;
+    ctx.fillRect(0, 0, W, horizonY);
+
+    const floor = ctx.createLinearGradient(0, horizonY, 0, H);
+    floor.addColorStop(0, "#cbd5e1");
+    floor.addColorStop(0.18, "#e2e8f0");
+    floor.addColorStop(1, "#f8fafc");
+    ctx.fillStyle = floor;
+    ctx.fillRect(0, horizonY, W, H - horizonY);
+
+    const spot = ctx.createRadialGradient(W * 0.5, H * 0.42, W * 0.05, W * 0.5, H * 0.5, W * 0.65);
+    spot.addColorStop(0, "rgba(255,255,255,0.65)");
+    spot.addColorStop(1, "rgba(255,255,255,0)");
+    ctx.fillStyle = spot;
+    ctx.fillRect(0, 0, W, H);
+  } else if (sceneId === "sunbeam_wall") {
+    const wall = ctx.createLinearGradient(0, 0, 0, horizonY);
+    wall.addColorStop(0, "#fdfbf7");
+    wall.addColorStop(1, "#ece3d5");
+    ctx.fillStyle = wall;
+    ctx.fillRect(0, 0, W, horizonY);
+
+    const floor = ctx.createLinearGradient(0, horizonY, 0, H);
+    floor.addColorStop(0, "#d8cbb8");
+    floor.addColorStop(1, "#f3ede2");
+    ctx.fillStyle = floor;
+    ctx.fillRect(0, horizonY, W, H - horizonY);
+
+    // Diagonal warm window sunlight beams
+    ctx.save();
+    ctx.globalCompositeOperation = "overlay";
+    ctx.fillStyle = "rgba(255, 244, 214, 0.55)";
+    for (let i = -2; i < 6; i++) {
+      ctx.beginPath();
+      const startX = W * (0.12 + i * 0.18);
+      ctx.moveTo(startX, 0);
+      ctx.lineTo(startX + W * 0.09, 0);
+      ctx.lineTo(startX + W * 0.42, H);
+      ctx.lineTo(startX + W * 0.30, H);
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.restore();
+  } else if (sceneId === "marble_luxury") {
+    const bg = ctx.createLinearGradient(0, 0, W, H);
+    bg.addColorStop(0, "#ffffff");
+    bg.addColorStop(0.65, "#f3f4f6");
+    bg.addColorStop(1, "#e5e7eb");
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, W, H);
+
+    // Subtle marble veins
+    ctx.strokeStyle = "rgba(156, 163, 175, 0.16)";
+    ctx.lineWidth = Math.max(1.5, W * 0.002);
+    for (let v = 0; v < 7; v++) {
+      ctx.beginPath();
+      let vx = (W * (v + 0.5)) / 7;
+      ctx.moveTo(vx, 0);
+      for (let y = 0; y <= H; y += H / 8) {
+        vx += Math.sin(y * 0.02 + v) * (W * 0.025);
+        ctx.lineTo(vx, y);
+      }
+      ctx.stroke();
+    }
+
+    const floor = ctx.createLinearGradient(0, horizonY, 0, H);
+    floor.addColorStop(0, "rgba(209, 213, 219, 0.55)");
+    floor.addColorStop(1, "rgba(255, 255, 255, 0.9)");
+    ctx.fillStyle = floor;
+    ctx.fillRect(0, horizonY, W, H - horizonY);
+  } else if (sceneId === "wood_table") {
+    const wall = ctx.createLinearGradient(0, 0, 0, horizonY);
+    wall.addColorStop(0, "#f4f1ea");
+    wall.addColorStop(1, "#ded6c8");
+    ctx.fillStyle = wall;
+    ctx.fillRect(0, 0, W, horizonY);
+
+    const wood = ctx.createLinearGradient(0, horizonY, 0, H);
+    wood.addColorStop(0, "#9c6b3b");
+    wood.addColorStop(0.15, "#b58350");
+    wood.addColorStop(1, "#85582c");
+    ctx.fillStyle = wood;
+    ctx.fillRect(0, horizonY, W, H - horizonY);
+
+    // Subtle wood plank lines
+    ctx.strokeStyle = "rgba(68, 38, 12, 0.15)";
+    ctx.lineWidth = Math.max(1, H * 0.002);
+    for (let y = horizonY + 8; y < H; y += Math.max(8, Math.round((H - horizonY) / 9))) {
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(W, y);
+      ctx.stroke();
+    }
+  } else if (sceneId === "botanical_bokeh") {
+    const g = ctx.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, "#d9f99d");
+    g.addColorStop(0.45, "#86efac");
+    g.addColorStop(0.75, "#4ade80");
+    g.addColorStop(1, "#dcfce7");
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, W, H);
+
+    // Dreamy bokeh circles
+    const orbs = [
+      [0.15, 0.2, 0.14, "rgba(254, 240, 138, 0.45)"],
+      [0.82, 0.18, 0.18, "rgba(255, 255, 255, 0.4)"],
+      [0.48, 0.28, 0.12, "rgba(254, 249, 195, 0.5)"],
+      [0.25, 0.55, 0.16, "rgba(187, 247, 208, 0.45)"],
+      [0.75, 0.48, 0.15, "rgba(254, 240, 138, 0.4)"]
+    ];
+    orbs.forEach(([ox, oy, orad, col]) => {
+      const rg = ctx.createRadialGradient(W * ox, H * oy, 0, W * ox, H * oy, W * orad);
+      rg.addColorStop(0, col);
+      rg.addColorStop(1, "rgba(255,255,255,0)");
+      ctx.fillStyle = rg;
+      ctx.fillRect(0, 0, W, H);
+    });
+
+    // Clean bright podium floor at base
+    const floor = ctx.createLinearGradient(0, horizonY, 0, H);
+    floor.addColorStop(0, "rgba(240, 253, 244, 0.85)");
+    floor.addColorStop(1, "#ffffff");
+    ctx.fillStyle = floor;
+    ctx.fillRect(0, horizonY, W, H - horizonY);
+  } else if (sceneId === "golden_sunset") {
+    const wall = ctx.createLinearGradient(0, 0, 0, horizonY);
+    wall.addColorStop(0, "#fed7aa");
+    wall.addColorStop(0.6, "#fdba74");
+    wall.addColorStop(1, "#fde68a");
+    ctx.fillStyle = wall;
+    ctx.fillRect(0, 0, W, horizonY);
+
+    const floor = ctx.createLinearGradient(0, horizonY, 0, H);
+    floor.addColorStop(0, "#f59e0b");
+    floor.addColorStop(0.2, "#fbbf24");
+    floor.addColorStop(1, "#fef3c7");
+    ctx.fillStyle = floor;
+    ctx.fillRect(0, horizonY, W, H - horizonY);
+
+    const sun = ctx.createRadialGradient(W * 0.5, horizonY, W * 0.02, W * 0.5, horizonY, W * 0.55);
+    sun.addColorStop(0, "rgba(255, 251, 235, 0.8)");
+    sun.addColorStop(1, "rgba(255, 251, 235, 0)");
+    ctx.fillStyle = sun;
+    ctx.fillRect(0, 0, W, H);
+  } else if (sceneId === "neon_cyber") {
+    const bg = ctx.createLinearGradient(0, 0, 0, H);
+    bg.addColorStop(0, "#090a10");
+    bg.addColorStop(0.72, "#111827");
+    bg.addColorStop(1, "#030712");
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, W, H);
+
+    const cyanRim = ctx.createRadialGradient(W * 0.18, H * 0.45, 0, W * 0.18, H * 0.45, W * 0.5);
+    cyanRim.addColorStop(0, "rgba(6, 182, 212, 0.35)");
+    cyanRim.addColorStop(1, "rgba(6, 182, 212, 0)");
+    ctx.fillStyle = cyanRim;
+    ctx.fillRect(0, 0, W, H);
+
+    const pinkRim = ctx.createRadialGradient(W * 0.82, H * 0.45, 0, W * 0.82, H * 0.45, W * 0.5);
+    pinkRim.addColorStop(0, "rgba(236, 72, 153, 0.35)");
+    pinkRim.addColorStop(1, "rgba(236, 72, 153, 0)");
+    ctx.fillStyle = pinkRim;
+    ctx.fillRect(0, 0, W, H);
+
+    ctx.strokeStyle = "rgba(108, 99, 255, 0.5)";
+    ctx.lineWidth = Math.max(2, H * 0.003);
+    ctx.beginPath();
+    ctx.moveTo(0, horizonY);
+    ctx.lineTo(W, horizonY);
+    ctx.stroke();
+  } else if (sceneId === "spotlight_dark") {
+    ctx.fillStyle = "#090d16";
+    ctx.fillRect(0, 0, W, H);
+
+    const cone = ctx.createRadialGradient(W * 0.5, H * 0.35, W * 0.04, W * 0.5, H * 0.55, W * 0.55);
+    cone.addColorStop(0, "rgba(255, 255, 255, 0.28)");
+    cone.addColorStop(0.5, "rgba(148, 163, 184, 0.10)");
+    cone.addColorStop(1, "rgba(0, 0, 0, 0)");
+    ctx.fillStyle = cone;
+    ctx.fillRect(0, 0, W, H);
+
+    const floorPool = ctx.createRadialGradient(W * 0.5, H * 0.82, W * 0.05, W * 0.5, H * 0.82, W * 0.45);
+    floorPool.addColorStop(0, "rgba(255, 255, 255, 0.22)");
+    floorPool.addColorStop(1, "rgba(0, 0, 0, 0)");
+    ctx.fillStyle = floorPool;
+    ctx.fillRect(0, horizonY - H * 0.05, W, H - horizonY + H * 0.05);
+  }
+
+  ctx.restore();
+}
+
+export async function renderPhotoroomCutoutComposite(origImg, subImg, opts = {}) {
+  const {
+    mode = "transparent",
+    color = "#ffffff",
+    blur = 14,
+    scene = "podium_light",
+    customBgUrl = null,
+    shadowType = "contact",
+    shadowOpacity = 45,
+    shadowBlur = 24,
+    shadowX = 0,
+    shadowY = 12,
+    outlineWidth = 0,
+    outlineColor = "#ffffff",
+    subjectScale = 1.0,
+    subjectX = 0,
+    subjectY = 0
+  } = opts;
+
+  const W = origImg.naturalWidth || origImg.width;
+  const H = origImg.naturalHeight || origImg.height;
+  const c = document.createElement("canvas");
+  c.width = W;
+  c.height = H;
+  const ctx = c.getContext("2d");
+
+  // 1. Render Background Layer
+  if (mode === "color") {
+    ctx.fillStyle = color;
+    ctx.fillRect(0, 0, W, H);
+  } else if (mode === "scene") {
+    drawPhotoroomScene(ctx, W, H, scene);
+  } else if (mode === "blur") {
+    ctx.save();
+    ctx.filter = `blur(${blur}px)`;
+    ctx.drawImage(origImg, -30, -30, W + 60, H + 60);
+    ctx.restore();
+  } else if (mode === "custom_bg" && customBgUrl) {
+    try {
+      const bgImg = await loadImageFromSrc(customBgUrl);
+      // Cover fit
+      const scale = Math.max(W / bgImg.naturalWidth, H / bgImg.naturalHeight);
+      const bW = bgImg.naturalWidth * scale;
+      const bH = bgImg.naturalHeight * scale;
+      ctx.drawImage(bgImg, (W - bW) / 2, (H - bH) / 2, bW, bH);
+    } catch (e) {
+      ctx.fillStyle = color || "#ffffff";
+      ctx.fillRect(0, 0, W, H);
+    }
+  }
+
+  // 2. Compute Subject placement & alpha bounding box (for realistic floor contact shadow)
+  const sW = Math.round(W * subjectScale);
+  const sH = Math.round(H * subjectScale);
+  const drawX = Math.round((W - sW) / 2 + (subjectX / 100) * W);
+  const drawY = Math.round((H - sH) / 2 + (subjectY / 100) * H);
+
+  // Measure alpha bounds of subject on a compact 256px sample grid
+  const sampleW = 256;
+  const sampleH = Math.max(1, Math.round((H / W) * sampleW));
+  const sCanvas = document.createElement("canvas");
+  sCanvas.width = sampleW;
+  sCanvas.height = sampleH;
+  const sCtx = sCanvas.getContext("2d");
+  sCtx.drawImage(subImg, 0, 0, sampleW, sampleH);
+  const sData = sCtx.getImageData(0, 0, sampleW, sampleH).data;
+
+  let minX = sampleW, maxX = 0, maxY = 0;
+  for (let y = 0; y < sampleH; y++) {
+    for (let x = 0; x < sampleW; x++) {
+      if (sData[(y * sampleW + x) * 4 + 3] > 35) {
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+        if (y > maxY) maxY = y;
+      }
+    }
+  }
+  if (maxX <= minX) {
+    minX = sampleW * 0.25;
+    maxX = sampleW * 0.75;
+    maxY = sampleH * 0.85;
+  }
+
+  const baseCenterX = drawX + ((minX + maxX) / 2 / sampleW) * sW + (shadowX / 100) * W * 0.25;
+  const baseBottomY = drawY + (maxY / sampleH) * sH + (shadowY / 100) * H * 0.1;
+  const subjectSpanW = Math.max(W * 0.15, ((maxX - minX) / sampleW) * sW);
+
+  // 3. Render Photoroom AI Shadow
+  const alpha = Math.min(1, Math.max(0, shadowOpacity / 100));
+  if (shadowType === "contact" && alpha > 0) {
+    // Dual-layer grounding contact shadow under the subject's feet/base
+    const rxOuter = subjectSpanW * 0.56;
+    const ryOuter = Math.max(6, H * 0.032 * (shadowBlur / 24 + 0.4));
+
+    ctx.save();
+    ctx.translate(baseCenterX, baseBottomY);
+    ctx.scale(1, ryOuter / rxOuter);
+    const gOuter = ctx.createRadialGradient(0, 0, rxOuter * 0.05, 0, 0, rxOuter);
+    gOuter.addColorStop(0, `rgba(0, 0, 0, ${(alpha * 0.75).toFixed(3)})`);
+    gOuter.addColorStop(0.45, `rgba(0, 0, 0, ${(alpha * 0.35).toFixed(3)})`);
+    gOuter.addColorStop(1, "rgba(0, 0, 0, 0)");
+    ctx.fillStyle = gOuter;
+    ctx.beginPath();
+    ctx.arc(0, 0, rxOuter, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    // Tight dark ambient occlusion core right at contact point
+    const rxCore = subjectSpanW * 0.34;
+    const ryCore = Math.max(3, H * 0.012);
+    ctx.save();
+    ctx.translate(baseCenterX, baseBottomY - ryCore * 0.2);
+    ctx.scale(1, ryCore / rxCore);
+    const gCore = ctx.createRadialGradient(0, 0, 0, 0, 0, rxCore);
+    gCore.addColorStop(0, `rgba(0, 0, 0, ${Math.min(0.92, alpha * 0.95).toFixed(3)})`);
+    gCore.addColorStop(1, "rgba(0, 0, 0, 0)");
+    ctx.fillStyle = gCore;
+    ctx.beginPath();
+    ctx.arc(0, 0, rxCore, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  } else if (shadowType === "floating" && alpha > 0) {
+    const floatY = Math.min(H - 8, baseBottomY + H * 0.055);
+    const rx = subjectSpanW * 0.48;
+    const ry = Math.max(6, H * 0.025 * (shadowBlur / 24 + 0.5));
+    ctx.save();
+    ctx.translate(baseCenterX, floatY);
+    ctx.scale(1, ry / rx);
+    const g = ctx.createRadialGradient(0, 0, rx * 0.05, 0, 0, rx);
+    g.addColorStop(0, `rgba(0, 0, 0, ${(alpha * 0.7).toFixed(3)})`);
+    g.addColorStop(0.55, `rgba(0, 0, 0, ${(alpha * 0.25).toFixed(3)})`);
+    g.addColorStop(1, "rgba(0, 0, 0, 0)");
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(0, 0, rx, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  } else if (shadowType === "drop" && alpha > 0) {
+    // Silhouette drop shadow
+    const silCanvas = document.createElement("canvas");
+    silCanvas.width = W;
+    silCanvas.height = H;
+    const silCtx = silCanvas.getContext("2d");
+    const offX = Math.round((shadowX / 100) * W * 0.12);
+    const offY = Math.round((shadowY / 100) * H * 0.12);
+    silCtx.drawImage(subImg, drawX + offX, drawY + offY, sW, sH);
+    silCtx.globalCompositeOperation = "source-in";
+    silCtx.fillStyle = `rgba(0, 0, 0, ${alpha.toFixed(3)})`;
+    silCtx.fillRect(0, 0, W, H);
+
+    ctx.save();
+    const scaledBlur = Math.max(2, Math.round((shadowBlur / 1000) * Math.max(W, H)));
+    ctx.filter = `blur(${scaledBlur}px)`;
+    ctx.drawImage(silCanvas, 0, 0);
+    ctx.restore();
+  }
+
+  // 4. Render Sticker / Cutout Outline if enabled
+  if (outlineWidth > 0) {
+    const rad = Math.max(2, Math.round((outlineWidth / 1000) * Math.max(W, H)));
+    const sil = document.createElement("canvas");
+    sil.width = sW;
+    sil.height = sH;
+    const sCtx2 = sil.getContext("2d");
+    sCtx2.drawImage(subImg, 0, 0, sW, sH);
+    sCtx2.globalCompositeOperation = "source-in";
+    sCtx2.fillStyle = outlineColor || "#ffffff";
+    sCtx2.fillRect(0, 0, sW, sH);
+
+    ctx.save();
+    const steps = 16;
+    for (let i = 0; i < steps; i++) {
+      const angle = (i / steps) * Math.PI * 2;
+      const ox = Math.cos(angle) * rad;
+      const oy = Math.sin(angle) * rad;
+      ctx.drawImage(sil, drawX + ox, drawY + oy);
+    }
+    ctx.restore();
+  }
+
+  // 5. Draw Crisp Foreground Subject Cutout
+  ctx.drawImage(subImg, drawX, drawY, sW, sH);
+
+  return c.toDataURL("image/png");
 }
 
 export function getExportDims(natW,natH,scaleVal){

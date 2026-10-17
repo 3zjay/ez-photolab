@@ -6,8 +6,10 @@ import { DEFAULT_FILTERS, FB_MODES, DEFAULT_HSL_MIXER } from "./constants";
 import {
   toCSSFilter, toTransformCSS, saveFile, canvasToBlob, loadImageFromSrc,
   renderFinal, getExportDims, applyUnsharpMask, applyNoiseReduction, applyAutoLevels, applyAutoContrast, calcBatchDims,
-  apply3DLut, applyBeautyPipeline, applyStructureAi, applySkyReplacement, applyRelight
+  apply3DLut, applyBeautyPipeline, applyStructureAi, applySkyReplacement, applyRelight,
+  renderPhotoroomCutoutComposite
 } from "./utils";
+import { inpaintCanvasLocal } from "./inpaintEngine";
 import { createSkinMask, createFaceOvalMask } from "./faceMasking";
 import { restoreFaceLocal } from "./faceRestore";
 import { decodeRaw, RAW_REGEX } from "./rawProcessor";
@@ -249,6 +251,22 @@ export default function App() {
   const [bgColor, setBgColor] = useState("#ffffff");
   const [bgBlur, setBgBlur] = useState(14);
   const [bgResult, setBgResult] = useState(null);
+
+  // Photoroom AI Studio Scene, Shadow, Outline & Subject Placement State
+  const [bgScene, setBgScene] = useState("minimal_podium");
+  const [bgCustomUrl, setBgCustomUrl] = useState(null);
+  const [bgShadowType, setBgShadowType] = useState("contact");
+  const [bgShadowOpacity, setBgShadowOpacity] = useState(55);
+  const [bgShadowBlur, setBgShadowBlur] = useState(24);
+  const [bgShadowX, setBgShadowX] = useState(0);
+  const [bgShadowY, setBgShadowY] = useState(12);
+  const [bgOutlineWidth, setBgOutlineWidth] = useState(0);
+  const [bgOutlineColor, setBgOutlineColor] = useState("#ffffff");
+  const [bgSubjectScale, setBgSubjectScale] = useState(100);
+  const [bgSubjectX, setBgSubjectX] = useState(0);
+  const [bgSubjectY, setBgSubjectY] = useState(0);
+  const [eraseMode, setEraseMode] = useState(false);
+  const [eraseHistory, setEraseHistory] = useState([]);
 
   // Single Editor Logo / Watermark State
   const [logo, setLogo] = useState(null);
@@ -787,9 +805,59 @@ export default function App() {
     return () => document.removeEventListener('input', onSliderInput, { capture: true });
   }, []);
 
+  const buildBgComposite = useCallback(async (subUrlOverride) => {
+    const subUrl = subUrlOverride || bgSubUrl;
+    if (!image || !subUrl) return;
+    try {
+      const [origImg, subImg] = await Promise.all([
+        loadImageFromSrc(image),
+        loadImageFromSrc(subUrl)
+      ]);
+      let customBgImg = null;
+      if (bgMode === "custom" && bgCustomUrl) {
+        try {
+          customBgImg = await loadImageFromSrc(bgCustomUrl);
+        } catch (e) {
+          console.warn("Custom background load error:", e);
+        }
+      }
+      const dataUrl = renderPhotoroomCutoutComposite(origImg, subImg, {
+        mode: bgMode,
+        color: bgColor,
+        blur: bgBlur,
+        sceneId: bgScene,
+        customBgImg,
+        shadowType: bgShadowType,
+        shadowOpacity: bgShadowOpacity / 100,
+        shadowBlur: bgShadowBlur,
+        shadowOffsetX: bgShadowX,
+        shadowOffsetY: bgShadowY,
+        outlineWidth: bgOutlineWidth,
+        outlineColor: bgOutlineColor,
+        subjectScale: bgSubjectScale / 100,
+        subjectX: bgSubjectX,
+        subjectY: bgSubjectY
+      });
+      setBgResult(dataUrl);
+    } catch (e) {
+      console.error("Photoroom composite render error:", e);
+    }
+  }, [
+    image, bgSubUrl, bgMode, bgColor, bgBlur, bgScene, bgCustomUrl,
+    bgShadowType, bgShadowOpacity, bgShadowBlur, bgShadowX, bgShadowY,
+    bgOutlineWidth, bgOutlineColor, bgSubjectScale, bgSubjectX, bgSubjectY
+  ]);
+
   useEffect(() => {
-    if (bgSubUrl && bgStatus === "done") buildBgComposite(bgSubUrl, bgMode, bgColor, bgBlur);
-  }, [bgMode, bgColor, bgBlur, bgSubUrl]);
+    if (bgSubUrl && bgStatus === "done") {
+      buildBgComposite(bgSubUrl);
+    }
+  }, [bgSubUrl, bgStatus, buildBgComposite]);
+
+  const clearBgCutout = useCallback(() => {
+    setBgStatus("idle");
+    setBgResult(null);
+  }, []);
 
   const onSplitMove = useCallback((cx) => {
     if (!splitRef.current) return;
@@ -827,7 +895,6 @@ export default function App() {
             setOriginalImage(result.url);
             setFilters(DEFAULT_FILTERS);
             
-            // Map EXIF orientation to rotation and flips
             const orientation = result.orientation || 1;
             let rot = 0;
             let fH = false;
@@ -855,6 +922,7 @@ export default function App() {
             setBgStatus("idle");
             setBgSubUrl(null);
             setBgResult(null);
+            setEraseHistory([]);
             setSplitPos(50);
             setShowBefore(false);
           } else {
@@ -894,6 +962,7 @@ export default function App() {
         setBgStatus("idle");
         setBgSubUrl(null);
         setBgResult(null);
+        setEraseHistory([]);
         setSplitPos(50);
         setShowBefore(false);
       };
@@ -947,6 +1016,13 @@ export default function App() {
     setBgResult(null);
     setBgSubUrl(null);
     setBgStatus('idle');
+    setBgShadowType('contact');
+    setBgOutlineWidth(0);
+    setBgSubjectScale(100);
+    setBgSubjectX(0);
+    setBgSubjectY(0);
+    setEraseMode(false);
+    setEraseHistory([]);
     setAiUpscaleResult(null);
     setAiFaceRestoreResult(null);
     setAiRemoveResult(null);
@@ -967,19 +1043,124 @@ export default function App() {
     setImage(url);
   }, []);
 
-  const applyCrop = () => {
-    const img = imgRef.current; if (!img) return;
-    const W = img.naturalWidth, H = img.naturalHeight;
-    const sx = cropBox.x / 100 * W, sy = cropBox.y / 100 * H;
-    const sw = cropBox.w / 100 * W, sh = cropBox.h / 100 * H;
-    const c = document.createElement("canvas"); c.width = sw; c.height = sh;
-    const ctx = c.getContext("2d"); ctx.drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh);
-    setImage(c.toDataURL("image/png")); setCropMode(false); setCropBox({ x: 0, y: 0, w: 100, h: 100 });
+  const applyCrop = async () => {
+    const src = (bgStatus === "done" && bgResult) ? bgResult : image;
+    if (!src) return;
+    try {
+      const img = await loadImageFromSrc(src);
+      const W = img.naturalWidth, H = img.naturalHeight;
+      // First bake any active rotation/flip onto a full-size source canvas
+      const rotCanvas = document.createElement("canvas");
+      rotCanvas.width = W;
+      rotCanvas.height = H;
+      const rCtx = rotCanvas.getContext("2d");
+      rCtx.save();
+      rCtx.translate(W / 2, H / 2);
+      if (rotation) rCtx.rotate((rotation * Math.PI) / 180);
+      rCtx.scale(flipH ? -1 : 1, flipV ? -1 : 1);
+      rCtx.drawImage(img, -W / 2, -H / 2, W, H);
+      rCtx.restore();
+
+      const sx = Math.round((cropBox.x / 100) * W);
+      const sy = Math.round((cropBox.y / 100) * H);
+      const sw = Math.max(1, Math.round((cropBox.w / 100) * W));
+      const sh = Math.max(1, Math.round((cropBox.h / 100) * H));
+
+      const c = document.createElement("canvas");
+      c.width = sw;
+      c.height = sh;
+      const ctx = c.getContext("2d");
+      ctx.drawImage(rotCanvas, sx, sy, sw, sh, 0, 0, sw, sh);
+      const croppedUrl = c.toDataURL("image/png");
+      setImage(croppedUrl);
+      setRotation(0);
+      setFlipH(false);
+      setFlipV(false);
+      if (bgStatus === "done") {
+        setBgResult(croppedUrl);
+      }
+      setCropMode(false);
+      setCropBox({ x: 0, y: 0, w: 100, h: 100 });
+    } catch (e) {
+      console.error("Apply crop failed:", e);
+    }
+  };
+
+  const applyCanvasPreset = async (preset, paddingPct = 8, fillMode = "color", fillColor = "#ffffff") => {
+    const src = (bgStatus === "done" && bgResult) ? bgResult : image;
+    if (!src || !preset?.w || !preset?.h) return;
+    try {
+      const img = await loadImageFromSrc(src);
+      const targetW = preset.w;
+      const targetH = preset.h;
+      const c = document.createElement("canvas");
+      c.width = targetW;
+      c.height = targetH;
+      const ctx = c.getContext("2d");
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = "high";
+
+      if (fillMode === "color") {
+        ctx.fillStyle = fillColor || "#ffffff";
+        ctx.fillRect(0, 0, targetW, targetH);
+      } else if (fillMode === "blur") {
+        const origImg = originalImage ? await loadImageFromSrc(originalImage) : img;
+        const coverScale = Math.max(targetW / origImg.naturalWidth, targetH / origImg.naturalHeight) * 1.1;
+        const bw = origImg.naturalWidth * coverScale;
+        const bh = origImg.naturalHeight * coverScale;
+        ctx.save();
+        ctx.filter = "blur(28px) brightness(0.95)";
+        ctx.drawImage(origImg, (targetW - bw) / 2, (targetH - bh) / 2, bw, bh);
+        ctx.restore();
+      }
+
+      const padFraction = Math.max(0, Math.min(0.45, (paddingPct || 0) / 100));
+      const availW = targetW * (1 - padFraction * 2);
+      const availH = targetH * (1 - padFraction * 2);
+      const fitScale = Math.min(availW / img.naturalWidth, availH / img.naturalHeight);
+      const drawW = Math.round(img.naturalWidth * fitScale);
+      const drawH = Math.round(img.naturalHeight * fitScale);
+      const drawX = Math.round((targetW - drawW) / 2);
+      const drawY = Math.round((targetH - drawH) / 2);
+
+      ctx.drawImage(img, drawX, drawY, drawW, drawH);
+      const resizedUrl = c.toDataURL("image/png");
+      setImage(resizedUrl);
+      if (bgStatus === "done") {
+        setBgResult(resizedUrl);
+      }
+      setCropMode(false);
+      setCropBox({ x: 0, y: 0, w: 100, h: 100 });
+    } catch (e) {
+      console.error("Smart canvas resize failed:", e);
+    }
   };
 
   const addText = () => {
     const id = Date.now();
-    setTexts(p => [...p, { id, content: "Tap to edit", x: 50, y: 50, fontSize: 48, color: "#ffffff", font: "System", bold: false, italic: false, stroke: true }]);
+    setTexts(p => [
+      ...p,
+      {
+        id,
+        type: "text",
+        content: "Tap to edit",
+        x: 50,
+        y: 50,
+        fontSize: 48,
+        color: "#ffffff",
+        font: "Montserrat",
+        bold: true,
+        italic: false,
+        stroke: false,
+        shadow: true,
+        bgEnabled: false,
+        bgColor: "#6c63ff",
+        bgRadius: 12,
+        opacity: 1,
+        rotation: 0,
+        visible: true
+      }
+    ]);
     setSelText(id);
   };
   const updateText = (id, key, val) => setTexts(p => p.map(t => t.id === id ? { ...t, [key]: val } : t));
@@ -993,20 +1174,13 @@ export default function App() {
       const blob = await (await fetch(image)).blob();
       const out = await removeBackground(blob, { progress: (k, c, t) => setBgProgress(Math.round(c / t * 100)), model: "medium" });
       const url = URL.createObjectURL(out);
-      setBgSubUrl(url); setBgStatus("done");
-      await buildBgComposite(url, bgMode, bgColor, bgBlur);
-    } catch (e) { console.error(e); setBgStatus("error"); }
-  };
-  const buildBgComposite = async (subUrl, mode, color, blur) => {
-    const orig = imgRef.current; if (!orig || !subUrl) return;
-    const W = orig.naturalWidth, H = orig.naturalHeight;
-    const sub = new Image(); sub.src = subUrl;
-    await new Promise(r => { sub.onload = r; if (sub.complete) r(); });
-    const c = document.createElement("canvas"); c.width = W; c.height = H; const ctx = c.getContext("2d");
-    if (mode === "transparent") ctx.drawImage(sub, 0, 0, W, H);
-    else if (mode === "color") { ctx.fillStyle = color; ctx.fillRect(0, 0, W, H); ctx.drawImage(sub, 0, 0, W, H); }
-    else if (mode === "blur") { ctx.filter = `blur(${blur}px)`; ctx.drawImage(orig, -30, -30, W + 60, H + 60); ctx.filter = "none"; ctx.drawImage(sub, 0, 0, W, H); }
-    setBgResult(c.toDataURL("image/png"));
+      setBgSubUrl(url);
+      setBgStatus("done");
+      await buildBgComposite(url);
+    } catch (e) {
+      console.error(e);
+      setBgStatus("error");
+    }
   };
 
   const combinedFilters = useMemo(() => {
@@ -1112,8 +1286,8 @@ export default function App() {
 
   const isHslEdited = Object.values(hslMixer).some(c => c.hue !== 0 || c.sat !== 0 || c.lum !== 0);
   const isCurvesEdited = Object.values(curves).some(pts => pts.some(p => (p.x === 0 && p.y !== 0) || (p.x === 255 && p.y !== 255) || (p.x !== 0 && p.x !== 255)));
-  const isEdited = Object.entries(filters).some(([k, v]) => v !== DEFAULT_FILTERS[k]) || isHslEdited || isCurvesEdited || rotation !== 0 || flipH || flipV || texts.length > 0 || lutId !== 'none' || accentAi !== 0 || structureAi !== 0 || skyMode !== 'none' || relightNear !== 0 || relightFar !== 0 || chromatic !== 0 || prism !== 0 || halation !== 0 || filmDust !== 0 || glitter !== 0 || vhs || lightLeak !== 'none' || heatmap !== 0;
-  const showSplit = isEdited && activeTab === "edit" && !cropMode;
+  const isEdited = Object.entries(filters).some(([k, v]) => v !== DEFAULT_FILTERS[k]) || isHslEdited || isCurvesEdited || rotation !== 0 || flipH || flipV || texts.length > 0 || lutId !== 'none' || accentAi !== 0 || structureAi !== 0 || skyMode !== 'none' || relightNear !== 0 || relightFar !== 0 || chromatic !== 0 || prism !== 0 || halation !== 0 || filmDust !== 0 || glitter !== 0 || vhs || lightLeak !== 'none' || heatmap !== 0 || bgStatus === "done" || eraseHistory.length > 0 || aiBeautySmooth !== 0 || aiBeautyClarity !== 0 || aiBeautyGlow !== 0;
+  const showSplit = isEdited && activeTab === "edit" && !cropMode && !eraseMode;
   const transformCSS = toTransformCSS(rotation, flipH, flipV);
 
   const selectSourceFolder = async () => {
@@ -2101,13 +2275,17 @@ export default function App() {
   const initMaskCanvas = useCallback((clearResult = false) => {
     const mc = maskCanvasRef.current;
     const img = imgRef.current;
-    if (!mc || !img) return;
-    mc.width = img.naturalWidth;
-    mc.height = img.naturalHeight;
-    const ctx = mc.getContext('2d');
-    ctx.fillStyle = '#000000';
-    ctx.fillRect(0, 0, mc.width, mc.height);
-    setAiMaskReady(false);
+    if (!mc) return;
+    const targetW = img?.naturalWidth || 1200;
+    const targetH = img?.naturalHeight || 900;
+    if (clearResult || mc.width !== targetW || mc.height !== targetH) {
+      mc.width = targetW;
+      mc.height = targetH;
+      const ctx = mc.getContext('2d');
+      ctx.fillStyle = '#000000';
+      ctx.fillRect(0, 0, mc.width, mc.height);
+      setAiMaskReady(false);
+    }
     if (clearResult) {
       setAiRemoveResult(null);
       setAiRemoveStatus('idle');
@@ -2115,12 +2293,21 @@ export default function App() {
     }
   }, []);
 
-  const drawMask = useCallback((e, canvas) => {
+  const drawMask = useCallback((e, containerEl) => {
     if (!maskDrawingRef.current) return;
-    const mc = maskCanvasRef.current;
+    let mc = maskCanvasRef.current;
+    const img = imgRef.current;
     if (!mc) return;
+    if ((!mc.width || !mc.height) && img?.naturalWidth) {
+      mc.width = img.naturalWidth;
+      mc.height = img.naturalHeight;
+      const initCtx = mc.getContext('2d');
+      initCtx.fillStyle = '#000000';
+      initCtx.fillRect(0, 0, mc.width, mc.height);
+    }
     const ctx = mc.getContext('2d');
-    const rect = canvas.getBoundingClientRect();
+    const rect = containerEl.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
     const scaleX = mc.width / rect.width;
     const scaleY = mc.height / rect.height;
     const clientX = e.touches ? e.touches[0].clientX : e.clientX;
@@ -2129,53 +2316,97 @@ export default function App() {
     const y = (clientY - rect.top) * scaleY;
     ctx.fillStyle = '#ffffff';
     ctx.beginPath();
-    ctx.arc(x, y, aiRemoveBrush * scaleX, 0, Math.PI * 2);
+    ctx.arc(x, y, Math.max(4, (aiRemoveBrush / 2) * scaleX), 0, Math.PI * 2);
     ctx.fill();
     setAiMaskReady(true);
   }, [aiRemoveBrush]);
 
+  const handleUndoErase = useCallback(() => {
+    setEraseHistory(prev => {
+      if (prev.length === 0) return prev;
+      const last = prev[prev.length - 1];
+      setImage(last);
+      return prev.slice(0, -1);
+    });
+  }, []);
+
   const handleAiRemove = useCallback(async () => {
-    if (!aiMaskReady) { alert('Paint over the area to remove first.'); return; }
-    const mc = maskCanvasRef.current;
-    if (!mc) return;
-    if (!claidApiKey.trim()) { alert('Enter your Claid.ai API key first.'); return; }
-    if (!image) return;
-    setAiRemoveStatus('loading'); setAiRemoveResult(null); setAiRemoveLog('Preparing image…');
-    try {
-      const srcImg = await loadImageFromSrc(image);
-      const tmpCanvas = document.createElement('canvas');
-      tmpCanvas.width = srcImg.naturalWidth; tmpCanvas.height = srcImg.naturalHeight;
-      const tCtx = tmpCanvas.getContext('2d');
-      tCtx.filter = toCSSFilter(filters);
-      tCtx.drawImage(srcImg, 0, 0);
-      tCtx.filter = 'none';
-
-      const [imgBlob, maskBlob] = await Promise.all([
-        canvasToBlob(tmpCanvas, 'image/jpeg', 0.95),
-        canvasToBlob(mc, 'image/png'),
-      ]);
-
-      setAiRemoveLog('Uploading to Claid.ai…');
-      const form = new FormData();
-      form.append('image', imgBlob, 'photo.jpg');
-      form.append('mask', maskBlob, 'mask.png');
-      form.append('operations', JSON.stringify([{ operation: 'inpaint' }]));
-
-      const res = await fetch('https://api.claid.ai/v1-beta1/image/edit', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${claidApiKey.trim()}` },
-        body: form,
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.message || data?.error || `Claid error ${res.status}`);
-      const outUrl = data?.data?.output?.tmp_url || data?.data?.output?.url;
-      if (!outUrl) throw new Error(`No URL in response: ${JSON.stringify(data).slice(0, 200)}`);
-      setAiRemoveResult(outUrl); setAiRemoveStatus('done'); setAiRemoveLog('');
-    } catch (e) {
-      console.error(e); setAiRemoveStatus('error');
-      setAiRemoveLog(e?.message || 'Failed. Check your Claid.ai API key.');
+    if (!aiMaskReady) {
+      setAiRemoveLog('Paint over the object or blemish first.');
+      return;
     }
-  }, [aiMaskReady, claidApiKey, image, filters]);
+    const mc = maskCanvasRef.current;
+    if (!mc || !image) return;
+    setAiRemoveStatus('loading');
+    setAiRemoveResult(null);
+    setAiRemoveLog('Reconstructing background…');
+
+    try {
+      const activeSrc = (bgStatus === 'done' && bgResult) ? bgResult : image;
+      const srcImg = await loadImageFromSrc(activeSrc);
+      const tmpCanvas = document.createElement('canvas');
+      tmpCanvas.width = srcImg.naturalWidth;
+      tmpCanvas.height = srcImg.naturalHeight;
+      const tCtx = tmpCanvas.getContext('2d');
+      tCtx.drawImage(srcImg, 0, 0);
+
+      // If user explicitly provided a Claid.ai key, try Cloud LaMa first
+      if (claidApiKey?.trim()) {
+        try {
+          setAiRemoveLog('Uploading to Claid.ai LaMa…');
+          const [imgBlob, maskBlob] = await Promise.all([
+            canvasToBlob(tmpCanvas, 'image/jpeg', 0.95),
+            canvasToBlob(mc, 'image/png'),
+          ]);
+          const form = new FormData();
+          form.append('image', imgBlob, 'photo.jpg');
+          form.append('mask', maskBlob, 'mask.png');
+          form.append('operations', JSON.stringify([{ operation: 'inpaint' }]));
+
+          const res = await fetch('https://api.claid.ai/v1-beta1/image/edit', {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${claidApiKey.trim()}` },
+            body: form,
+          });
+          const data = await res.json();
+          if (res.ok) {
+            const outUrl = data?.data?.output?.tmp_url || data?.data?.output?.url;
+            if (outUrl) {
+              setAiRemoveResult(outUrl);
+              setAiRemoveStatus('done');
+              setAiRemoveLog('✓ Cloud LaMa inpainting complete');
+              return;
+            }
+          }
+        } catch (cloudErr) {
+          console.warn('Cloud inpaint fallback to local engine:', cloudErr);
+        }
+      }
+
+      // Free 100% In-Browser Harmonic Patch Inpainting Engine
+      await new Promise(r => setTimeout(r, 20));
+      const outCanvas = inpaintCanvasLocal(tmpCanvas, mc);
+      const resultDataUrl = outCanvas.toDataURL('image/png');
+
+      setEraseHistory(prev => [...prev.slice(-9), image]);
+      setImage(resultDataUrl);
+      if (bgStatus === 'done') {
+        setBgResult(resultDataUrl);
+      }
+
+      // Clear mask so user can immediately paint another spot
+      const mCtx = mc.getContext('2d');
+      mCtx.fillStyle = '#000000';
+      mCtx.fillRect(0, 0, mc.width, mc.height);
+      setAiMaskReady(false);
+      setAiRemoveStatus('done');
+      setAiRemoveLog('✓ Object erased! Paint another area or click Undo.');
+    } catch (e) {
+      console.error('Magic Retouch error:', e);
+      setAiRemoveStatus('error');
+      setAiRemoveLog(e?.message || 'Magic Retouch failed.');
+    }
+  }, [aiMaskReady, claidApiKey, image, bgStatus, bgResult]);
 
   const applyUpscalePipeline = async (sourceCanvas, scale, onProgress) => {
     const natW = sourceCanvas.width;
@@ -2232,7 +2463,7 @@ export default function App() {
       setAiUpscaleResultSize(`${W.toLocaleString()}×${H.toLocaleString()}px · ~${approxKb > 1024 ? (approxKb / 1024).toFixed(1) + 'MB' : approxKb + 'KB'}`);
       setAiUpscaleResult(resultUrl);
       setAiUpscaleStatus('done'); setAiUpscaleLog(''); setAiUpscaleProgress(100);
-      setExportScale(1); // Set default export scale to 1x (Original) since it is already upscaled
+      setExportScale(1);
       applyAiBaseImage(resultUrl);
     } catch (e) {
       console.error('Upscale error:', e);
@@ -2275,14 +2506,20 @@ export default function App() {
           // Color & LUTs / Grading props
           filters, setFilters, filterGroup, setFilterGroup, hslMixer, setHslMixer, curves, setCurves, isEdited, resetAll, revertAi, dm, cardBdr, cardBg, image, imgRef, runBrowserUpscale, aiUpscaleStatus, aiUpscaleLog, aiUpscaleProgress, aiUpscaleResult, aiUpscaleResultSize, applyAiResult, saveFile, aiScale, setAiScale, aiBeautySmooth, setAiBeautySmooth, aiBeautyClarity, setAiBeautyClarity, aiBeautyGlow, setAiBeautyGlow, aiBeautyUseMask, setAiBeautyUseMask, runFalFaceRestore, aiFaceRestoreStatus, aiFaceRestoreLog, aiFaceRestoreResult, lutId, setLutId, lutIntensity, setLutIntensity, customLutData, setCustomLutData, customLutName, setCustomLutName, user, logo, setLogo, logoFile, setLogoFile, logoScale, setLogoScale, logoScalePortrait, setLogoScalePortrait, logoOpacity, setLogoOpacity, logoPos, setLogoPos, logoMargin, setLogoMargin, handleLogoUpload, logoX, setLogoX, logoY, setLogoY,
           
-          // Adjust / Crop props
-          setRotation, setFlipH, setFlipV, rotation, flipH, flipV, cropMode, setCropMode, setCropBox, cropAspect, setCropAspect, applyCrop,
+          // Adjust / Crop & Marketplace Resize props
+          setRotation, setFlipH, setFlipV, rotation, flipH, flipV, cropMode, setCropMode, cropBox, setCropBox, cropAspect, setCropAspect, applyCrop, applyCanvasPreset,
           
-          // Tools / AI Canvas props
-          handleRemoveBg, bgStatus, bgProgress, bgSubUrl, bgMode, setBgMode, bgColor, setBgColor, bgBlur, setBgBlur, bgResult, falApiKey, saveFalKey, claidApiKey, saveClaidKey, aiRemoveBrush, setAiRemoveBrush, toCSSFilter, initMaskCanvas, maskCanvasRef, maskDrawingRef, drawMask, aiMaskReady, handleAiRemove, aiRemoveStatus, aiRemoveLog, aiRemoveResult,
+          // Tools / Photoroom Studio props
+          handleRemoveBg, clearBgCutout, bgStatus, bgProgress, bgSubUrl, bgMode, setBgMode, bgColor, setBgColor, bgBlur, setBgBlur, bgResult,
+          bgScene, setBgScene, bgCustomUrl, setBgCustomUrl,
+          bgShadowType, setBgShadowType, bgShadowOpacity, setBgShadowOpacity, bgShadowBlur, setBgShadowBlur, bgShadowX, setBgShadowX, bgShadowY, setBgShadowY,
+          bgOutlineWidth, setBgOutlineWidth, bgOutlineColor, setBgOutlineColor,
+          bgSubjectScale, setBgSubjectScale, bgSubjectX, setBgSubjectX, bgSubjectY, setBgSubjectY,
+          falApiKey, saveFalKey, claidApiKey, saveClaidKey, aiRemoveBrush, setAiRemoveBrush, toCSSFilter, initMaskCanvas, maskCanvasRef, maskDrawingRef, drawMask, aiMaskReady, handleAiRemove, aiRemoveStatus, aiRemoveLog, aiRemoveResult,
+          eraseMode, setEraseMode, canUndoErase: eraseHistory.length > 0, handleUndoErase,
           
-          // Overlay / Text props
-          texts, selText, setSelText, addText, deleteText, updateText, inputSt,
+          // Overlay / Layers props
+          texts, setTexts, selText, setSelText, addText, deleteText, updateText, inputSt,
 
           // PhotoLab AI props
           accentAi, setAccentAi, accentOffsets,
@@ -2297,6 +2534,21 @@ export default function App() {
       )}
     </div>
   );
+
+  const previewProps = {
+    image: (aiPreviewUrl || beautyPreviewUrl || image),
+    originalImage, dragging, setDragging, loadImage, fileInputRef, imgRef, splitRef, previewRef,
+    activeTab, bgResult, bgMode, bgStatus, showBefore, setShowBefore, showSplit, splitPos,
+    isDragSplit, setIsDragSplit, cssFilter, transformCSS, filters, texts, selText, setSelText,
+    updateText, cropMode, cropBox, setCropBox, cropAspect, applyCrop, isEdited, resetAll,
+    setImage, setBgStatus, setBgSubUrl, setBgResult, isMobile, rotation, flipH, flipV,
+    activeLutData, lutIntensity, lutId, dm, rawLoading, rawProgressMsg,
+    logo, logoScale, logoScalePortrait, logoOpacity, logoPos, logoMargin, logoX, setLogoX, logoY, setLogoY, setLogoPos,
+    filterGroup, chromatic, prism, halation, filmDust, glitter, vhs, lightLeak, heatmap, vibeAudio,
+    hslMixer, curves,
+    eraseMode, aiRemoveBrush, maskCanvasRef, maskDrawingRef, drawMask, aiMaskReady, handleAiRemove, aiRemoveStatus,
+    highResImage: image
+  };
 
   return (
     <div className={dm ? 'app-bg-dark text-gray-200' : 'app-bg-light text-gray-800'} style={{ minHeight: "100dvh", width: "100%", maxWidth: "100vw", overflowX: "hidden", WebkitTapHighlightColor: "transparent" }}>
@@ -2402,7 +2654,6 @@ export default function App() {
               const isPremiumAccount = id === "account" && user.tier !== "free";
               const isAdmin = user.tier === "admin";
               
-              // Custom colors for admin badge or standard premium badge
               const activeBorder = isAdmin 
                 ? (isActive ? "1px solid #ef4444" : "1px solid rgba(239, 68, 68, 0.3)")
                 : (isActive ? "1px solid #f97316" : "1px solid rgba(249, 115, 22, 0.3)");
@@ -2478,7 +2729,7 @@ export default function App() {
                 </div>
               )}
               <div style={{ flex: 1, minWidth: 0, minHeight: 0, display: "flex", alignItems: "center", justifyContent: "center", padding: "20px", position: "relative", overflow: "hidden" }}>
-                <Preview {...{ image: (aiPreviewUrl || beautyPreviewUrl || image), originalImage, dragging, setDragging, loadImage, fileInputRef, imgRef, splitRef, previewRef, activeTab, bgResult, bgMode, showBefore, setShowBefore, showSplit, splitPos, isDragSplit, setIsDragSplit, cssFilter, transformCSS, filters, texts, selText, setSelText, updateText, cropMode, cropBox, setCropBox, cropAspect, isEdited, resetAll, setImage, setBgStatus, setBgSubUrl, setBgResult, isMobile, rotation, flipH, flipV, activeLutData, lutIntensity, lutId, dm, rawLoading, rawProgressMsg, logo, logoScale, logoScalePortrait, logoOpacity, logoPos, logoMargin, logoX, setLogoX, logoY, setLogoY, setLogoPos, filterGroup, chromatic, prism, halation, filmDust, glitter, vhs, lightLeak, heatmap, vibeAudio, hslMixer, curves }} highResImage={image} />
+                <Preview {...previewProps} />
               </div>
             </div>
           )
@@ -2506,7 +2757,7 @@ export default function App() {
               {image ? (
                 <>
                   <div style={{ height: "42dvh", minWidth: 0, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", padding: "8px 12px 36px", position: "relative", overflow: "hidden", borderBottom: `1px solid ${dm ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'}` }}>
-                    <Preview {...{ image: (aiPreviewUrl || beautyPreviewUrl || image), originalImage, dragging, setDragging, loadImage, fileInputRef, imgRef, splitRef, previewRef, activeTab, bgResult, bgMode, showBefore, setShowBefore, showSplit, splitPos, isDragSplit, setIsDragSplit, cssFilter, transformCSS, filters, texts, selText, setSelText, updateText, cropMode, cropBox, setCropBox, cropAspect, isEdited, resetAll, setImage, setBgStatus, setBgSubUrl, setBgResult, isMobile, rotation, flipH, flipV, activeLutData, lutIntensity, lutId, dm, rawLoading, rawProgressMsg, logo, logoScale, logoScalePortrait, logoOpacity, logoPos, logoMargin, logoX, setLogoX, logoY, setLogoY, setLogoPos, filterGroup, chromatic, prism, halation, filmDust, glitter, vhs, lightLeak, heatmap, vibeAudio, hslMixer, curves }} highResImage={image} />
+                    <Preview {...previewProps} />
                   </div>
                   <div className="glass-panel" style={{ flex: 1, minWidth: 0, overflowY: "auto", overflowX: "hidden", WebkitOverflowScrolling: "touch", borderTop: `1px solid ${dm ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'}` }}>
                     {renderPanel(true)}
@@ -2514,7 +2765,7 @@ export default function App() {
                 </>
               ) : (
                 <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", justifyContent: "center", padding: "16px", position: "relative", overflow: "hidden" }}>
-                  <Preview {...{ image: (aiPreviewUrl || beautyPreviewUrl || image), originalImage, dragging, setDragging, loadImage, fileInputRef, imgRef, splitRef, previewRef, activeTab, bgResult, bgMode, showBefore, setShowBefore, showSplit, splitPos, isDragSplit, setIsDragSplit, cssFilter, transformCSS, filters, texts, selText, setSelText, updateText, cropMode, cropBox, setCropBox, cropAspect, isEdited, resetAll, setImage, setBgStatus, setBgSubUrl, setBgResult, isMobile, rotation, flipH, flipV, activeLutData, lutIntensity, lutId, dm, rawLoading, rawProgressMsg, logo, logoScale, logoScalePortrait, logoOpacity, logoPos, logoMargin, logoX, setLogoX, logoY, setLogoY, setLogoPos, filterGroup, chromatic, prism, halation, filmDust, glitter, vhs, lightLeak, heatmap, vibeAudio, hslMixer, curves }} highResImage={image} />
+                  <Preview {...previewProps} />
                 </div>
               )}
             </div>
