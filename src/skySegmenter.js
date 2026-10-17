@@ -1,13 +1,12 @@
-import { env, pipeline } from '@xenova/transformers';
-
-// Configure environment to fetch from Hugging Face CDN
-env.allowLocalModels = false;
-
 let segmenterPromise = null;
 
 async function getSegmenter() {
   if (!segmenterPromise) {
-    segmenterPromise = pipeline('image-segmentation', 'Xenova/segformer-b0-finetuned-ade-512-512');
+    segmenterPromise = (async () => {
+      const { env, pipeline } = await import('@xenova/transformers');
+      env.allowLocalModels = false;
+      return pipeline('image-segmentation', 'Xenova/segformer-b0-finetuned-ade-512-512');
+    })();
   }
   return segmenterPromise;
 }

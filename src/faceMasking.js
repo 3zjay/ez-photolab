@@ -1,39 +1,8 @@
-import { FaceLandmarker, FilesetResolver } from '@mediapipe/tasks-vision';
-
-let faceLandmarker = null;
+import { FaceLandmarker } from '@mediapipe/tasks-vision';
+import { getLandmarker } from './faceRestore';
 
 export async function initFaceLandmarker() {
-  if (faceLandmarker) return;
-  const vision = await FilesetResolver.forVisionTasks(
-    "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.35/wasm"
-  );
-  try {
-    faceLandmarker = await FaceLandmarker.createFromOptions(vision, {
-      baseOptions: {
-        modelAssetPath: "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task",
-        delegate: "GPU"
-      },
-      outputFaceBlendshapes: false,
-      runningMode: "IMAGE",
-      numFaces: 5
-    });
-  } catch (e) {
-    console.warn("Failed to init FaceLandmarker with GPU, trying CPU fallback...", e);
-    try {
-      faceLandmarker = await FaceLandmarker.createFromOptions(vision, {
-        baseOptions: {
-          modelAssetPath: "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task",
-          delegate: "CPU"
-        },
-        outputFaceBlendshapes: false,
-        runningMode: "IMAGE",
-        numFaces: 5
-      });
-    } catch (err) {
-      console.error("Failed to init FaceLandmarker on CPU:", err);
-      throw err;
-    }
-  }
+  return getLandmarker();
 }
 
 function drawConnections(ctx, landmarks, connections, width, height) {
@@ -67,7 +36,7 @@ function drawConnections(ctx, landmarks, connections, width, height) {
 }
 
 export async function createSkinMask(sourceCanvas) {
-  if (!faceLandmarker) await initFaceLandmarker();
+  const faceLandmarker = await getLandmarker();
   
   const results = faceLandmarker.detect(sourceCanvas);
   if (!results.faceLandmarks || results.faceLandmarks.length === 0) {
@@ -114,7 +83,7 @@ export async function createSkinMask(sourceCanvas) {
 }
 
 export async function createFaceOvalMask(sourceCanvas) {
-  if (!faceLandmarker) await initFaceLandmarker();
+  const faceLandmarker = await getLandmarker();
   
   const results = faceLandmarker.detect(sourceCanvas);
   if (!results.faceLandmarks || results.faceLandmarks.length === 0) {

@@ -1,13 +1,12 @@
-import { env, pipeline } from '@xenova/transformers';
-
-// Configure environment to fetch from Hugging Face CDN
-env.allowLocalModels = false;
-
 let depthPipePromise = null;
 
 async function getDepthPipeline() {
   if (!depthPipePromise) {
-    depthPipePromise = pipeline('depth-estimation', 'Xenova/depth-anything-small-hf');
+    depthPipePromise = (async () => {
+      const { env, pipeline } = await import('@xenova/transformers');
+      env.allowLocalModels = false;
+      return pipeline('depth-estimation', 'Xenova/depth-anything-small-hf');
+    })();
   }
   return depthPipePromise;
 }

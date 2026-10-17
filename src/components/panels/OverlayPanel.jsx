@@ -1,6 +1,5 @@
-
 import { SL, Empty, SmoothSlider } from "../ui/common";
-import { FONTS, FONT_MAP } from "../../constants";
+import { FONTS } from "../../constants";
 
 export function OverlayPanel({ image, texts, selText, setSelText, addText, deleteText, updateText, dm, cardBg, cardBdr, inputSt }) {
     const selectedText = texts.find(t => t.id === selText);
@@ -12,7 +11,7 @@ export function OverlayPanel({ image, texts, selText, setSelText, addText, delet
                 <>
                     <div>
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
-                            <SL>Text Overlays</SL>
+                            <SL style={{ margin: 0 }}>Text Overlays</SL>
                             <button onClick={addText} style={{ padding: "6px 12px", background: "linear-gradient(135deg,#6c63ff,#a78bfa)", color: "#fff", border: "none", borderRadius: "8px", fontSize: "12px", fontWeight: 700, cursor: "pointer" }}>+ Add Text</button>
                         </div>
                         {texts.length === 0 && <Empty>Tap "+ Add Text" to add text to your photo</Empty>}
@@ -50,12 +49,21 @@ export function OverlayPanel({ image, texts, selText, setSelText, addText, delet
                                     </div>
                                     <SmoothSlider min={12} max={200} step={2} value={selectedText.fontSize} defaultValue={48} onChange={v => updateText(selText, "fontSize", v)} />
                                 </div>
-                                <div style={{ marginBottom: "10px" }}>
-                                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "5px" }}>
-                                        <span style={{ fontSize: "11px", fontWeight: 600, color: "#aaa", textTransform: "uppercase", letterSpacing: ".06em" }}>Position Y</span>
-                                        <span style={{ fontSize: "12px", color: "#6c63ff", fontWeight: 600 }}>{selectedText.y}%</span>
+                                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "10px" }}>
+                                    <div>
+                                        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "5px" }}>
+                                            <span style={{ fontSize: "11px", fontWeight: 600, color: "#aaa", textTransform: "uppercase", letterSpacing: ".06em" }}>Pos X</span>
+                                            <span style={{ fontSize: "12px", color: "#6c63ff", fontWeight: 600 }}>{Math.round(selectedText.x)}%</span>
+                                        </div>
+                                        <SmoothSlider min={5} max={95} step={1} value={Math.round(selectedText.x)} defaultValue={50} onChange={v => updateText(selText, "x", v)} />
                                     </div>
-                                    <SmoothSlider min={5} max={95} step={1} value={selectedText.y} defaultValue={50} onChange={v => updateText(selText, "y", v)} />
+                                    <div>
+                                        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "5px" }}>
+                                            <span style={{ fontSize: "11px", fontWeight: 600, color: "#aaa", textTransform: "uppercase", letterSpacing: ".06em" }}>Pos Y</span>
+                                            <span style={{ fontSize: "12px", color: "#6c63ff", fontWeight: 600 }}>{Math.round(selectedText.y)}%</span>
+                                        </div>
+                                        <SmoothSlider min={5} max={95} step={1} value={Math.round(selectedText.y)} defaultValue={50} onChange={v => updateText(selText, "y", v)} />
+                                    </div>
                                 </div>
                                 <div style={{ display: "flex", gap: "8px" }}>
                                     {[{ k: "bold", l: "Bold" }, { k: "italic", l: "Italic" }, { k: "stroke", l: "Outline" }].map(o => (

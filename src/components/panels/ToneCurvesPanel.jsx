@@ -1,9 +1,10 @@
 import React, { useState, useRef, useEffect } from "react";
-import { SL } from "../ui/common";
+import { SL, SmoothSlider } from "../ui/common";
 
 export function ToneCurvesPanel({ curves, setCurves, dm, cardBg, cardBdr }) {
   const [activeChannel, setActiveChannel] = useState("master");
   const canvasRef = useRef(null);
+  const draggingPtRef = useRef(null);
 
   const channelColors = {
     master: { name: "RGB Master", color: dm ? "#ffffff" : "#111827", stroke: dm ? "#ffffff" : "#111827" },
@@ -77,7 +78,7 @@ export function ToneCurvesPanel({ curves, setCurves, dm, cardBg, cardBdr }) {
         } else {
           for (let j = 0; j < pts.length - 1; j++) {
             if (inputVal >= pts[j].x && inputVal <= pts[j + 1].x) {
-              const t = (inputVal - pts[j].x) / (pts[j + 1].x - pts[j].x);
+              const t = (inputVal - pts[j].x) / (pts[j + 1].x - pts[j].x || 1);
               outputVal = pts[j].y + t * (pts[j + 1].y - pts[j].y);
               break;
             }
@@ -110,18 +111,76 @@ export function ToneCurvesPanel({ curves, setCurves, dm, cardBg, cardBdr }) {
     setCurves(prev => {
       const channelPts = [...(prev[activeChannel] || [{ x: 0, y: 0 }, { x: 255, y: 255 }])];
       channelPts[index] = {
-        x: Math.min(255, Math.max(0, newX)),
-        y: Math.min(255, Math.max(0, newY))
+        x: Math.min(255, Math.max(0, Math.round(newX))),
+        y: Math.min(255, Math.max(0, Math.round(newY)))
       };
       return { ...prev, [activeChannel]: channelPts };
     });
   };
 
+  const handleCanvasPointerDown = (e) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const px = ((e.clientX - rect.left) / rect.width) * 255;
+    const py = 255 - ((e.clientY - rect.top) / rect.height) * 255;
+
+    // Find closest existing point within 25 units
+    let closestIdx = -1;
+    let minDist = 28;
+    currentPoints.forEach((pt, idx) => {
+      const dist = Math.hypot(pt.x - px, pt.y - py);
+      if (dist < minDist) {
+        minDist = dist;
+        closestIdx = idx;
+      }
+    });
+
+    if (closestIdx !== -1) {
+      draggingPtRef.current = closestIdx;
+      e.currentTarget.setPointerCapture?.(e.pointerId);
+    } else if (currentPoints.length < 3) {
+      // Create a midtone point where the user clicked and begin dragging it
+      setCurves(prev => {
+        const pts = [...(prev[activeChannel] || [{ x: 0, y: 0 }, { x: 255, y: 255 }])];
+        pts.splice(1, 0, {
+          x: Math.min(240, Math.max(15, Math.round(px))),
+          y: Math.min(255, Math.max(0, Math.round(py)))
+        });
+        return { ...prev, [activeChannel]: pts };
+      });
+      draggingPtRef.current = 1;
+      e.currentTarget.setPointerCapture?.(e.pointerId);
+    }
+  };
+
+  const handleCanvasPointerMove = (e) => {
+    const idx = draggingPtRef.current;
+    if (idx === null || idx === undefined) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const px = ((e.clientX - rect.left) / rect.width) * 255;
+    const py = 255 - ((e.clientY - rect.top) / rect.height) * 255;
+
+    const lastIdx = currentPoints.length - 1;
+    if (idx === 0) {
+      updatePoint(0, 0, py);
+    } else if (idx === lastIdx) {
+      updatePoint(lastIdx, 255, py);
+    } else {
+      updatePoint(idx, Math.min(240, Math.max(15, px)), py);
+    }
+  };
+
+  const handleCanvasPointerUp = () => {
+    draggingPtRef.current = null;
+  };
+
   const addMidpoint = () => {
     setCurves(prev => {
       const pts = [...(prev[activeChannel] || [{ x: 0, y: 0 }, { x: 255, y: 255 }])];
-      if (pts.length < 5) {
-        // Add midpoint at x=128, y=128
+      if (pts.length < 3) {
         pts.splice(1, 0, { x: 128, y: 128 });
       }
       return { ...prev, [activeChannel]: pts };
@@ -139,6 +198,9 @@ export function ToneCurvesPanel({ curves, setCurves, dm, cardBg, cardBdr }) {
   };
 
   const isCurveModified = currentPoints.some(p => (p.x === 0 && p.y !== 0) || (p.x === 255 && p.y !== 255) || (p.x !== 0 && p.x !== 255));
+  const shadowsVal = currentPoints[0]?.y ?? 0;
+  const midtonesVal = currentPoints[1]?.y ?? 128;
+  const highlightsVal = currentPoints[currentPoints.length - 1]?.y ?? 255;
 
   return (
     <div style={{ padding: "14px", background: cardBg, border: `1.5px solid ${cardBdr}`, borderRadius: "12px", display: "flex", flexDirection: "column", gap: "12px" }}>
@@ -152,7 +214,7 @@ export function ToneCurvesPanel({ curves, setCurves, dm, cardBg, cardBdr }) {
       </div>
 
       <p style={{ fontSize: "11px", color: dm ? "#aaa" : "#666", margin: 0, lineHeight: 1.4 }}>
-        Precision tonal adjustments for shadows, midtones, and highlights per RGB channel.
+        Drag control points directly on the graph or use the precision sliders below.
       </p>
 
       {/* Channel Switcher */}
@@ -179,7 +241,16 @@ export function ToneCurvesPanel({ curves, setCurves, dm, cardBg, cardBdr }) {
 
       {/* Canvas Curve Graph */}
       <div style={{ display: "flex", justifyContent: "center", alignItems: "center" }}>
-        <canvas ref={canvasRef} width={220} height={220} style={{ borderRadius: "10px", border: `1px solid ${cardBdr}`, cursor: "crosshair" }} />
+        <canvas
+          ref={canvasRef}
+          width={220}
+          height={220}
+          onPointerDown={handleCanvasPointerDown}
+          onPointerMove={handleCanvasPointerMove}
+          onPointerUp={handleCanvasPointerUp}
+          onPointerCancel={handleCanvasPointerUp}
+          style={{ borderRadius: "10px", border: `1px solid ${cardBdr}`, cursor: "crosshair", touchAction: "none" }}
+        />
       </div>
 
       {/* Midtone Lift Control Sliders */}
@@ -189,22 +260,22 @@ export function ToneCurvesPanel({ curves, setCurves, dm, cardBg, cardBdr }) {
             Shadows Lift (x=0)
           </span>
           <span style={{ fontSize: "11px", fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
-            {currentPoints[0]?.y || 0}
+            {shadowsVal}
           </span>
         </div>
-        <input type="range" min={0} max={128} value={currentPoints[0]?.y || 0} onChange={e => updatePoint(0, 0, Number(e.target.value))} style={{ width: "100%", accentColor: channelColors[activeChannel].color }} />
+        <SmoothSlider min={0} max={128} step={1} value={shadowsVal} defaultValue={0} onChange={v => updatePoint(0, 0, v)} />
 
         {currentPoints.length > 2 && (
           <>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <span style={{ fontSize: "11.5px", fontWeight: 700, color: channelColors[activeChannel].color }}>
-                Midtones Curve (x=128)
+                Midtones Curve (x={currentPoints[1]?.x ?? 128})
               </span>
               <span style={{ fontSize: "11px", fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
-                {currentPoints[1]?.y || 128}
+                {midtonesVal}
               </span>
             </div>
-            <input type="range" min={30} max={225} value={currentPoints[1]?.y || 128} onChange={e => updatePoint(1, 128, Number(e.target.value))} style={{ width: "100%", accentColor: channelColors[activeChannel].color }} />
+            <SmoothSlider min={0} max={255} step={1} value={midtonesVal} defaultValue={128} onChange={v => updatePoint(1, currentPoints[1]?.x ?? 128, v)} />
           </>
         )}
 
@@ -213,10 +284,10 @@ export function ToneCurvesPanel({ curves, setCurves, dm, cardBg, cardBdr }) {
             Highlights Rolloff (x=255)
           </span>
           <span style={{ fontSize: "11px", fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
-            {currentPoints[currentPoints.length - 1]?.y || 255}
+            {highlightsVal}
           </span>
         </div>
-        <input type="range" min={128} max={255} value={currentPoints[currentPoints.length - 1]?.y || 255} onChange={e => updatePoint(currentPoints.length - 1, 255, Number(e.target.value))} style={{ width: "100%", accentColor: channelColors[activeChannel].color }} />
+        <SmoothSlider min={128} max={255} step={1} value={highlightsVal} defaultValue={255} onChange={v => updatePoint(currentPoints.length - 1, 255, v)} />
 
         {currentPoints.length <= 2 && (
           <button onClick={addMidpoint}

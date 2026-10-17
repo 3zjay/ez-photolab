@@ -1,4 +1,4 @@
-const CACHE_NAME = 'photolab-cache-v2.8.0';
+const CACHE_NAME = 'photolab-cache-v2.9.0';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
@@ -70,7 +70,7 @@ self.addEventListener('fetch', (event) => {
             cache.put(event.request, responseToCache);
           });
           return networkResponse;
-        });
+        }).catch(() => new Response('Offline', { status: 503, statusText: 'Service Unavailable' }));
       })
     );
   } else {
@@ -86,7 +86,8 @@ self.addEventListener('fetch', (event) => {
           }
           return networkResponse;
         }).catch(() => {
-          // Silent catch for network failures (offline mode)
+          // Offline fallback to cached shell or 503 Response
+          return cachedResponse || caches.match('/index.html') || new Response('Offline', { status: 503, statusText: 'Service Unavailable' });
         });
         
         return cachedResponse || fetchPromise;

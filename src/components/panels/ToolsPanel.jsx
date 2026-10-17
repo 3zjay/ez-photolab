@@ -69,14 +69,6 @@ export function ToolsPanel({ image, handleRemoveBg, bgStatus, bgProgress, bgSubU
                         <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                             <span style={{ fontSize: "11px", fontWeight: 700, color: "#6c63ff" }}>⚙ API CONFIGURATION</span>
                         </div>
-                        
-                        {/* fal.ai API Key */}
-                        <div>
-                            <div style={{ fontSize: "11px", fontWeight: 600, color: "#aaa", textTransform: "uppercase", letterSpacing: ".05em", marginBottom: "5px" }}>fal.ai API Key (Face Restore)</div>
-                            <input type="password" value={falApiKey} onChange={e => saveFalKey(e.target.value)}
-                                placeholder="your-fal-api-key"
-                                style={{ width: "100%", padding: "8px 10px", border: `1px solid ${falApiKey ? '#6c63ff' : cardBdr}`, borderRadius: "8px", fontSize: "12px", fontFamily: "monospace", outline: "none", background: dm ? '#0e0e1a' : '#fff', color: dm ? '#ddd' : '#333' }} />
-                        </div>
 
                         {/* Claid API Key */}
                         <div>
@@ -107,18 +99,18 @@ export function ToolsPanel({ image, handleRemoveBg, bgStatus, bgProgress, bgSubU
                         {aiMaskReady && <div style={{ position: "absolute", top: "6px", left: "6px", padding: "3px 8px", background: "rgba(245,158,11,.9)", borderRadius: "12px", fontSize: "10px", fontWeight: 700, color: "#fff" }}>✏ Mask painted</div>}
                     </div>
                     <div style={{ display: "flex", gap: "7px" }}>
-                        <button onClick={() => { initMaskCanvas(); setAiRemoveResult(null); setAiRemoveStatus('idle'); }}
+                        <button onClick={() => { initMaskCanvas(true); }}
                             style={{ flex: 1, padding: "9px", border: `1px solid ${cardBdr}`, background: dm ? '#252525' : '#f2f2f8', borderRadius: "9px", fontSize: "12px", fontWeight: 600, color: dm ? '#ccc' : '#666', cursor: "pointer", fontFamily: "inherit" }}>
                             🗑 Clear
                         </button>
                         <AB onClick={handleAiRemove}
-                            disabled={aiRemoveStatus === 'loading' || !aiMaskReady || !falApiKey}
+                            disabled={aiRemoveStatus === 'loading' || !aiMaskReady || !claidApiKey?.trim()}
                             color={aiRemoveStatus === 'done' ? '#f0fff4' : 'purple'}
                             textColor={aiRemoveStatus === 'done' ? '#16a34a' : '#fff'}
                             style={{ flex: 2, padding: "9px", fontSize: "12px" }}>
                             {aiRemoveStatus === 'loading' ? <Row><Spin />Removing…</Row>
                                 : aiRemoveStatus === 'done' ? '✓ Done — Paint Again'
-                                    : !falApiKey ? 'Enter API key above'
+                                    : !claidApiKey?.trim() ? 'Enter Claid.ai key above'
                                         : '🧹 Remove Object'}
                         </AB>
                     </div>

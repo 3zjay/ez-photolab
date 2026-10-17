@@ -1184,8 +1184,8 @@ export default function CullPage({
               <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: "6px" }}>
                 <span style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", color: dm ? "#777" : "#aaa" }}>Console logs</span>
                 <div style={{ width: "100%", maxHeight: "100px", overflowY: "auto", background: dm ? "#000" : "#222", color: "#22c55e", padding: "10px", borderRadius: "10px", fontFamily: "monospace", fontSize: "11px", display: "flex", flexDirection: "column", gap: "4px" }}>
-                  {batchLogs.slice(-4).map((log, lidx) => (
-                    <div key={lidx}>{log.text}</div>
+                  {batchLogs.slice(0, 4).map((log, lidx) => (
+                    <div key={log.id ?? lidx}>{log.msg || log.text}</div>
                   ))}
                 </div>
               </div>

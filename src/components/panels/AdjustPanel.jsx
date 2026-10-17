@@ -1,17 +1,26 @@
 
 import { SL, Empty, AB, SmoothSlider } from "../ui/common";
 
-export function AdjustPanel({ image, setRotation, setFlipH, setFlipV, rotation, flipH, flipV, cropMode, setCropMode, setCropBox, cropAspect, setCropAspect, applyCrop, dm, cardBg, cardBdr }) {
+export function AdjustPanel({ image, imgRef, setRotation, setFlipH, setFlipV, rotation, flipH, flipV, cropMode, setCropMode, setCropBox, cropAspect, setCropAspect, applyCrop, dm, cardBg, cardBdr }) {
     const setCropAspectRatio = ratio => {
         setCropAspect(ratio);
         if (ratio === "free") return;
         const [aw, ah] = ratio.split(":").map(Number);
-        const imgW = image?.naturalWidth || 1, imgH = image?.naturalHeight || 1;
-        const imgAspect = imgW / imgH, cropAspect = aw / ah;
+        const imgEl = imgRef?.current;
+        const imgW = imgEl?.naturalWidth || image?.naturalWidth || 1;
+        const imgH = imgEl?.naturalHeight || image?.naturalHeight || 1;
+        const imgAspect = imgW / imgH;
+        const targetAspect = aw / ah;
         let w, h;
-        if (imgAspect > cropAspect) { h = 100; w = h * (cropAspect / (imgW / imgH)) * (imgW / imgH); }
-        else { w = 100; h = w * (imgW / imgH) / cropAspect; }
-        w = Math.min(100, w); h = Math.min(100, h);
+        if (imgAspect > targetAspect) {
+            h = 100;
+            w = (targetAspect / imgAspect) * 100;
+        } else {
+            w = 100;
+            h = (imgAspect / targetAspect) * 100;
+        }
+        w = Math.min(100, Math.max(10, w));
+        h = Math.min(100, Math.max(10, h));
         setCropBox({ x: (100 - w) / 2, y: (100 - h) / 2, w, h });
     };
 

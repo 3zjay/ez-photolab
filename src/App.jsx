@@ -1,14 +1,8 @@
-import { useState, useRef, useEffect, useCallback, useMemo } from "react";
-import { BatchPage } from "./BatchPage";
-import CullPage from "./CullPage";
-import { ToolsPanel } from "./components/panels/ToolsPanel";
-import { AdjustPanel } from "./components/panels/AdjustPanel";
-import { OverlayPanel } from "./components/panels/OverlayPanel";
+import { useState, useRef, useEffect, useCallback, useMemo, lazy, Suspense } from "react";
 import { EditPanel } from "./components/panels/EditPanel";
-import { RawBatchPanel } from "./components/panels/RawBatchPanel";
 import { Preview } from "./Preview";
-import { Empty, SL, AB, Row, Spin, SmoothSlider } from "./components/ui/common";
-import { DEFAULT_FILTERS, FB_MODES, PRESETS, DEFAULT_HSL_MIXER } from "./constants";
+import { SL, AB, Row, Spin, SmoothSlider } from "./components/ui/common";
+import { DEFAULT_FILTERS, FB_MODES, DEFAULT_HSL_MIXER } from "./constants";
 import {
   toCSSFilter, toTransformCSS, saveFile, canvasToBlob, loadImageFromSrc,
   renderFinal, getExportDims, applyUnsharpMask, applyNoiseReduction, applyAutoLevels, applyAutoContrast, calcBatchDims,
@@ -16,17 +10,20 @@ import {
 } from "./utils";
 import { createSkinMask, createFaceOvalMask } from "./faceMasking";
 import { restoreFaceLocal } from "./faceRestore";
-import { decodeRaw, RAW_EXTENSIONS, RAW_REGEX } from "./rawProcessor";
+import { decodeRaw, RAW_REGEX } from "./rawProcessor";
 import { generateBuiltInLut, parseCubeLut } from "./lutParser";
 import { analyzeImage } from "./accentEngine";
 import { segmentSky } from "./skySegmenter";
 import { estimateDepth } from "./depthEstimator";
-import { LandingPage } from "./LandingPage";
 import { StripeCheckout } from "./components/ui/StripeCheckout";
-import { AccountDashboard } from "./components/panels/AccountDashboard";
 import { auth, db, googleProvider } from "./firebase";
 import { signInWithPopup, signInWithRedirect, getRedirectResult, signOut as firebaseSignOut, onAuthStateChanged } from "firebase/auth";
 import { doc, onSnapshot, setDoc } from "firebase/firestore";
+
+const LandingPage = lazy(() => import("./LandingPage").then(m => ({ default: m.LandingPage })));
+const BatchPage = lazy(() => import("./BatchPage").then(m => ({ default: m.BatchPage })));
+const CullPage = lazy(() => import("./CullPage"));
+const AccountDashboard = lazy(() => import("./components/panels/AccountDashboard").then(m => ({ default: m.AccountDashboard })));
 
 export function ApertureLogo({ size = 26, className = "" }) {
   return (
@@ -86,25 +83,6 @@ export function getTabIcon(id, isActive, dm) {
           )}
           <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" stroke={isActive ? "url(#editTabGlow)" : color} />
           <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" stroke={isActive ? "url(#editTabGlow)" : color} />
-        </svg>
-      );
-    case "adjust":
-      return (
-        <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" style={{ transition: "stroke 0.2s" }}>
-          <path d="M6.13 1L6 16a2 2 0 0 0 2 2h15" />
-          <path d="M1 6.13L16 6a2 2 0 0 1 2 2v15" />
-        </svg>
-      );
-    case "overlay":
-      return (
-        <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" style={{ transition: "stroke 0.2s" }}>
-          <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
-        </svg>
-      );
-    case "tools":
-      return (
-        <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" style={{ transition: "stroke 0.2s" }}>
-          <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
         </svg>
       );
     case "cull":
@@ -397,8 +375,14 @@ export default function App() {
       console.warn("Redirect sign-in check:", err);
     });
 
-    // Check if URL overrides with local admin mode
+    // Handle return from Stripe Checkout or Billing Portal
     const params = new URLSearchParams(window.location.search);
+    if (params.get("checkout") === "success" || params.get("portal") === "returned" || params.get("success") === "true") {
+      setActiveTab("account");
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+
+    // Check if URL overrides with local admin mode
     if (params.get("admin") === "true") return; // Keep the static admin mode
 
     const unsubscribeAuth = onAuthStateChanged(auth, async (firebaseUser) => {
@@ -418,7 +402,8 @@ export default function App() {
               uid: firebaseUser.uid,
               email: firebaseUser.email,
               tier: firebaseUser.email === "isidro.pascua@gmail.com" ? "admin" : (data.tier || "free"),
-              billingPeriod: data.billingPeriod || "monthly",
+              billingPeriod: data.billingCycle || data.billingPeriod || "monthly",
+              stripeCustomerId: data.stripeCustomerId || null,
               offlineLeaseExpires: data.offlineLeaseExpires || null
             };
             setUser(u);
@@ -439,6 +424,7 @@ export default function App() {
               email: firebaseUser.email,
               tier: firebaseUser.email === "isidro.pascua@gmail.com" ? "admin" : "free",
               billingPeriod: "monthly",
+              stripeCustomerId: null,
               offlineLeaseExpires: null
             };
             setUser(u);
@@ -448,7 +434,7 @@ export default function App() {
           console.error("Firestore sync error:", err);
         });
       } else {
-        setUser({ loggedIn: false, email: "", tier: "free", billingPeriod: "monthly", offlineLeaseExpires: null });
+        setUser({ loggedIn: false, email: "", tier: "free", billingPeriod: "monthly", stripeCustomerId: null, offlineLeaseExpires: null });
         localStorage.removeItem("photolab_saas_user");
       }
     });
@@ -487,54 +473,6 @@ export default function App() {
       setActiveTab("home");
     } catch (e) {
       console.error("Logout failed:", e);
-    }
-  };
-
-  const handlePaymentSuccess = async ({ email, tier, billingPeriod }) => {
-    if (!auth.currentUser) return;
-    try {
-      const expiry = new Date();
-      expiry.setDate(expiry.getDate() + 30);
-      const userDocRef = doc(db, "users", auth.currentUser.uid);
-      await setDoc(userDocRef, { 
-        tier, 
-        billingPeriod, 
-        offlineLeaseExpires: expiry.toISOString() 
-      }, { merge: true });
-    } catch (e) {
-      console.error("Payment success update error:", e);
-    }
-  };
-
-  const handleCancelSubscription = async () => {
-    if (!auth.currentUser) return;
-    try {
-      const userDocRef = doc(db, "users", auth.currentUser.uid);
-      await setDoc(userDocRef, { tier: "free", offlineLeaseExpires: null }, { merge: true });
-    } catch (e) {
-      console.error(e);
-    }
-  };
-
-  const handleChangeBillingPeriod = async (period) => {
-    if (!auth.currentUser) return;
-    try {
-      const userDocRef = doc(db, "users", auth.currentUser.uid);
-      await setDoc(userDocRef, { billingPeriod: period }, { merge: true });
-    } catch (e) {
-      console.error(e);
-    }
-  };
-
-  const handleChangeTier = async (tier) => {
-    if (!auth.currentUser) return;
-    try {
-      const expiry = new Date();
-      expiry.setDate(expiry.getDate() + 30);
-      const userDocRef = doc(db, "users", auth.currentUser.uid);
-      await setDoc(userDocRef, { tier, offlineLeaseExpires: expiry.toISOString() }, { merge: true });
-    } catch (e) {
-      console.error(e);
     }
   };
 
@@ -594,9 +532,6 @@ export default function App() {
   const [aiUpscaleStatus, setAiUpscaleStatus] = useState('idle');
   const [aiUpscaleResult, setAiUpscaleResult] = useState(null);
   const [aiUpscaleLog, setAiUpscaleLog] = useState('');
-  const [aiBeautyStatus, setAiBeautyStatus] = useState('idle');
-  const [aiBeautyResult, setAiBeautyResult] = useState(null);
-  const [aiBeautyLog, setAiBeautyLog] = useState('');
   const [aiBeautyUseMask, setAiBeautyUseMask] = useState(true);
   const [beautyPreviewUrl, setBeautyPreviewUrl] = useState(null);
   const lowResCanvasRef = useRef(null);
@@ -611,7 +546,6 @@ export default function App() {
   
   const [skyMode, setSkyMode] = useState('none');
   const [skyOpacity, setSkyOpacity] = useState(100);
-  const [skyBlend, setSkyBlend] = useState(50);
   const [skyLightMatch, setSkyLightMatch] = useState(50);
   const [customSkyUrl, setCustomSkyUrl] = useState(null);
   const [skyMaskStatus, setSkyMaskStatus] = useState('idle');
@@ -1014,7 +948,6 @@ export default function App() {
     setBgSubUrl(null);
     setBgStatus('idle');
     setAiUpscaleResult(null);
-    setAiBeautyResult(null);
     setAiFaceRestoreResult(null);
     setAiRemoveResult(null);
     if (originalImage) {
@@ -1026,7 +959,6 @@ export default function App() {
     if (originalImage) {
       setImage(originalImage);
       setAiUpscaleResult(null);
-      setAiBeautyResult(null);
       setAiFaceRestoreResult(null);
     }
   }, [originalImage]);
@@ -1130,7 +1062,8 @@ export default function App() {
         structureAi, skyMode, skyOpacity, skyLightMatch, customSkyUrl,
         relightNear, relightFar,
         faceOvalMaskRef.current, skyMaskRef.current, depthMapRef.current,
-        { chromatic, prism, halation, filmDust, glitter, vhs, lightLeak, heatmap }
+        { chromatic, prism, halation, filmDust, glitter, vhs, lightLeak, heatmap },
+        hslMixer, curves
       );
       const fmts = { jpg: { mime: "image/jpeg", ext: "jpg" }, png: { mime: "image/png", ext: "png" }, webp: { mime: "image/webp", ext: "webp" } };
       const { mime, ext } = fmts[exportFmt];
@@ -1164,7 +1097,8 @@ export default function App() {
         structureAi, skyMode, skyOpacity, skyLightMatch, customSkyUrl,
         relightNear, relightFar,
         faceOvalMaskRef.current, skyMaskRef.current, depthMapRef.current,
-        { chromatic, prism, halation, filmDust, glitter, vhs, lightLeak, heatmap }
+        { chromatic, prism, halation, filmDust, glitter, vhs, lightLeak, heatmap },
+        hslMixer, curves
       );
       const blob = await canvasToBlob(canvas, "image/jpeg", 0.82);
       if (!blob || blob.size === 0) throw new Error("Empty blob");
@@ -1203,19 +1137,34 @@ export default function App() {
       const handle = await window.showDirectoryPicker();
       setCullSourceHandle(handle);
       const files = [];
-      const RAW_REGEX = /\.(nef|cr2|cr3|arw|dng|orf|raf|rw2|pef|x3f)$/i;
+      const stdFiles = [];
+      const rawFiles = [];
       for await (const entry of handle.values()) {
         if (entry.kind === 'file') {
           if (entry.name.match(/\.(jpg|jpeg|png|webp)$/i)) {
             const file = await entry.getFile();
-            files.push({ name: entry.name, file });
+            const item = { name: entry.name, file };
+            files.push(item);
+            stdFiles.push(item);
           } else if (entry.name.match(RAW_REGEX)) {
             const file = await entry.getFile();
             files.push({ name: entry.name, file, isRaw: true });
+            rawFiles.push({
+              name: entry.name,
+              file,
+              previewUrl: null,
+              metadata: { model: 'RAW File', iso: '...', width: 0, height: 0 }
+            });
           }
         }
       }
       setCullImages(files);
+      // Sync with Batch Processor queue if no batch folder is currently loaded so users don't have to pick the same folder twice
+      if (batchImages.length === 0 && batchRawFiles.length === 0) {
+        setSourceHandle(handle);
+        if (stdFiles.length > 0) setBatchImages(stdFiles);
+        if (rawFiles.length > 0) setBatchRawFiles(rawFiles);
+      }
     } catch (err) { if (err.name !== 'AbortError') console.error(err); }
   };
 
@@ -1255,7 +1204,6 @@ export default function App() {
       const handle = await window.showDirectoryPicker();
       setSourceHandle(handle);
       const files = [];
-      const RAW_REGEX = /\.(nef|cr2|cr3|arw|dng|orf|raf|rw2|pef|x3f)$/i;
       
       addBatchLog("Scanning folder for RAW files...", "info");
       for await (const entry of handle.values()) {
@@ -2138,85 +2086,6 @@ export default function App() {
 
 
 
-  const canvasToDataUrl = useCallback((canvas, quality = 0.92) => {
-    const MAX = 1600;
-    const scale = Math.min(1, MAX / Math.max(canvas.width, canvas.height));
-    if (scale < 1) {
-      const tmp = document.createElement('canvas');
-      tmp.width = Math.round(canvas.width * scale);
-      tmp.height = Math.round(canvas.height * scale);
-      tmp.getContext('2d').drawImage(canvas, 0, 0, tmp.width, tmp.height);
-      return tmp.toDataURL('image/jpeg', quality);
-    }
-    return canvas.toDataURL('image/jpeg', quality);
-  }, []);
-
-  const falRun = useCallback(async (modelId, input, onLog) => {
-    const key = falApiKey.trim();
-    const headers = { 'Authorization': `Key ${key}`, 'Content-Type': 'application/json' };
-
-    onLog?.('Submitting to fal.ai queue…');
-    const submitRes = await fetch(`https://queue.fal.run/${modelId}`, {
-      method: 'POST', headers, body: JSON.stringify(input),
-    });
-    if (!submitRes.ok) {
-      const txt = await submitRes.text();
-      throw new Error(`Submit failed (${submitRes.status}): ${txt}`);
-    }
-    const { request_id } = await submitRes.json();
-
-    onLog?.('Job queued — waiting for GPU…');
-    const statusUrl = `https://queue.fal.run/${modelId}/requests/${request_id}/status`;
-    const resultUrl = `https://queue.fal.run/${modelId}/requests/${request_id}`;
-
-    for (let i = 0; i < 150; i++) {
-      await new Promise(r => setTimeout(r, 2000));
-      const sRes = await fetch(statusUrl, { headers });
-      const s = await sRes.json();
-      if (s.status === 'COMPLETED') {
-        const rRes = await fetch(resultUrl, { headers });
-        return await rRes.json();
-      }
-      if (s.status === 'FAILED') throw new Error(s.error || 'Job failed on fal.ai server');
-      if (s.status === 'IN_QUEUE') onLog?.(`In queue — position ${s.queue_position ?? '…'}`);
-      if (s.status === 'IN_PROGRESS') onLog?.('Running on GPU…');
-    }
-    throw new Error('Timed out after 5 minutes');
-  }, [falApiKey]);
-
-  const runFalModel = useCallback(async (modelId, extraInput, setStatus, setResult, setLog) => {
-    if (!falApiKey.trim()) { alert('Enter your fal.ai API key in the Tools tab first.'); return; }
-    if (!image) { alert('Upload a photo first.'); return; }
-    setStatus('loading'); setResult(null); setLog('Preparing image…');
-    try {
-      const srcImg = imgRef.current;
-      const W = srcImg.naturalWidth, H = srcImg.naturalHeight;
-      const tmp = document.createElement('canvas');
-      tmp.width = W; tmp.height = H;
-      const ctx = tmp.getContext('2d');
-      ctx.filter = toCSSFilter(filters);
-      ctx.drawImage(srcImg, 0, 0, W, H);
-      ctx.filter = 'none';
-      const imageUrl = canvasToDataUrl(tmp);
-
-      const result = await falRun(
-        modelId,
-        { image_url: imageUrl, ...extraInput },
-        msg => setLog(msg)
-      );
-      const outUrl = result?.image?.url
-        || result?.images?.[0]?.url
-        || result?.output_image_url
-        || result?.output?.[0]?.url;
-      if (!outUrl) throw new Error(`No image URL in response: ${JSON.stringify(result).slice(0, 300)}`);
-      setResult(outUrl); setStatus('done'); setLog('');
-    } catch (e) {
-      console.error('fal.ai error:', e);
-      setStatus('error');
-      setLog(e?.message || 'Request failed. Check your API key and try again.');
-    }
-  }, [falApiKey, image, filters, canvasToDataUrl, falRun]);
-
   const applyAiResult = useCallback(async (url) => {
     const res = await fetch(url);
     const blob = await res.blob();
@@ -2229,7 +2098,7 @@ export default function App() {
     reader.readAsDataURL(blob);
   }, []);
 
-  const initMaskCanvas = useCallback(() => {
+  const initMaskCanvas = useCallback((clearResult = false) => {
     const mc = maskCanvasRef.current;
     const img = imgRef.current;
     if (!mc || !img) return;
@@ -2239,6 +2108,11 @@ export default function App() {
     ctx.fillStyle = '#000000';
     ctx.fillRect(0, 0, mc.width, mc.height);
     setAiMaskReady(false);
+    if (clearResult) {
+      setAiRemoveResult(null);
+      setAiRemoveStatus('idle');
+      setAiRemoveLog('');
+    }
   }, []);
 
   const drawMask = useCallback((e, canvas) => {
@@ -2330,52 +2204,6 @@ export default function App() {
     return currentCanvas;
   };
 
-  const applyBeautyPipeline = async (canvas, ctx, W, H, smooth, clarity, glow, maskCanvas = null) => {
-    // If mask provided, we apply effects to a separate canvas and then composite
-    let targetCtx = ctx;
-    let targetCanvas = canvas;
-
-    if (maskCanvas) {
-      targetCanvas = document.createElement('canvas');
-      targetCanvas.width = W;
-      targetCanvas.height = H;
-      targetCtx = targetCanvas.getContext('2d');
-      targetCtx.drawImage(canvas, 0, 0);
-    }
-
-    if (smooth > 0) applyNoiseReduction(targetCanvas, targetCtx, W, H, smooth * 0.5);
-    applyAutoLevels(targetCtx, W, H);
-    targetCtx.globalCompositeOperation = 'overlay';
-    targetCtx.fillStyle = `rgba(255,200,150,${glow * 0.012})`;
-    targetCtx.fillRect(0, 0, W, H);
-    targetCtx.globalCompositeOperation = 'source-over';
-
-    if (clarity > 0) applyUnsharpMask(targetCanvas, targetCtx, W, H, clarity * 0.15, 1.2);
-
-    if (glow > 0) {
-      const glowCanvas = document.createElement('canvas');
-      glowCanvas.width = W; glowCanvas.height = H;
-      const gCtx = glowCanvas.getContext('2d');
-      gCtx.filter = `blur(${Math.round(glow * 3)}px) brightness(1.15)`;
-      gCtx.drawImage(targetCanvas, 0, 0);
-      gCtx.filter = 'none';
-      targetCtx.globalCompositeOperation = 'screen';
-      targetCtx.globalAlpha = glow * 0.025;
-      targetCtx.drawImage(glowCanvas, 0, 0);
-      targetCtx.globalAlpha = 1; targetCtx.globalCompositeOperation = 'source-over';
-    }
-
-    if (maskCanvas) {
-      // Mask the targetCanvas with the face mask
-      targetCtx.globalCompositeOperation = 'destination-in';
-      targetCtx.drawImage(maskCanvas, 0, 0);
-      targetCtx.globalCompositeOperation = 'source-over';
-
-      // Draw the masked result back onto the original canvas
-      ctx.drawImage(targetCanvas, 0, 0);
-    }
-  };
-
   const runBrowserUpscale = useCallback(async () => {
     if (!image) return;
     setAiUpscaleStatus('loading'); setAiUpscaleResult(null); setAiUpscaleLog('Loading image…'); setAiUpscaleProgress(10);
@@ -2445,7 +2273,7 @@ export default function App() {
       {activeTab === "edit" && (
         <EditPanel {...{
           // Color & LUTs / Grading props
-          filters, setFilters, filterGroup, setFilterGroup, hslMixer, setHslMixer, curves, setCurves, isEdited, resetAll, revertAi, dm, cardBdr, cardBg, image, runBrowserUpscale, aiUpscaleStatus, aiUpscaleLog, aiUpscaleProgress, aiUpscaleResult, aiUpscaleResultSize, applyAiResult, saveFile, aiScale, setAiScale, aiBeautySmooth, setAiBeautySmooth, aiBeautyClarity, setAiBeautyClarity, aiBeautyGlow, setAiBeautyGlow, aiBeautyUseMask, setAiBeautyUseMask, runFalFaceRestore, aiFaceRestoreStatus, aiFaceRestoreLog, aiFaceRestoreResult, lutId, setLutId, lutIntensity, setLutIntensity, customLutData, setCustomLutData, customLutName, setCustomLutName, user, logo, setLogo, logoFile, setLogoFile, logoScale, setLogoScale, logoScalePortrait, setLogoScalePortrait, logoOpacity, setLogoOpacity, logoPos, setLogoPos, logoMargin, setLogoMargin, handleLogoUpload, logoX, setLogoX, logoY, setLogoY,
+          filters, setFilters, filterGroup, setFilterGroup, hslMixer, setHslMixer, curves, setCurves, isEdited, resetAll, revertAi, dm, cardBdr, cardBg, image, imgRef, runBrowserUpscale, aiUpscaleStatus, aiUpscaleLog, aiUpscaleProgress, aiUpscaleResult, aiUpscaleResultSize, applyAiResult, saveFile, aiScale, setAiScale, aiBeautySmooth, setAiBeautySmooth, aiBeautyClarity, setAiBeautyClarity, aiBeautyGlow, setAiBeautyGlow, aiBeautyUseMask, setAiBeautyUseMask, runFalFaceRestore, aiFaceRestoreStatus, aiFaceRestoreLog, aiFaceRestoreResult, lutId, setLutId, lutIntensity, setLutIntensity, customLutData, setCustomLutData, customLutName, setCustomLutName, user, logo, setLogo, logoFile, setLogoFile, logoScale, setLogoScale, logoScalePortrait, setLogoScalePortrait, logoOpacity, setLogoOpacity, logoPos, setLogoPos, logoMargin, setLogoMargin, handleLogoUpload, logoX, setLogoX, logoY, setLogoY,
           
           // Adjust / Crop props
           setRotation, setFlipH, setFlipV, rotation, flipH, flipV, cropMode, setCropMode, setCropBox, cropAspect, setCropAspect, applyCrop,
@@ -2466,18 +2294,6 @@ export default function App() {
           chromatic, setChromatic, prism, setPrism, halation, setHalation, filmDust, setFilmDust, glitter, setGlitter, vhs, setVhs, lightLeak, setLightLeak, heatmap, setHeatmap, vibeAudio, setVibeAudio,
           setActiveTab
         }} />
-      )}
-      {activeTab === "batch" && (
-        <div style={{ padding: "16px", color: dm ? '#aaa' : '#888', fontSize: "13px", textAlign: "center" }}>
-          <div style={{ fontSize: "32px", marginBottom: "8px" }}>📦</div>
-          Batch mode opens as a full-page view.
-        </div>
-      )}
-      {activeTab === "cull" && (
-        <div style={{ padding: "16px", color: dm ? '#aaa' : '#888', fontSize: "13px", textAlign: "center" }}>
-          <div style={{ fontSize: "32px", marginBottom: "8px" }}>🔍</div>
-          Cull AI mode opens as a full-page view.
-        </div>
       )}
     </div>
   );
@@ -2638,68 +2454,70 @@ export default function App() {
         </div>
       </header>
 
-      {!isMobile && (
-        activeTab === "home" ? (
-          <LandingPage {...{ dm, loadImage, setActiveTab, handleInstallClick, deferredPrompt, isIOS, isInstalled }} onSelectPlan={(plan) => setCheckoutPlan(plan)} />
-        ) : activeTab === "batch" ? (
-          <BatchPage {...{ dm, cardBg, cardBdr, inputSt, user, setActiveTab, sourceHandle, outputHandle, batchImages, selectSourceFolder, selectRawSourceFolder, selectOutputFolder, batchResizeMode, setBatchResizeMode, batchResizePreset, setBatchResizePreset, batchCustomW, setBatchCustomW, batchCustomH, setBatchCustomH, batchKeepAspect, setBatchKeepAspect, batchLongEdgePx, setBatchLongEdgePx, batchAutoLevels, setBatchAutoLevels, batchAutoContrast, setBatchAutoContrast, batchSharpen, setBatchSharpen, batchSharpenAmt, setBatchSharpenAmt, batchSharpenRad, setBatchSharpenRad, batchDenoise, setBatchDenoise, batchDenoiseAmt, setBatchDenoiseAmt, batchLogo, setBatchLogo, batchLogoFile, setBatchLogoFile, handleBatchLogoUpload, batchLogoScale, setBatchLogoScale, batchLogoScalePortrait, setBatchLogoScalePortrait, batchLogoOpacity, setBatchLogoOpacity, batchLogoPos, setBatchLogoPos, batchLogoMargin, setBatchLogoMargin, batchOutputFmt, setBatchOutputFmt, batchOutputQ, setBatchOutputQ, batchPrefix, setBatchPrefix, batchSuffix, setBatchSuffix, batchProcessing, batchProgress, batchDone, handleBatchProcess, batchPreviewIdx, batchPreviewOrigUrl, batchPreviewAfterUrl, batchPreviewLoading, batchPreviewSplit, setBatchPreviewSplit, batchPreviewDragging, setBatchPreviewDragging, batchPreviewOpen, setBatchPreviewOpen, generateBatchPreview, filters, setFilters, resetAll, batchFilterGroup, setBatchFilterGroup, calcBatchDims, batchAiUpscale, setBatchAiUpscale, batchAiBeauty, setBatchAiBeauty, batchAiScale, setBatchAiScale, batchAiBeautySmooth, setBatchAiBeautySmooth, batchAiBeautyClarity, setBatchAiBeautyClarity, batchAiBeautyGlow, setBatchAiBeautyGlow, batchAiFaceRestore, setBatchAiFaceRestore, batchAiBeautyUseMask, setBatchAiBeautyUseMask, batchSection, setBatchSection, batchRawFiles, setBatchRawFiles, handleRawBatchProcess, batchLogs, addBatchLog, batchConfirmFirst, setBatchConfirmFirst, batchConfirmData, batchCancelRequested, handleCancelBatch, continueBatchProcess, cancelBatchProcess, batchStats, batchLutId, setBatchLutId, batchLutIntensity, setBatchLutIntensity, batchCustomLutData, setBatchCustomLutData, batchCustomLutName, setBatchCustomLutName, batchFbOptimize, setBatchFbOptimize, importOutputsToCull, batchCullFilter, setBatchCullFilter, batchCullSort, setBatchCullSort, cullResults }} />
-
-        ) : activeTab === "cull" ? (
-          <CullPage {...{ dm, cardBg, cardBdr, inputSt, sourceHandle: cullSourceHandle, outputHandle, batchImages: cullImages, selectSourceFolder: selectCullSourceFolder, selectRawSourceFolder, selectOutputFolder, batchLogs, addBatchLog, batchSection, setBatchSection, isMobile, user, setActiveTab, cullResults, setCullResults, groups, setGroups, activeGroupIndex: cullActiveGroupIndex, setActiveGroupIndex: setCullActiveGroupIndex, activeAlternateIndex: cullActiveAlternateIndex, setActiveAlternateIndex: setCullActiveAlternateIndex }} />
-        ) : activeTab === "account" ? (
-          <div style={{ display: "flex", justifyContent: "center", minHeight: "calc(100vh - 52px)", overflowY: "auto", background: dm ? "#0a0e17" : "#f3f4f6" }}>
-            <AccountDashboard user={user} onLogin={handleLogin} onLogout={handleLogout} onCancelSubscription={handleCancelSubscription} onChangeBillingPeriod={handleChangeBillingPeriod} onChangeTier={handleChangeTier} onRenewLease={handleRenewLease} dm={dm} />
-          </div>
-        ) : (
-          <div style={{ display: "flex", height: "calc(100vh - 52px)" }}>
-            {image && (
-              <div className="glass-panel" style={{ width: "360px", borderRight: `1px solid ${dm ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'}`, overflowY: "auto", flexShrink: 0 }}>
-                {renderPanel()}
-              </div>
-            )}
-            <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: "20px", position: "relative", overflow: "hidden" }}>
-              <Preview {...{ image: (aiPreviewUrl || beautyPreviewUrl || image), originalImage, dragging, setDragging, loadImage, fileInputRef, imgRef, splitRef, previewRef, activeTab, bgResult, bgMode, showBefore, setShowBefore, showSplit, splitPos, isDragSplit, setIsDragSplit, cssFilter, transformCSS, filters, texts, selText, setSelText, updateText, cropMode, cropBox, setCropBox, cropAspect, isEdited, resetAll, setImage, setBgStatus, setBgSubUrl, setBgResult, isMobile, rotation, flipH, flipV, activeLutData, lutIntensity, lutId, dm, rawLoading, rawProgressMsg, logo, logoScale, logoScalePortrait, logoOpacity, logoPos, logoMargin, logoX, setLogoX, logoY, setLogoY, setLogoPos, filterGroup, chromatic, prism, halation, filmDust, glitter, vhs, lightLeak, heatmap, vibeAudio, hslMixer, curves }} highResImage={image} />
-            </div>
-          </div>
-        )
-      )}
-
-      {isMobile && (
-        activeTab === "home" ? (
-          <div style={{ height: "calc(100vh - 52px)", overflowY: "auto" }}>
+      <Suspense fallback={<div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "calc(100vh - 52px)" }}><Spin /></div>}>
+        {!isMobile && (
+          activeTab === "home" ? (
             <LandingPage {...{ dm, loadImage, setActiveTab, handleInstallClick, deferredPrompt, isIOS, isInstalled }} onSelectPlan={(plan) => setCheckoutPlan(plan)} />
-          </div>
-        ) : activeTab === "batch" ? (
-          <div style={{ height: "calc(100vh - 52px)", overflowY: "auto" }}>
-            <BatchPage {...{ dm, cardBg, cardBdr, inputSt, isMobile: true, user, setActiveTab, sourceHandle, outputHandle, batchImages, selectSourceFolder, selectRawSourceFolder, selectOutputFolder, batchResizeMode, setBatchResizeMode, batchResizePreset, setBatchResizePreset, batchCustomW, setBatchCustomW, batchCustomH, setBatchCustomH, batchKeepAspect, setBatchKeepAspect, batchLongEdgePx, setBatchLongEdgePx, batchAutoLevels, setBatchAutoLevels, batchAutoContrast, setBatchAutoContrast, batchSharpen, setBatchSharpen, batchSharpenAmt, setBatchSharpenAmt, batchSharpenRad, setBatchSharpenRad, batchDenoise, setBatchDenoise, batchDenoiseAmt, setBatchDenoiseAmt, batchLogo, setBatchLogo, batchLogoFile, setBatchLogoFile, handleBatchLogoUpload, batchLogoScale, setBatchLogoScale, batchLogoScalePortrait, setBatchLogoScalePortrait, batchLogoOpacity, setBatchLogoOpacity, batchLogoPos, setBatchLogoPos, batchLogoMargin, setBatchLogoMargin, batchOutputFmt, setBatchOutputFmt, batchOutputQ, setBatchOutputQ, batchPrefix, setBatchPrefix, batchSuffix, setBatchSuffix, batchProcessing, batchProgress, batchDone, handleBatchProcess, batchPreviewIdx, batchPreviewOrigUrl, batchPreviewAfterUrl, batchPreviewLoading, batchPreviewSplit, setBatchPreviewSplit, batchPreviewDragging, setBatchPreviewDragging, batchPreviewOpen, setBatchPreviewOpen, generateBatchPreview, filters, setFilters, resetAll, batchFilterGroup, setBatchFilterGroup, calcBatchDims, batchAiUpscale, setBatchAiUpscale, batchAiBeauty, setBatchAiBeauty, batchAiScale, setBatchAiScale, batchAiBeautySmooth, setBatchAiBeautySmooth, batchAiBeautyClarity, setBatchAiBeautyClarity, batchAiBeautyGlow, setBatchAiBeautyGlow, batchAiFaceRestore, setBatchAiFaceRestore, batchAiBeautyUseMask, setBatchAiBeautyUseMask, batchSection, setBatchSection, batchRawFiles, setBatchRawFiles, handleRawBatchProcess, batchLogs, addBatchLog, batchConfirmFirst, setBatchConfirmFirst, batchConfirmData, batchCancelRequested, handleCancelBatch, continueBatchProcess, cancelBatchProcess, batchStats, batchLutId, setBatchLutId, batchLutIntensity, setBatchLutIntensity, batchCustomLutData, setBatchCustomLutData, batchCustomLutName, setBatchCustomLutName, batchFbOptimize, setBatchFbOptimize, importOutputsToCull, batchCullFilter, setBatchCullFilter, batchCullSort, setBatchCullSort, cullResults }} />
-          </div>
-        ) : activeTab === "cull" ? (
-          <div style={{ height: "calc(100vh - 52px)", overflowY: "auto", padding: "16px" }}>
-            <CullPage {...{ dm, cardBg, cardBdr, inputSt, sourceHandle: cullSourceHandle, outputHandle, batchImages: cullImages, selectSourceFolder: selectCullSourceFolder, selectRawSourceFolder, selectOutputFolder, batchLogs, addBatchLog, batchSection, setBatchSection, isMobile: true, user, setActiveTab, cullResults, setCullResults, groups, setGroups, activeGroupIndex: cullActiveGroupIndex, setActiveGroupIndex: setCullActiveGroupIndex, activeAlternateIndex: cullActiveAlternateIndex, setActiveAlternateIndex: setCullActiveAlternateIndex }} />
-          </div>
-        ) : activeTab === "account" ? (
-          <div style={{ display: "flex", justifyContent: "center", minHeight: "calc(100vh - 52px)", overflowY: "auto", background: dm ? "#0a0e17" : "#f3f4f6" }}>
-            <AccountDashboard user={user} onLogin={handleLogin} onLogout={handleLogout} onCancelSubscription={handleCancelSubscription} onChangeBillingPeriod={handleChangeBillingPeriod} onChangeTier={handleChangeTier} onRenewLease={handleRenewLease} dm={dm} />
-          </div>
-        ) : (
-          <div style={{ display: "flex", flexDirection: "column", height: "calc(100vh - 52px)", overflow: "hidden" }}>
-            {image ? (
-              <>
-                <div style={{ height: "42vh", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", position: "relative", borderBottom: `1px solid ${dm ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'}` }}>
+          ) : activeTab === "batch" ? (
+            <BatchPage {...{ dm, cardBg, cardBdr, inputSt, user, setActiveTab, sourceHandle, outputHandle, batchImages, selectSourceFolder, selectRawSourceFolder, selectOutputFolder, batchResizeMode, setBatchResizeMode, batchResizePreset, setBatchResizePreset, batchCustomW, setBatchCustomW, batchCustomH, setBatchCustomH, batchKeepAspect, setBatchKeepAspect, batchLongEdgePx, setBatchLongEdgePx, batchAutoLevels, setBatchAutoLevels, batchAutoContrast, setBatchAutoContrast, batchSharpen, setBatchSharpen, batchSharpenAmt, setBatchSharpenAmt, batchSharpenRad, setBatchSharpenRad, batchDenoise, setBatchDenoise, batchDenoiseAmt, setBatchDenoiseAmt, batchLogo, setBatchLogo, batchLogoFile, setBatchLogoFile, handleBatchLogoUpload, batchLogoScale, setBatchLogoScale, batchLogoScalePortrait, setBatchLogoScalePortrait, batchLogoOpacity, setBatchLogoOpacity, batchLogoPos, setBatchLogoPos, batchLogoMargin, setBatchLogoMargin, batchOutputFmt, setBatchOutputFmt, batchOutputQ, setBatchOutputQ, batchPrefix, setBatchPrefix, batchSuffix, setBatchSuffix, batchProcessing, batchProgress, batchDone, handleBatchProcess, batchPreviewIdx, batchPreviewOrigUrl, batchPreviewAfterUrl, batchPreviewLoading, batchPreviewSplit, setBatchPreviewSplit, batchPreviewDragging, setBatchPreviewDragging, batchPreviewOpen, setBatchPreviewOpen, generateBatchPreview, filters, setFilters, resetAll, batchFilterGroup, setBatchFilterGroup, calcBatchDims, batchAiUpscale, setBatchAiUpscale, batchAiBeauty, setBatchAiBeauty, batchAiScale, setBatchAiScale, batchAiBeautySmooth, setBatchAiBeautySmooth, batchAiBeautyClarity, setBatchAiBeautyClarity, batchAiBeautyGlow, setBatchAiBeautyGlow, batchAiFaceRestore, setBatchAiFaceRestore, batchAiBeautyUseMask, setBatchAiBeautyUseMask, batchSection, setBatchSection, batchRawFiles, setBatchRawFiles, handleRawBatchProcess, batchLogs, addBatchLog, batchConfirmFirst, setBatchConfirmFirst, batchConfirmData, batchCancelRequested, handleCancelBatch, continueBatchProcess, cancelBatchProcess, batchStats, batchLutId, setBatchLutId, batchLutIntensity, setBatchLutIntensity, batchCustomLutData, setBatchCustomLutData, batchCustomLutName, setBatchCustomLutName, batchFbOptimize, setBatchFbOptimize, importOutputsToCull, batchCullFilter, setBatchCullFilter, batchCullSort, setBatchCullSort, cullResults }} />
+
+          ) : activeTab === "cull" ? (
+            <CullPage {...{ dm, cardBg, cardBdr, inputSt, sourceHandle: cullSourceHandle, outputHandle, batchImages: cullImages, selectSourceFolder: selectCullSourceFolder, selectRawSourceFolder, selectOutputFolder, batchLogs, addBatchLog, batchSection, setBatchSection, isMobile, user, setActiveTab, cullResults, setCullResults, groups, setGroups, activeGroupIndex: cullActiveGroupIndex, setActiveGroupIndex: setCullActiveGroupIndex, activeAlternateIndex: cullActiveAlternateIndex, setActiveAlternateIndex: setCullActiveAlternateIndex }} />
+          ) : activeTab === "account" ? (
+            <div style={{ display: "flex", justifyContent: "center", minHeight: "calc(100vh - 52px)", overflowY: "auto", background: dm ? "#0a0e17" : "#f3f4f6" }}>
+              <AccountDashboard user={user} onLogin={handleLogin} onLogout={handleLogout} onRenewLease={handleRenewLease} onUpgrade={() => { setActiveTab("home"); setTimeout(() => document.getElementById("pricing-container")?.scrollIntoView({ behavior: "smooth" }), 100); }} dm={dm} />
+            </div>
+          ) : (
+            <div style={{ display: "flex", height: "calc(100vh - 52px)" }}>
+              {image && (
+                <div className="glass-panel" style={{ width: "360px", borderRight: `1px solid ${dm ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'}`, overflowY: "auto", flexShrink: 0 }}>
+                  {renderPanel()}
+                </div>
+              )}
+              <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: "20px", position: "relative", overflow: "hidden" }}>
+                <Preview {...{ image: (aiPreviewUrl || beautyPreviewUrl || image), originalImage, dragging, setDragging, loadImage, fileInputRef, imgRef, splitRef, previewRef, activeTab, bgResult, bgMode, showBefore, setShowBefore, showSplit, splitPos, isDragSplit, setIsDragSplit, cssFilter, transformCSS, filters, texts, selText, setSelText, updateText, cropMode, cropBox, setCropBox, cropAspect, isEdited, resetAll, setImage, setBgStatus, setBgSubUrl, setBgResult, isMobile, rotation, flipH, flipV, activeLutData, lutIntensity, lutId, dm, rawLoading, rawProgressMsg, logo, logoScale, logoScalePortrait, logoOpacity, logoPos, logoMargin, logoX, setLogoX, logoY, setLogoY, setLogoPos, filterGroup, chromatic, prism, halation, filmDust, glitter, vhs, lightLeak, heatmap, vibeAudio, hslMixer, curves }} highResImage={image} />
+              </div>
+            </div>
+          )
+        )}
+
+        {isMobile && (
+          activeTab === "home" ? (
+            <div style={{ height: "calc(100vh - 52px)", overflowY: "auto" }}>
+              <LandingPage {...{ dm, loadImage, setActiveTab, handleInstallClick, deferredPrompt, isIOS, isInstalled }} onSelectPlan={(plan) => setCheckoutPlan(plan)} />
+            </div>
+          ) : activeTab === "batch" ? (
+            <div style={{ height: "calc(100vh - 52px)", overflowY: "auto" }}>
+              <BatchPage {...{ dm, cardBg, cardBdr, inputSt, isMobile: true, user, setActiveTab, sourceHandle, outputHandle, batchImages, selectSourceFolder, selectRawSourceFolder, selectOutputFolder, batchResizeMode, setBatchResizeMode, batchResizePreset, setBatchResizePreset, batchCustomW, setBatchCustomW, batchCustomH, setBatchCustomH, batchKeepAspect, setBatchKeepAspect, batchLongEdgePx, setBatchLongEdgePx, batchAutoLevels, setBatchAutoLevels, batchAutoContrast, setBatchAutoContrast, batchSharpen, setBatchSharpen, batchSharpenAmt, setBatchSharpenAmt, batchSharpenRad, setBatchSharpenRad, batchDenoise, setBatchDenoise, batchDenoiseAmt, setBatchDenoiseAmt, batchLogo, setBatchLogo, batchLogoFile, setBatchLogoFile, handleBatchLogoUpload, batchLogoScale, setBatchLogoScale, batchLogoScalePortrait, setBatchLogoScalePortrait, batchLogoOpacity, setBatchLogoOpacity, batchLogoPos, setBatchLogoPos, batchLogoMargin, setBatchLogoMargin, batchOutputFmt, setBatchOutputFmt, batchOutputQ, setBatchOutputQ, batchPrefix, setBatchPrefix, batchSuffix, setBatchSuffix, batchProcessing, batchProgress, batchDone, handleBatchProcess, batchPreviewIdx, batchPreviewOrigUrl, batchPreviewAfterUrl, batchPreviewLoading, batchPreviewSplit, setBatchPreviewSplit, batchPreviewDragging, setBatchPreviewDragging, batchPreviewOpen, setBatchPreviewOpen, generateBatchPreview, filters, setFilters, resetAll, batchFilterGroup, setBatchFilterGroup, calcBatchDims, batchAiUpscale, setBatchAiUpscale, batchAiBeauty, setBatchAiBeauty, batchAiScale, setBatchAiScale, batchAiBeautySmooth, setBatchAiBeautySmooth, batchAiBeautyClarity, setBatchAiBeautyClarity, batchAiBeautyGlow, setBatchAiBeautyGlow, batchAiFaceRestore, setBatchAiFaceRestore, batchAiBeautyUseMask, setBatchAiBeautyUseMask, batchSection, setBatchSection, batchRawFiles, setBatchRawFiles, handleRawBatchProcess, batchLogs, addBatchLog, batchConfirmFirst, setBatchConfirmFirst, batchConfirmData, batchCancelRequested, handleCancelBatch, continueBatchProcess, cancelBatchProcess, batchStats, batchLutId, setBatchLutId, batchLutIntensity, setBatchLutIntensity, batchCustomLutData, setBatchCustomLutData, batchCustomLutName, setBatchCustomLutName, batchFbOptimize, setBatchFbOptimize, importOutputsToCull, batchCullFilter, setBatchCullFilter, batchCullSort, setBatchCullSort, cullResults }} />
+            </div>
+          ) : activeTab === "cull" ? (
+            <div style={{ height: "calc(100vh - 52px)", overflowY: "auto", padding: "16px" }}>
+              <CullPage {...{ dm, cardBg, cardBdr, inputSt, sourceHandle: cullSourceHandle, outputHandle, batchImages: cullImages, selectSourceFolder: selectCullSourceFolder, selectRawSourceFolder, selectOutputFolder, batchLogs, addBatchLog, batchSection, setBatchSection, isMobile: true, user, setActiveTab, cullResults, setCullResults, groups, setGroups, activeGroupIndex: cullActiveGroupIndex, setActiveGroupIndex: setCullActiveGroupIndex, activeAlternateIndex: cullActiveAlternateIndex, setActiveAlternateIndex: setCullActiveAlternateIndex }} />
+            </div>
+          ) : activeTab === "account" ? (
+            <div style={{ display: "flex", justifyContent: "center", minHeight: "calc(100vh - 52px)", overflowY: "auto", background: dm ? "#0a0e17" : "#f3f4f6" }}>
+              <AccountDashboard user={user} onLogin={handleLogin} onLogout={handleLogout} onRenewLease={handleRenewLease} onUpgrade={() => { setActiveTab("home"); setTimeout(() => document.getElementById("pricing-container")?.scrollIntoView({ behavior: "smooth" }), 100); }} dm={dm} />
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", height: "calc(100vh - 52px)", overflow: "hidden" }}>
+              {image ? (
+                <>
+                  <div style={{ height: "42vh", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", position: "relative", borderBottom: `1px solid ${dm ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'}` }}>
+                    <Preview {...{ image: (aiPreviewUrl || beautyPreviewUrl || image), originalImage, dragging, setDragging, loadImage, fileInputRef, imgRef, splitRef, previewRef, activeTab, bgResult, bgMode, showBefore, setShowBefore, showSplit, splitPos, isDragSplit, setIsDragSplit, cssFilter, transformCSS, filters, texts, selText, setSelText, updateText, cropMode, cropBox, setCropBox, cropAspect, isEdited, resetAll, setImage, setBgStatus, setBgSubUrl, setBgResult, isMobile, rotation, flipH, flipV, activeLutData, lutIntensity, lutId, dm, rawLoading, rawProgressMsg, logo, logoScale, logoScalePortrait, logoOpacity, logoPos, logoMargin, logoX, setLogoX, logoY, setLogoY, setLogoPos, filterGroup, chromatic, prism, halation, filmDust, glitter, vhs, lightLeak, heatmap, vibeAudio, hslMixer, curves }} highResImage={image} />
+                  </div>
+                  <div className="glass-panel" style={{ flex: 1, overflowY: "auto", WebkitOverflowScrolling: "touch", borderTop: `1px solid ${dm ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'}` }}>
+                    {renderPanel(true)}
+                  </div>
+                </>
+              ) : (
+                <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: "16px", position: "relative", overflow: "hidden" }}>
                   <Preview {...{ image: (aiPreviewUrl || beautyPreviewUrl || image), originalImage, dragging, setDragging, loadImage, fileInputRef, imgRef, splitRef, previewRef, activeTab, bgResult, bgMode, showBefore, setShowBefore, showSplit, splitPos, isDragSplit, setIsDragSplit, cssFilter, transformCSS, filters, texts, selText, setSelText, updateText, cropMode, cropBox, setCropBox, cropAspect, isEdited, resetAll, setImage, setBgStatus, setBgSubUrl, setBgResult, isMobile, rotation, flipH, flipV, activeLutData, lutIntensity, lutId, dm, rawLoading, rawProgressMsg, logo, logoScale, logoScalePortrait, logoOpacity, logoPos, logoMargin, logoX, setLogoX, logoY, setLogoY, setLogoPos, filterGroup, chromatic, prism, halation, filmDust, glitter, vhs, lightLeak, heatmap, vibeAudio, hslMixer, curves }} highResImage={image} />
                 </div>
-                <div className="glass-panel" style={{ flex: 1, overflowY: "auto", WebkitOverflowScrolling: "touch", borderTop: `1px solid ${dm ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'}` }}>
-                  {renderPanel(true)}
-                </div>
-              </>
-            ) : (
-              <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: "16px", position: "relative", overflow: "hidden" }}>
-                <Preview {...{ image: (aiPreviewUrl || beautyPreviewUrl || image), originalImage, dragging, setDragging, loadImage, fileInputRef, imgRef, splitRef, previewRef, activeTab, bgResult, bgMode, showBefore, setShowBefore, showSplit, splitPos, isDragSplit, setIsDragSplit, cssFilter, transformCSS, filters, texts, selText, setSelText, updateText, cropMode, cropBox, setCropBox, cropAspect, isEdited, setImage, setBgStatus, setBgSubUrl, setBgResult, isMobile, rotation, flipH, flipV, activeLutData, lutIntensity, lutId, dm, rawLoading, rawProgressMsg, logo, logoScale, logoScalePortrait, logoOpacity, logoPos, logoMargin, logoX, setLogoX, logoY, setLogoY, setLogoPos, filterGroup, hslMixer, curves }} highResImage={image} />
-              </div>
-            )}
-          </div>
-        )
-      )}
+              )}
+            </div>
+          )
+        )}
+      </Suspense>
 
       {showExport && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.45)", backdropFilter: "blur(6px)", zIndex: 100, display: "flex", alignItems: "flex-end", justifyContent: "center", padding: isMobile ? "0" : "20px" }}
@@ -2922,7 +2740,7 @@ export default function App() {
         </div>
       )}
       {checkoutPlan && (
-        <StripeCheckout isOpen={!!checkoutPlan} onClose={() => setCheckoutPlan(null)} plan={checkoutPlan} dm={dm} onPaymentSuccess={handlePaymentSuccess} />
+        <StripeCheckout isOpen={!!checkoutPlan} onClose={() => setCheckoutPlan(null)} plan={checkoutPlan} dm={dm} user={user} onLogin={handleLogin} />
       )}
       <canvas ref={canvasRef} style={{ display: "none" }} />
     </div>
