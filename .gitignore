@@ -3,3 +3,4 @@ dist/
 .idx/
 .DS_Store
 .vercel
+package-lock.json
