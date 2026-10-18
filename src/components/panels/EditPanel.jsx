@@ -24,7 +24,7 @@ export function EditPanel({
     logoX, setLogoX, logoY, setLogoY,
     
     // Adjust / Crop props
-    imgRef, setRotation, setFlipH, setFlipV, rotation, flipH, flipV, cropMode, setCropMode, cropBox, setCropBox, cropAspect, setCropAspect, applyCrop, applyCanvasPreset,
+    imgRef, setRotation, setFlipH, setFlipV, rotation, flipH, flipV, cropMode, setCropMode, cropBox, setCropBox, cropAspect, setCropAspect, applyCrop, applyCanvasPreset, handleRotateStep, handleFlipStep,
     
     // Tools / Photoroom Studio props
     handleRemoveBg, clearBgCutout, bgStatus, bgProgress, bgSubUrl, bgMode, setBgMode, bgColor, setBgColor, bgBlur, setBgBlur, bgResult,
@@ -622,7 +622,7 @@ export function EditPanel({
                 <AdjustPanel {...{
                     image, imgRef, setRotation, setFlipH, setFlipV, rotation, flipH, flipV,
                     cropMode, setCropMode, cropBox, setCropBox, cropAspect, setCropAspect,
-                    applyCrop, applyCanvasPreset, dm, cardBg, cardBdr
+                    applyCrop, applyCanvasPreset, handleRotateStep, handleFlipStep, dm, cardBg, cardBdr
                 }} />
             )}
 

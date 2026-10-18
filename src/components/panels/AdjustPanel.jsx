@@ -30,6 +30,8 @@ export function AdjustPanel({
     setCropAspect,
     applyCrop,
     applyCanvasPreset,
+    handleRotateStep,
+    handleFlipStep,
     dm,
     cardBg,
     cardBdr
@@ -41,8 +43,11 @@ export function AdjustPanel({
     const [canvasFillColor, setCanvasFillColor] = useState("#ffffff");
 
     const imgEl = imgRef?.current;
-    const natW = imgEl?.naturalWidth || 0;
-    const natH = imgEl?.naturalHeight || 0;
+    const rawNatW = imgEl?.naturalWidth || 0;
+    const rawNatH = imgEl?.naturalHeight || 0;
+    const isRotSwapped = rotation === 90 || rotation === 270;
+    const natW = isRotSwapped ? rawNatH : rawNatW;
+    const natH = isRotSwapped ? rawNatW : rawNatH;
     const cropPxW = natW ? Math.max(1, Math.round((natW * (cropBox?.w || 100)) / 100)) : 0;
     const cropPxH = natH ? Math.max(1, Math.round((natH * (cropBox?.h || 100)) / 100)) : 0;
 
@@ -51,8 +56,13 @@ export function AdjustPanel({
         setCropMode(true);
         if (ratio === "free") return;
         const [aw, ah] = ratio.split(":").map(Number);
-        const imgW = imgEl?.naturalWidth || 1;
-        const imgH = imgEl?.naturalHeight || 1;
+        let imgW = imgEl?.naturalWidth || 1;
+        let imgH = imgEl?.naturalHeight || 1;
+        if (isRotSwapped) {
+            const tmp = imgW;
+            imgW = imgH;
+            imgH = tmp;
+        }
         const imgAspect = imgW / imgH;
         const targetAspect = aw / ah;
         let w, h;
@@ -178,10 +188,10 @@ export function AdjustPanel({
                         <SL style={{ margin: 0 }}>Rotate, Straighten & Flip</SL>
                         <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: "6px" }}>
                             {[
-                                { l: "↺ -90°", a: () => setRotation(r => (r - 90 + 360) % 360) },
-                                { l: "↻ +90°", a: () => setRotation(r => (r + 90) % 360) },
-                                { l: "↔ Flip H", a: () => setFlipH(v => !v), active: flipH },
-                                { l: "↕ Flip V", a: () => setFlipV(v => !v), active: flipV }
+                                { l: "↺ -90°", a: () => handleRotateStep ? handleRotateStep(-90) : setRotation(r => (r - 90 + 360) % 360) },
+                                { l: "↻ +90°", a: () => handleRotateStep ? handleRotateStep(90) : setRotation(r => (r + 90) % 360) },
+                                { l: "↔ Flip H", a: () => handleFlipStep ? handleFlipStep('H') : setFlipH(v => !v), active: flipH },
+                                { l: "↕ Flip V", a: () => handleFlipStep ? handleFlipStep('V') : setFlipV(v => !v), active: flipV }
                             ].map(b => (
                                 <button
                                     key={b.l}
@@ -207,7 +217,7 @@ export function AdjustPanel({
                                 <span style={{ fontSize: "12px", fontWeight: 600, color: rotation !== 0 ? "#6c63ff" : (dm ? "#ccc" : "#666") }}>Fine Straighten Angle</span>
                                 <span style={{ fontSize: "12px", fontWeight: 700, color: "#6c63ff", fontVariantNumeric: "tabular-nums" }}>{rotation}°</span>
                             </div>
-                            <SmoothSlider min={-180} max={180} step={1} value={rotation} defaultValue={0} onChange={setRotation} />
+                            <SmoothSlider min={-45} max={45} step={0.5} value={rotation} defaultValue={0} onChange={setRotation} />
                             {rotation !== 0 && (
                                 <button
                                     onClick={() => setRotation(0)}

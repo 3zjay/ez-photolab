@@ -118,11 +118,11 @@ export function Preview({
         ctx.putImageData(imgData, 0, 0);
       }
 
-      if (chromatic > 0) applyChromaticAberration(ctx, pW, pH, chromatic);
+      if (chromatic > 0) applyChromaticAberration(canvas, ctx, pW, pH, chromatic);
       if (prism > 0) applyPrismRefraction(canvas, ctx, pW, pH, prism);
-      if (heatmap > 0) applyThermalHeatmap(ctx, pW, pH, heatmap);
-      if (filmDust > 0) applyFilmDust(ctx, pW, pH, filmDust);
-      if (glitter > 0) applyGlitterSparkles(ctx, pW, pH, glitter);
+      if (heatmap > 0) applyThermalHeatmap(canvas, ctx, pW, pH, heatmap);
+      if (filmDust > 0) applyFilmDust(canvas, ctx, pW, pH, filmDust);
+      if (glitter > 0) applyGlitterSparkles(canvas, ctx, pW, pH, glitter);
     }, 35);
     return () => clearTimeout(timer);
   }, [
@@ -168,8 +168,7 @@ export function Preview({
       const r = containerRef.current.getBoundingClientRect();
       const nx = Math.min(96, Math.max(4, ((clientX - r.left) / r.width) * 100));
       const ny = Math.min(96, Math.max(4, ((clientY - r.top) / r.height) * 100));
-      updateText(dragTxt.id, "x", nx);
-      updateText(dragTxt.id, "y", ny);
+      updateText(dragTxt.id, { x: nx, y: ny });
     };
     const up = () => setDragTxt(null);
     window.addEventListener("mousemove", mm);
@@ -278,11 +277,13 @@ export function Preview({
         }
       }
 
+      const clampedX = Math.max(0, Math.min(100 - minSize, x));
+      const clampedY = Math.max(0, Math.min(100 - minSize, y));
       setCropBox({
-        x: Math.max(0, Math.min(100 - minSize, x)),
-        y: Math.max(0, Math.min(100 - minSize, y)),
-        w: Math.max(minSize, Math.min(100, w)),
-        h: Math.max(minSize, Math.min(100, h))
+        x: clampedX,
+        y: clampedY,
+        w: Math.max(minSize, Math.min(100 - clampedX, w)),
+        h: Math.max(minSize, Math.min(100 - clampedY, h))
       });
     };
 
@@ -307,10 +308,11 @@ export function Preview({
   useEffect(() => {
     if (!draggingLogo) return;
     const mm = e => {
-      if (!splitRef.current) return;
+      const targetEl = containerRef.current || splitRef.current;
+      if (!targetEl) return;
       const clientX = e.touches ? e.touches[0].clientX : e.clientX;
       const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-      const r = splitRef.current.getBoundingClientRect();
+      const r = targetEl.getBoundingClientRect();
       const nx = Math.min(98, Math.max(2, ((clientX - r.left) / r.width) * 100));
       const ny = Math.min(98, Math.max(2, ((clientY - r.top) / r.height) * 100));
       setLogoX(nx);
@@ -733,7 +735,7 @@ export function Preview({
                 outline: selText === t.id ? "2px dashed #6c63ff" : "none",
                 outlineOffset: "3px",
                 whiteSpace: "nowrap",
-                zIndex: 8
+                zIndex: selText === t.id ? 20 : 8
               }}
             >
               {t.type === "graphic" && t.imageSrc ? (
@@ -765,7 +767,7 @@ export function Preview({
           {effectiveShowSplit && (
             <>
               <div style={{ position: "absolute", inset: 0, clipPath: `inset(0 0 0 ${splitPos}%)`, zIndex: 16, pointerEvents: "none" }}>
-                <img src={originalImage || displaySrc} alt="before" style={{ width: "100%", height: "100%", objectFit: "contain", display: "block", filter: "none", transform: "none" }} />
+                <img src={originalImage || displaySrc} alt="before" style={{ width: "100%", height: "100%", objectFit: "contain", display: "block", filter: "none", transform: effectiveShowBefore ? "none" : transformCSS }} />
               </div>
               <div
                 onMouseDown={e => { e.preventDefault(); e.stopPropagation(); setIsDragSplit(true); }}

@@ -4,8 +4,10 @@
  */
 
 export async function inpaintCanvasLocal(sourceCanvas, maskCanvas, onProgress) {
+  if (!sourceCanvas || !maskCanvas) return sourceCanvas;
   const W = sourceCanvas.width;
   const H = sourceCanvas.height;
+  if (!W || !H) return sourceCanvas;
   const srcCtx = sourceCanvas.getContext("2d");
   const srcImageData = srcCtx.getImageData(0, 0, W, H);
   const srcData = srcImageData.data;
@@ -84,6 +86,56 @@ export async function inpaintCanvasLocal(sourceCanvas, maskCanvas, onProgress) {
         }
       }
     }
+  }
+
+  // Large ROI downscaling optimization:
+  // For large brush strokes or high-res images, downscale the ROI proxy to <= 360px
+  // for instant (<60ms) harmonic inpainting without UI lockups, then upscale and blend.
+  const maxRoiDim = 360;
+  if (Math.max(bW, bH) > maxRoiDim) {
+    const roiScale = maxRoiDim / Math.max(bW, bH);
+    const sW = Math.max(1, Math.round(bW * roiScale));
+    const sH = Math.max(1, Math.round(bH * roiScale));
+
+    const roiSourceCanvas = document.createElement("canvas");
+    roiSourceCanvas.width = sW;
+    roiSourceCanvas.height = sH;
+    const rscCtx = roiSourceCanvas.getContext("2d");
+    rscCtx.drawImage(sourceCanvas, bMinX, bMinY, bW, bH, 0, 0, sW, sH);
+
+    const roiMaskCanvas = document.createElement("canvas");
+    roiMaskCanvas.width = sW;
+    roiMaskCanvas.height = sH;
+    const rmcCtx = roiMaskCanvas.getContext("2d");
+    rmcCtx.drawImage(scaledMaskCanvas, bMinX, bMinY, bW, bH, 0, 0, sW, sH);
+
+    const healedRoiCanvas = await inpaintCanvasLocal(roiSourceCanvas, roiMaskCanvas, onProgress);
+
+    const upscaledPatchCanvas = document.createElement("canvas");
+    upscaledPatchCanvas.width = bW;
+    upscaledPatchCanvas.height = bH;
+    const upCtx = upscaledPatchCanvas.getContext("2d");
+    upCtx.imageSmoothingEnabled = true;
+    upCtx.imageSmoothingQuality = "high";
+    upCtx.drawImage(healedRoiCanvas, 0, 0, bW, bH);
+    const upscaledData = upCtx.getImageData(0, 0, bW, bH).data;
+
+    for (let ly = 0; ly < bH; ly++) {
+      const gy = bMinY + ly;
+      for (let lx = 0; lx < bW; lx++) {
+        if (!mask[ly * bW + lx]) continue;
+        const gx = bMinX + lx;
+        const gIdx = (gy * W + gx) * 4;
+        const pIdx = (ly * bW + lx) * 4;
+        srcData[gIdx] = upscaledData[pIdx];
+        srcData[gIdx + 1] = upscaledData[pIdx + 1];
+        srcData[gIdx + 2] = upscaledData[pIdx + 2];
+        srcData[gIdx + 3] = upscaledData[pIdx + 3];
+      }
+    }
+
+    outCtx.putImageData(srcImageData, 0, 0);
+    return outCanvas;
   }
 
   // Copy ROI RGB channels into float buffers for smooth multi-pass propagation

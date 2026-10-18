@@ -817,43 +817,56 @@ export default function App() {
     return () => document.removeEventListener('input', onSliderInput, { capture: true });
   }, []);
 
-  const buildBgComposite = useCallback(async (subUrlOverride) => {
+  const bgCompositeTimerRef = useRef(null);
+
+  const buildBgComposite = useCallback((subUrlOverride) => {
     const subUrl = subUrlOverride || bgSubUrl;
     if (!image || !subUrl) return;
-    try {
-      const [origImg, subImg] = await Promise.all([
-        loadImageFromSrc(image),
-        loadImageFromSrc(subUrl)
-      ]);
-      let customBgImg = null;
-      if (bgMode === "custom" && bgCustomUrl) {
-        try {
-          customBgImg = await loadImageFromSrc(bgCustomUrl);
-        } catch (e) {
-          console.warn("Custom background load error:", e);
-        }
-      }
-      const dataUrl = renderPhotoroomCutoutComposite(origImg, subImg, {
-        mode: bgMode,
-        color: bgColor,
-        blur: bgBlur,
-        sceneId: bgScene,
-        customBgImg,
-        shadowType: bgShadowType,
-        shadowOpacity: bgShadowOpacity / 100,
-        shadowBlur: bgShadowBlur,
-        shadowOffsetX: bgShadowX,
-        shadowOffsetY: bgShadowY,
-        outlineWidth: bgOutlineWidth,
-        outlineColor: bgOutlineColor,
-        subjectScale: bgSubjectScale / 100,
-        subjectX: bgSubjectX,
-        subjectY: bgSubjectY
-      });
-      setBgResult(dataUrl);
-    } catch (e) {
-      console.error("Photoroom composite render error:", e);
+
+    // Fast-path: transparent background with no shadows or transforms needs zero canvas processing
+    if (bgMode === "transparent" && bgShadowType === "none" && bgOutlineWidth === 0 && bgSubjectScale === 100 && bgSubjectX === 0 && bgSubjectY === 0) {
+      if (bgCompositeTimerRef.current) clearTimeout(bgCompositeTimerRef.current);
+      setBgResult(subUrl);
+      return;
     }
+
+    if (bgCompositeTimerRef.current) clearTimeout(bgCompositeTimerRef.current);
+    bgCompositeTimerRef.current = setTimeout(async () => {
+      try {
+        const [origImg, subImg] = await Promise.all([
+          loadImageFromSrc(image),
+          loadImageFromSrc(subUrl)
+        ]);
+        let customBgImg = null;
+        if (bgMode === "custom" && bgCustomUrl) {
+          try {
+            customBgImg = await loadImageFromSrc(bgCustomUrl);
+          } catch (e) {
+            console.warn("Custom background load error:", e);
+          }
+        }
+        const dataUrl = renderPhotoroomCutoutComposite(origImg, subImg, {
+          mode: bgMode,
+          color: bgColor,
+          blur: bgBlur,
+          sceneId: bgScene,
+          customBgImg,
+          shadowType: bgShadowType,
+          shadowOpacity: bgShadowOpacity / 100,
+          shadowBlur: bgShadowBlur,
+          shadowOffsetX: bgShadowX,
+          shadowOffsetY: bgShadowY,
+          outlineWidth: bgOutlineWidth,
+          outlineColor: bgOutlineColor,
+          subjectScale: bgSubjectScale / 100,
+          subjectX: bgSubjectX,
+          subjectY: bgSubjectY
+        });
+        setBgResult(dataUrl);
+      } catch (e) {
+        console.error("Photoroom composite render error:", e);
+      }
+    }, 25);
   }, [
     image, bgSubUrl, bgMode, bgColor, bgBlur, bgScene, bgCustomUrl,
     bgShadowType, bgShadowOpacity, bgShadowBlur, bgShadowX, bgShadowY,
@@ -867,13 +880,15 @@ export default function App() {
   }, [bgSubUrl, bgStatus, buildBgComposite]);
 
   const clearBgCutout = useCallback(() => {
+    if (bgCompositeTimerRef.current) clearTimeout(bgCompositeTimerRef.current);
     setBgStatus("idle");
     setBgResult(null);
   }, []);
 
   const onSplitMove = useCallback((cx) => {
     if (!splitRef.current) return;
-    const r = splitRef.current.getBoundingClientRect();
+    const targetEl = splitRef.current.firstElementChild || splitRef.current;
+    const r = targetEl.getBoundingClientRect();
     setSplitPos(Math.min(95, Math.max(5, ((cx - r.left) / r.width) * 100)));
   }, []);
   useEffect(() => {
@@ -905,10 +920,6 @@ export default function App() {
             setRawProgressMsg(msg);
           });
           if (result && result.url) {
-            setImage(result.url);
-            setOriginalImage(result.url);
-            setFilters(DEFAULT_FILTERS);
-            
             const orientation = result.orientation || 1;
             let rot = 0;
             let fH = false;
@@ -922,9 +933,17 @@ export default function App() {
               case 7: rot = 270; fH = true; break;
               case 8: rot = 270; break;
             }
-            setRotation(rot);
-            setFlipH(fH);
-            setFlipV(fV);
+            let finalUrl = result.url;
+            if (rot !== 0 || fH || fV) {
+              finalUrl = await cropSingleImageUrl(result.url, { x: 0, y: 0, w: 100, h: 100 }, rot, fH, fV);
+            }
+            setImage(finalUrl);
+            setOriginalImage(finalUrl);
+            setActiveTab("edit");
+            setFilters(DEFAULT_FILTERS);
+            setRotation(0);
+            setFlipH(false);
+            setFlipV(false);
             setLutId('none');
             setLutIntensity(1.0);
             setCustomLutData(null);
@@ -969,6 +988,7 @@ export default function App() {
       reader.onload = e => {
         setImage(e.target.result);
         setOriginalImage(e.target.result);
+        setActiveTab("edit");
         setFilters(DEFAULT_FILTERS);
         setRotation(0);
         setFlipH(false);
@@ -1081,22 +1101,28 @@ export default function App() {
 
   const cropSingleImageUrl = async (url, box, rot, fH, fV) => {
     const img = await loadImageFromSrc(url);
-    const W = img.naturalWidth, H = img.naturalHeight;
+    const W = img.naturalWidth || img.width;
+    const H = img.naturalHeight || img.height;
+    const isRotSwapped = rot === 90 || rot === 270;
+    const rad = Math.abs(((rot || 0) * Math.PI) / 180);
+    const rotW = isRotSwapped ? H : (rot && rot % 180 !== 0 ? Math.round(W * Math.abs(Math.cos(rad)) + H * Math.abs(Math.sin(rad))) : W);
+    const rotH = isRotSwapped ? W : (rot && rot % 180 !== 0 ? Math.round(W * Math.abs(Math.sin(rad)) + H * Math.abs(Math.cos(rad))) : H);
+
     const rotCanvas = document.createElement("canvas");
-    rotCanvas.width = W;
-    rotCanvas.height = H;
+    rotCanvas.width = rotW;
+    rotCanvas.height = rotH;
     const rCtx = rotCanvas.getContext("2d");
     rCtx.save();
-    rCtx.translate(W / 2, H / 2);
+    rCtx.translate(rotW / 2, rotH / 2);
     if (rot) rCtx.rotate((rot * Math.PI) / 180);
     rCtx.scale(fH ? -1 : 1, fV ? -1 : 1);
     rCtx.drawImage(img, -W / 2, -H / 2, W, H);
     rCtx.restore();
 
-    const sx = Math.round((box.x / 100) * W);
-    const sy = Math.round((box.y / 100) * H);
-    const sw = Math.max(1, Math.round((box.w / 100) * W));
-    const sh = Math.max(1, Math.round((box.h / 100) * H));
+    const sx = Math.round((box.x / 100) * rotW);
+    const sy = Math.round((box.y / 100) * rotH);
+    const sw = Math.max(1, Math.round((box.w / 100) * rotW));
+    const sh = Math.max(1, Math.round((box.h / 100) * rotH));
 
     const c = document.createElement("canvas");
     c.width = sw;
@@ -1149,7 +1175,13 @@ export default function App() {
         return;
       }
 
-      const baseSrc = (snap.bgStatus === "done" && snap.bgResult) ? snap.bgResult : snap.image;
+      let baseSrc = (snap.bgStatus === "done" && snap.bgResult) ? snap.bgResult : snap.image;
+      if (rotation !== 0 || flipH || flipV) {
+        baseSrc = await cropSingleImageUrl(baseSrc, { x: 0, y: 0, w: 100, h: 100 }, rotation, flipH, flipV);
+        setRotation(0);
+        setFlipH(false);
+        setFlipV(false);
+      }
       const img = await loadImageFromSrc(baseSrc);
       const targetW = preset.w;
       const targetH = preset.h;
@@ -1164,7 +1196,11 @@ export default function App() {
         ctx.fillStyle = fillColor || "#ffffff";
         ctx.fillRect(0, 0, targetW, targetH);
       } else if (fillMode === "blur") {
-        const origImg = originalImage ? await loadImageFromSrc(originalImage) : img;
+        let origSrc = originalImage || baseSrc;
+        if (rotation !== 0 || flipH || flipV) {
+          origSrc = await cropSingleImageUrl(origSrc, { x: 0, y: 0, w: 100, h: 100 }, rotation, flipH, flipV);
+        }
+        const origImg = await loadImageFromSrc(origSrc);
         const coverScale = Math.max(targetW / origImg.naturalWidth, targetH / origImg.naturalHeight) * 1.1;
         const bw = origImg.naturalWidth * coverScale;
         const bh = origImg.naturalHeight * coverScale;
@@ -1187,7 +1223,11 @@ export default function App() {
       const resizedUrl = c.toDataURL("image/png");
 
       if (snap.bgStatus === "done" && snap.bgSubUrl) {
-        const subImg = await loadImageFromSrc(snap.bgSubUrl);
+        let bakedSubUrl = snap.bgSubUrl;
+        if (rotation !== 0 || flipH || flipV) {
+          bakedSubUrl = await cropSingleImageUrl(bakedSubUrl, { x: 0, y: 0, w: 100, h: 100 }, rotation, flipH, flipV);
+        }
+        const subImg = await loadImageFromSrc(bakedSubUrl);
         const subCanvas = document.createElement("canvas");
         subCanvas.width = targetW;
         subCanvas.height = targetH;
@@ -1210,6 +1250,88 @@ export default function App() {
       setCropBox({ x: 0, y: 0, w: 100, h: 100 });
     } catch (e) {
       console.error("Smart canvas resize failed:", e);
+    }
+  };
+
+  const handleRotateStep = async (deg) => {
+    if (!image) return;
+    try {
+      const rot = (deg + 360) % 360;
+      const [newMain, newOrig] = await Promise.all([
+        cropSingleImageUrl(image, { x: 0, y: 0, w: 100, h: 100 }, rot, false, false),
+        originalImage ? cropSingleImageUrl(originalImage, { x: 0, y: 0, w: 100, h: 100 }, rot, false, false) : null
+      ]);
+      setImage(newMain);
+      if (newOrig) setOriginalImage(newOrig);
+
+      if (bgStatus === "done" && bgSubUrl) {
+        const [newSub, newRes] = await Promise.all([
+          cropSingleImageUrl(bgSubUrl, { x: 0, y: 0, w: 100, h: 100 }, rot, false, false),
+          bgResult ? cropSingleImageUrl(bgResult, { x: 0, y: 0, w: 100, h: 100 }, rot, false, false) : null
+        ]);
+        setBgSubUrl(newSub);
+        if (newRes) setBgResult(newRes);
+      }
+
+      // Rotate existing text layers so they stay locked to visual positions on the photo
+      setTexts(prev => prev.map(t => {
+        let nx = t.x;
+        let ny = t.y;
+        if (rot === 90) {
+          nx = 100 - t.y;
+          ny = t.x;
+        } else if (rot === 180) {
+          nx = 100 - t.x;
+          ny = 100 - t.y;
+        } else if (rot === 270) {
+          nx = t.y;
+          ny = 100 - t.x;
+        }
+        return {
+          ...t,
+          x: Math.round(nx * 10) / 10,
+          y: Math.round(ny * 10) / 10,
+          rotation: ((t.rotation || 0) + rot) % 360
+        };
+      }));
+
+      setCropBox({ x: 0, y: 0, w: 100, h: 100 });
+      preCanvasImageRef.current = null;
+    } catch (e) {
+      console.error("Rotate step failed:", e);
+    }
+  };
+
+  const handleFlipStep = async (axis) => {
+    if (!image) return;
+    try {
+      const fH = axis === 'H';
+      const fV = axis === 'V';
+      const [newMain, newOrig] = await Promise.all([
+        cropSingleImageUrl(image, { x: 0, y: 0, w: 100, h: 100 }, 0, fH, fV),
+        originalImage ? cropSingleImageUrl(originalImage, { x: 0, y: 0, w: 100, h: 100 }, 0, fH, fV) : null
+      ]);
+      setImage(newMain);
+      if (newOrig) setOriginalImage(newOrig);
+
+      if (bgStatus === "done" && bgSubUrl) {
+        const [newSub, newRes] = await Promise.all([
+          cropSingleImageUrl(bgSubUrl, { x: 0, y: 0, w: 100, h: 100 }, 0, fH, fV),
+          bgResult ? cropSingleImageUrl(bgResult, { x: 0, y: 0, w: 100, h: 100 }, 0, fH, fV) : null
+        ]);
+        setBgSubUrl(newSub);
+        if (newRes) setBgResult(newRes);
+      }
+
+      setTexts(prev => prev.map(t => ({
+        ...t,
+        x: fH ? (100 - t.x) : t.x,
+        y: fV ? (100 - t.y) : t.y
+      })));
+
+      preCanvasImageRef.current = null;
+    } catch (e) {
+      console.error("Flip step failed:", e);
     }
   };
 
@@ -1240,7 +1362,15 @@ export default function App() {
     ]);
     setSelText(id);
   };
-  const updateText = (id, key, val) => setTexts(p => p.map(t => t.id === id ? { ...t, [key]: val } : t));
+  const updateText = useCallback((id, keyOrObj, val) => {
+    setTexts(p => p.map(t => {
+      if (t.id !== id) return t;
+      if (typeof keyOrObj === 'object' && keyOrObj !== null) {
+        return { ...t, ...keyOrObj };
+      }
+      return { ...t, [keyOrObj]: val };
+    }));
+  }, []);
   const deleteText = id => { setTexts(p => p.filter(t => t.id !== id)); setSelText(null); };
 
   const handleRemoveBg = async () => {
@@ -2430,10 +2560,16 @@ export default function App() {
     }
     let mc = maskCanvasRef.current;
     const img = imgRef.current;
-    if (!mc) return;
-    if ((!mc.width || !mc.height) && img?.naturalWidth) {
-      mc.width = img.naturalWidth;
-      mc.height = img.naturalHeight;
+    const targetW = img?.naturalWidth || 1200;
+    const targetH = img?.naturalHeight || 900;
+    if (!mc) {
+      mc = document.createElement('canvas');
+      mc.width = targetW;
+      mc.height = targetH;
+      maskCanvasRef.current = mc;
+    } else if (!mc.width || !mc.height) {
+      mc.width = targetW;
+      mc.height = targetH;
       const initCtx = mc.getContext('2d');
       initCtx.clearRect(0, 0, mc.width, mc.height);
     }
@@ -2517,17 +2653,18 @@ export default function App() {
       setEraseHistory(prev => [...prev.slice(-9), { image, bgStatus, bgSubUrl, bgResult }]);
       setImage(resultDataUrl);
       if (bgStatus === 'done' && bgSubUrl) {
-        // Also inpaint or erase masked area on cutout subject so buildBgComposite stays in sync
+        // Erase masked area from cutout subject so buildBgComposite stays in sync
         const subImg = await loadImageFromSrc(bgSubUrl);
         const subCanvas = document.createElement('canvas');
-        subCanvas.width = subImg.naturalWidth;
-        subCanvas.height = subImg.naturalHeight;
+        subCanvas.width = subImg.naturalWidth || subImg.width;
+        subCanvas.height = subImg.naturalHeight || subImg.height;
         const sCtx = subCanvas.getContext('2d');
         sCtx.drawImage(subImg, 0, 0);
-        const outSubCanvas = await inpaintCanvasLocal(subCanvas, mc);
-        const outSubUrl = typeof outSubCanvas === 'string' ? outSubCanvas : outSubCanvas.toDataURL('image/png');
+        sCtx.globalCompositeOperation = 'destination-out';
+        sCtx.drawImage(mc, 0, 0, subCanvas.width, subCanvas.height);
+        sCtx.globalCompositeOperation = 'source-over';
+        const outSubUrl = subCanvas.toDataURL('image/png');
         setBgSubUrl(outSubUrl);
-        setBgResult(resultDataUrl);
       }
 
       // Clear mask so user can immediately paint another spot
@@ -2613,8 +2750,9 @@ export default function App() {
     if (!image) { alert('Upload a photo first.'); return; }
     setAiFaceRestoreStatus('loading'); setAiFaceRestoreResult(null); setAiFaceRestoreLog('Starting face restore…');
     try {
-      const srcImg = imgRef.current;
-      const W = srcImg.naturalWidth, H = srcImg.naturalHeight;
+      const srcImg = await loadImageFromSrc(activeBaseImage);
+      const W = srcImg.naturalWidth || srcImg.width;
+      const H = srcImg.naturalHeight || srcImg.height;
       const tmp = document.createElement('canvas');
       tmp.width = W; tmp.height = H;
       const ctx = tmp.getContext('2d');
@@ -2629,7 +2767,7 @@ export default function App() {
       setAiFaceRestoreStatus('error');
       setAiFaceRestoreLog(e.message || 'Face restoration failed');
     }
-  }, [image, applyAiBaseImage]);
+  }, [image, activeBaseImage, applyAiBaseImage]);
 
   const dm = darkMode;
   const cardBg = dm ? '#2a2a2a' : '#f8f8fd';
@@ -2644,7 +2782,7 @@ export default function App() {
           filters, setFilters, filterGroup, setFilterGroup, hslMixer, setHslMixer, curves, setCurves, isEdited, resetAll, revertAi, dm, cardBdr, cardBg, image: activeBaseImage, imgRef, runBrowserUpscale, aiUpscaleStatus, aiUpscaleLog, aiUpscaleProgress, aiUpscaleResult, aiUpscaleResultSize, applyAiResult, saveFile, aiScale, setAiScale, aiBeautySmooth, setAiBeautySmooth, aiBeautyClarity, setAiBeautyClarity, aiBeautyGlow, setAiBeautyGlow, aiBeautyUseMask, setAiBeautyUseMask, runFalFaceRestore, aiFaceRestoreStatus, aiFaceRestoreLog, aiFaceRestoreResult, lutId, setLutId, lutIntensity, setLutIntensity, customLutData, setCustomLutData, customLutName, setCustomLutName, user, logo, setLogo, logoFile, setLogoFile, logoScale, setLogoScale, logoScalePortrait, setLogoScalePortrait, logoOpacity, setLogoOpacity, logoPos, setLogoPos, logoMargin, setLogoMargin, handleLogoUpload, logoX, setLogoX, logoY, setLogoY,
           
           // Adjust / Crop & Marketplace Resize props
-          setRotation, setFlipH, setFlipV, rotation, flipH, flipV, cropMode, setCropMode, cropBox, setCropBox, cropAspect, setCropAspect, applyCrop, applyCanvasPreset,
+          setRotation, setFlipH, setFlipV, rotation, flipH, flipV, cropMode, setCropMode, cropBox, setCropBox, cropAspect, setCropAspect, applyCrop, applyCanvasPreset, handleRotateStep, handleFlipStep,
           
           // Tools / Photoroom Studio props
           handleRemoveBg, clearBgCutout, bgStatus, bgProgress, bgSubUrl, bgMode, setBgMode, bgColor, setBgColor, bgBlur, setBgBlur, bgResult,

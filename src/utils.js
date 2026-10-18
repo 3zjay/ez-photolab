@@ -458,14 +458,19 @@ export async function renderFinal(
   let H = targetH || natH;
   if (W * H > MAX) { const s = Math.sqrt(MAX / (W * H)); W = Math.floor(W * s); H = Math.floor(H * s); }
 
+  const rad = Math.abs(((rotation || 0) * Math.PI) / 180);
+  const isRotSwapped = rotation === 90 || rotation === 270;
+  const rotW = isRotSwapped ? H : (rotation && rotation % 180 !== 0 ? Math.round(W * Math.abs(Math.cos(rad)) + H * Math.abs(Math.sin(rad))) : W);
+  const rotH = isRotSwapped ? W : (rotation && rotation % 180 !== 0 ? Math.round(W * Math.abs(Math.sin(rad)) + H * Math.abs(Math.cos(rad))) : H);
+
   const canvas = document.createElement('canvas');
-  canvas.width = W; canvas.height = H;
+  canvas.width = rotW; canvas.height = rotH;
   const ctx = canvas.getContext('2d');
 
   // Apply rotation + flip
   ctx.save();
-  ctx.translate(W / 2, H / 2);
-  ctx.rotate(rotation * Math.PI / 180);
+  ctx.translate(rotW / 2, rotH / 2);
+  if (rotation) ctx.rotate((rotation * Math.PI) / 180);
   ctx.scale(flipH ? -1 : 1, flipV ? -1 : 1);
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = 'high';
@@ -477,6 +482,9 @@ export async function renderFinal(
   ctx.drawImage(sourceEl, -W / 2, -H / 2, W, H);
   ctx.restore();
   ctx.filter = 'none';
+
+  W = rotW;
+  H = rotH;
 
   // Apply Structure AI [PRO]
   if (structureAmt > 0) {
@@ -1655,88 +1663,122 @@ export function applyThermalHeatmap(canvas, ctx, W, H, amount) {
  * Uses perimeter color-clustering, distance thresholds, and morphological feathering.
  */
 export function extractSalientCutoutFallback(sourceCanvas) {
-  const W = sourceCanvas.width;
-  const H = sourceCanvas.height;
-  const ctx = sourceCanvas.getContext('2d');
-  const imgData = ctx.getImageData(0, 0, W, H);
-  const d = imgData.data;
+  const natW = sourceCanvas.width;
+  const natH = sourceCanvas.height;
+  if (!natW || !natH) return sourceCanvas;
 
-  // 1. Sample perimeter border colors to identify background palette
-  const bgSamples = [];
-  const step = Math.max(1, Math.round(Math.min(W, H) / 80));
+  // Process on a fast 400px proxy canvas for instant <15ms execution
+  const maxDim = 400;
+  const scale = Math.min(1, maxDim / Math.max(natW, natH));
+  const sW = Math.max(1, Math.round(natW * scale));
+  const sH = Math.max(1, Math.round(natH * scale));
 
-  for (let x = 0; x < W; x += step) {
-    // Top border
+  const proxyCanvas = document.createElement('canvas');
+  proxyCanvas.width = sW;
+  proxyCanvas.height = sH;
+  const pCtx = proxyCanvas.getContext('2d');
+  pCtx.drawImage(sourceCanvas, 0, 0, sW, sH);
+  const pData = pCtx.getImageData(0, 0, sW, sH).data;
+
+  // 1. Collect perimeter border samples and cluster into <= 14 unique centroids
+  const rawSamples = [];
+  const step = Math.max(1, Math.round(Math.min(sW, sH) / 32));
+
+  for (let x = 0; x < sW; x += step) {
     let idx = x * 4;
-    bgSamples.push([d[idx], d[idx + 1], d[idx + 2]]);
-    // Bottom border
-    idx = ((H - 1) * W + x) * 4;
-    bgSamples.push([d[idx], d[idx + 1], d[idx + 2]]);
+    rawSamples.push([pData[idx], pData[idx + 1], pData[idx + 2]]);
+    idx = ((sH - 1) * sW + x) * 4;
+    rawSamples.push([pData[idx], pData[idx + 1], pData[idx + 2]]);
   }
-  for (let y = 0; y < H; y += step) {
-    // Left border
-    let idx = (y * W) * 4;
-    bgSamples.push([d[idx], d[idx + 1], d[idx + 2]]);
-    // Right border
-    idx = (y * W + (W - 1)) * 4;
-    bgSamples.push([d[idx], d[idx + 1], d[idx + 2]]);
+  for (let y = 0; y < sH; y += step) {
+    let idx = (y * sW) * 4;
+    rawSamples.push([pData[idx], pData[idx + 1], pData[idx + 2]]);
+    idx = (y * sW + (sW - 1)) * 4;
+    rawSamples.push([pData[idx], pData[idx + 1], pData[idx + 2]]);
   }
 
-  const outCanvas = document.createElement('canvas');
-  outCanvas.width = W;
-  outCanvas.height = H;
-  const outCtx = outCanvas.getContext('2d');
-  const outImgData = outCtx.createImageData(W, H);
-  const od = outImgData.data;
+  // Quantize to representative centroids
+  const centroids = [];
+  for (const [r, g, b] of rawSamples) {
+    let match = false;
+    for (const c of centroids) {
+      const dr = r - c[0], dg = g - c[1], db = b - c[2];
+      if (dr * dr + dg * dg + db * db < 650) {
+        match = true;
+        break;
+      }
+    }
+    if (!match && centroids.length < 16) {
+      centroids.push([r, g, b]);
+    }
+  }
 
-  const cx = W * 0.5;
-  const cy = H * 0.52;
-  const maxDist = Math.sqrt(cx * cx + cy * cy);
+  // 2. Generate mask on proxy canvas
+  const maskCanvas = document.createElement('canvas');
+  maskCanvas.width = sW;
+  maskCanvas.height = sH;
+  const mCtx = maskCanvas.getContext('2d');
+  const maskImgData = mCtx.createImageData(sW, sH);
+  const md = maskImgData.data;
 
-  for (let y = 0; y < H; y++) {
-    const rowOff = y * W;
-    for (let x = 0; x < W; x++) {
+  const cx = sW * 0.5;
+  const cy = sH * 0.52;
+
+  for (let y = 0; y < sH; y++) {
+    const rowOff = y * sW;
+    const dy = (y - cy) / cy;
+    for (let x = 0; x < sW; x++) {
       const idx = (rowOff + x) * 4;
-      const r = d[idx];
-      const g = d[idx + 1];
-      const b = d[idx + 2];
+      const r = pData[idx];
+      const g = pData[idx + 1];
+      const b = pData[idx + 2];
 
-      // Minimum color distance to any perimeter background sample
       let minColorDist = 999999;
-      for (let s = 0; s < bgSamples.length; s += 2) {
-        const sr = bgSamples[s][0];
-        const sg = bgSamples[s][1];
-        const sb = bgSamples[s][2];
-        const dr = r - sr;
-        const dg = g - sg;
-        const db = b - sb;
+      for (let s = 0; s < centroids.length; s++) {
+        const c = centroids[s];
+        const dr = r - c[0];
+        const dg = g - c[1];
+        const db = b - c[2];
         const dist = dr * dr + dg * dg + db * db;
         if (dist < minColorDist) minColorDist = dist;
       }
 
-      // Distance from center prior (0 at center, 1 at corners)
       const dx = (x - cx) / cx;
-      const dy = (y - cy) / cy;
       const centerFactor = Math.min(1, Math.sqrt(dx * dx + dy * dy));
-
-      // Subject classification threshold
-      // Closer to borders requires a stronger color contrast to be considered subject
-      const thresh = 900 + centerFactor * 1400;
+      const thresh = 800 + centerFactor * 1300;
       let alpha = 0;
-
       if (minColorDist > thresh) {
-        const ramp = Math.min(1, (minColorDist - thresh) / 800);
+        const ramp = Math.min(1, (minColorDist - thresh) / 750);
         alpha = Math.round(255 * ramp);
       }
 
-      od[idx] = r;
-      od[idx + 1] = g;
-      od[idx + 2] = b;
-      od[idx + 3] = alpha;
+      md[idx] = 255;
+      md[idx + 1] = 255;
+      md[idx + 2] = 255;
+      md[idx + 3] = alpha;
     }
   }
+  mCtx.putImageData(maskImgData, 0, 0);
 
-  outCtx.putImageData(outImgData, 0, 0);
+  // 3. Smooth / feather mask edges
+  const featherCanvas = document.createElement('canvas');
+  featherCanvas.width = sW;
+  featherCanvas.height = sH;
+  const fCtx = featherCanvas.getContext('2d');
+  fCtx.filter = 'blur(2.5px)';
+  fCtx.drawImage(maskCanvas, 0, 0);
+  fCtx.filter = 'none';
+
+  // 4. Composite smoothed mask onto full resolution source
+  const outCanvas = document.createElement('canvas');
+  outCanvas.width = natW;
+  outCanvas.height = natH;
+  const outCtx = outCanvas.getContext('2d');
+  outCtx.drawImage(sourceCanvas, 0, 0);
+  outCtx.globalCompositeOperation = 'destination-in';
+  outCtx.drawImage(featherCanvas, 0, 0, natW, natH);
+  outCtx.globalCompositeOperation = 'source-over';
+
   return outCanvas;
 }
 
