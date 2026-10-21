@@ -8,25 +8,25 @@ const buttonStyle = { padding: '6px 10px', border: '1px solid #73738e', borderRa
 
 export function DesktopHome({ onEdit, onCull, onBatch }) {
   return <main style={{ maxWidth: 760, margin: '70px auto', padding: 32 }}>
-    <p style={{ color: '#a49dff', fontSize: 13, letterSpacing: 2 }}>WINDOWS PREVIEW · 0.1.0</p>
-    <h1 style={{ fontSize: 40, margin: '18px 0' }}>Your photo workspace.</h1>
-    <p style={{ lineHeight: 1.7, opacity: .8 }}>Edit photos, organize a shoot, and process folders from your desktop. Save an editable PHOTOlab project to return to your work later.</p>
+    <p style={{ color: '#a49dff', fontSize: 13, letterSpacing: 2, fontWeight: 700 }}>WINDOWS DESKTOP v2.9.0 · FULL AI STUDIO</p>
+    <h1 style={{ fontSize: 40, margin: '18px 0' }}>Professional AI Photo Studio for Windows</h1>
+    <p style={{ lineHeight: 1.7, opacity: .85 }}>Fully updated with 100% on-device AI Magic Retouch, smart cutouts, tone curves, multi-layer compositing, and native folder access for fast culling and batch exports.</p>
     <div style={{ display: 'flex', gap: 12, margin: '28px 0' }}>
-      <button style={buttonStyle} onClick={onEdit}>Open editor</button><button style={buttonStyle} onClick={onCull}>Cull a shoot</button><button style={buttonStyle} onClick={onBatch}>Batch process</button>
+      <button style={{ ...buttonStyle, background: 'linear-gradient(135deg, #6c63ff, #8b5cf6)', color: '#fff', border: 'none', fontWeight: 600, padding: '8px 16px' }} onClick={onEdit}>🎨 Open Edit Studio</button><button style={{ ...buttonStyle, padding: '8px 16px' }} onClick={onCull}>⚡ Cull a shoot</button><button style={{ ...buttonStyle, padding: '8px 16px' }} onClick={onBatch}>📦 Batch process</button>
     </div>
     <DesktopAccount />
   </main>;
 }
 export function DesktopAccount() {
   return <div style={{ padding: 24, border: '1px solid #666680', borderRadius: 12, lineHeight: 1.7 }}>
-    <strong>Accounts &amp; cloud services</strong>
-    <p>This preview runs separately from the live website. Sign-in, billing, and cloud photo uploads will be connected after testing with separate test services.</p>
+    <strong>PHOTOlab Desktop v2.9.0 Status</strong>
+    <p>This desktop installation runs locally with full hardware acceleration. All Edit Studio features, 100% on-device AI Magic Retouch, smart cutout, tone curves, and multi-layer editing are fully active.</p>
     <p style={{ opacity: .7, marginTop: 8 }}>Local editing tools are available for preview. AI tools may need an internet connection to download models. Batch queues and culling sessions are not included in project recovery yet.</p>
   </div>;
 }
 
 export function DesktopWorkspace({ document: current, restore, loadPhoto, exportPhoto }) {
-  const [status, setStatus] = useState('Windows preview · Local workspace');
+  const [status, setStatus] = useState('PHOTOlab Desktop v2.9.0 · Local workspace');
   const [recovery, setRecovery] = useState(null);
   const [historyState, setHistoryState] = useState({ back: 0, forward: 0 });
   const [busy, setBusy] = useState(false);

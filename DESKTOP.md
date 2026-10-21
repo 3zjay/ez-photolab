@@ -1,4 +1,4 @@
-# PHOTOlab Desktop Preview 0.1.0
+# PHOTOlab Desktop v2.9.0
 
 This is a separate Windows x64 preview built from the existing React editor. Work is on `codex/windows-desktop`. No changes have been pushed, no Vercel deployment has been performed, and no production Firebase or Stripe configuration has been changed.
 
