@@ -1,8 +1,12 @@
-import { useRef, useEffect, useCallback, memo } from "react";
+import { useRef, useEffect, useCallback, memo, useId } from "react";
 
-export const SL = ({ children }) => <div className="text-[11px] font-semibold text-gray-400 tracking-wider uppercase mb-2">{children}</div>;
+export const SL = ({ children, style = {}, className = "" }) => (
+  <div style={style} className={`text-[11px] font-semibold text-gray-400 tracking-wider uppercase mb-2 ${className}`}>
+    {children}
+  </div>
+);
 export const Empty = ({ children }) => (
-  <div className="text-xs text-gray-400 text-center p-8 rounded-2xl glass-panel border border-dashed border-gray-500/30 flex flex-col items-center justify-center gap-3 transition-all hover:bg-white/5 cursor-pointer">
+  <div className="text-xs text-gray-400 text-center p-8 rounded-2xl glass-panel border border-dashed border-gray-500/30 flex flex-col items-center justify-center gap-3 transition-all">
     <div className="w-12 h-12 rounded-full bg-gradient-to-br from-indigo-500/20 to-purple-500/20 flex items-center justify-center text-xl shadow-inner border border-white/10">
       <svg className="w-6 h-6 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
     </div>
@@ -18,6 +22,7 @@ export const PBar = ({ value }) => (
 );
 export function AB({ children, onClick, disabled, color = "purple", textColor = "#fff", style = {}, className = "" }) {
   const isPurple = color === "purple";
+  const resolvedBg = color === "red" ? "rgba(239, 68, 68, 0.9)" : color;
   return (
     <button
       onClick={onClick}
@@ -29,7 +34,7 @@ export function AB({ children, onClick, disabled, color = "purple", textColor = 
             ? 'bg-gradient-to-br from-indigo-500 to-purple-500 text-white shadow-[0_4px_14px_0_rgba(99,102,241,0.39)] hover:shadow-[0_6px_20px_rgba(99,102,241,0.23)] hover:-translate-y-0.5'
             : 'bg-white/10 text-white hover:bg-white/20 border border-white/10 backdrop-blur-md'
       } ${className}`}
-      style={!isPurple && !disabled ? { background: color, color: textColor, ...style } : style}
+      style={!isPurple && !disabled ? { background: resolvedBg, color: textColor, ...style } : style}
     >
       {children}
     </button>
@@ -111,6 +116,7 @@ export const SmoothSlider = memo(function SmoothSlider({
 });
 
 export function ModernImageUploadIcon({ size = 44, dm = true }) {
+  const gradId = useId();
   return (
     <svg 
       width={size} 
@@ -121,7 +127,7 @@ export function ModernImageUploadIcon({ size = 44, dm = true }) {
       style={{ display: 'inline-block', transition: 'transform 0.3s' }}
     >
       <defs>
-        <linearGradient id="modernPhotoGlow" x1="0%" y1="0%" x2="100%" y2="100%">
+        <linearGradient id={gradId} x1="0%" y1="0%" x2="100%" y2="100%">
           <stop offset="0%" stopColor="#06b6d4" />
           <stop offset="50%" stopColor="#6c63ff" />
           <stop offset="100%" stopColor="#ec4899" />
@@ -130,11 +136,11 @@ export function ModernImageUploadIcon({ size = 44, dm = true }) {
       {/* Background overlapping photo */}
       <rect x="2" y="6" width="13" height="13" rx="3.5" stroke={dm ? "rgba(255,255,255,0.18)" : "rgba(0,0,0,0.15)"} strokeWidth="1.5" strokeLinecap="round" />
       {/* Foreground primary photo */}
-      <rect x="7" y="3" width="15" height="15" rx="4" fill={dm ? "rgba(108, 99, 255, 0.06)" : "rgba(108, 99, 255, 0.02)"} stroke="url(#modernPhotoGlow)" strokeWidth="1.8" strokeLinecap="round" />
+      <rect x="7" y="3" width="15" height="15" rx="4" fill={dm ? "rgba(108, 99, 255, 0.06)" : "rgba(108, 99, 255, 0.02)"} stroke={`url(#${gradId})`} strokeWidth="1.8" strokeLinecap="round" />
       {/* Sun/Moon */}
-      <circle cx="11.5" cy="7.5" r="1.5" fill="url(#modernPhotoGlow)" />
+      <circle cx="11.5" cy="7.5" r="1.5" fill={`url(#${gradId})`} />
       {/* Mountain hills inside */}
-      <path d="M7.5 17.5L12 12.5L15.5 15.5L18.5 12.5L21.5 15.5" stroke="url(#modernPhotoGlow)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M7.5 17.5L12 12.5L15.5 15.5L18.5 12.5L21.5 15.5" stroke={`url(#${gradId})`} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }

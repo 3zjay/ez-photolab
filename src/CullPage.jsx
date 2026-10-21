@@ -862,15 +862,15 @@ export default function CullPage({
           className="glass-panel"
           style={{
             borderRadius: "20px",
-            padding: "36px",
+            padding: isMobile ? "18px" : "32px",
             display: "flex",
             flexDirection: "column",
-            gap: "28px",
+            gap: isMobile ? "20px" : "28px",
             boxShadow: dm ? "0 10px 40px rgba(0,0,0,0.3)" : "0 10px 30px rgba(0,0,0,0.03)"
           }}
         >
           {/* Files Selector Row */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "24px" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 260px), 1fr))", gap: isMobile ? "16px" : "24px" }}>
             
             {/* Step 1: Input directory */}
             <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
@@ -996,7 +996,7 @@ export default function CullPage({
               <h3 style={{ margin: 0, fontSize: "15px", fontWeight: 700 }}>AI Parameters & Sensitivity Settings</h3>
             </div>
             
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "24px" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 250px), 1fr))", gap: isMobile ? "16px" : "24px" }}>
               
               {/* Grouping Sensitivity */}
               <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
@@ -1188,8 +1188,8 @@ export default function CullPage({
               <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: "6px" }}>
                 <span style={{ fontSize: "11px", fontWeight: 700, textTransform: "uppercase", color: dm ? "#777" : "#aaa" }}>Console logs</span>
                 <div style={{ width: "100%", maxHeight: "100px", overflowY: "auto", background: dm ? "#000" : "#222", color: "#22c55e", padding: "10px", borderRadius: "10px", fontFamily: "monospace", fontSize: "11px", display: "flex", flexDirection: "column", gap: "4px" }}>
-                  {batchLogs.slice(-4).map((log, lidx) => (
-                    <div key={lidx}>{log.text}</div>
+                  {batchLogs.slice(0, 4).map((log, lidx) => (
+                    <div key={log.id ?? lidx}>{log.msg || log.text}</div>
                   ))}
                 </div>
               </div>
@@ -1324,23 +1324,24 @@ export default function CullPage({
 
       {/* ACTIVE CULLING REVIEW WORKSPACE */}
       {groups.length > 0 && activePhoto && (
-        <div style={{ display: "grid", gridTemplateColumns: "2.2fr 1fr", gap: "20px", flexShrink: 0 }}>
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "minmax(0, 2fr) minmax(280px, 1fr)", gap: "20px", flexShrink: 0 }}>
           
           {/* Left Column: Darkroom Viewport & Group Details */}
           <div
             className="glass-panel"
             style={{
               borderRadius: "20px",
-              padding: "20px",
+              padding: isMobile ? "14px" : "20px",
               display: "flex",
               flexDirection: "column",
               boxShadow: dm ? "0 10px 40px rgba(0,0,0,0.3)" : "0 10px 30px rgba(0,0,0,0.03)",
-              position: "relative"
+              position: "relative",
+              minWidth: 0
             }}
           >
             {/* Header info */}
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: `1px solid ${dm ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)"}`, paddingBottom: "12px", marginBottom: "16px" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "8px", borderBottom: `1px solid ${dm ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)"}`, paddingBottom: "12px", marginBottom: "16px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
                 <span style={{
                   background: (activeGroup.every(x => getPhotoIsDark(x, darkThreshold)) || activePhoto.groupIsDark)
                     ? "linear-gradient(135deg, #7c3aed, #9333ea)"
@@ -1358,7 +1359,7 @@ export default function CullPage({
                 </span>
               </div>
               
-              <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+              <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
                 <button
                   onClick={() => handleTogglePhotoDark(activePhoto)}
                   style={{
@@ -1432,8 +1433,8 @@ export default function CullPage({
                 position: "relative",
                 overflow: "hidden",
                 border: `1px solid ${dm ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.05)"}`,
-                minHeight: "45vh",
-                maxHeight: "48vh"
+                minHeight: isMobile ? "36dvh" : "45dvh",
+                maxHeight: "48dvh"
               }}
             >
               <div style={{ position: "relative", display: "inline-block", maxWidth: "100%", maxHeight: "100%" }}>
@@ -1442,7 +1443,7 @@ export default function CullPage({
                   alt={activePhoto.name}
                   style={{
                     maxWidth: "100%",
-                    maxHeight: "46vh",
+                    maxHeight: "46dvh",
                     objectFit: "contain",
                     borderRadius: "8px",
                     display: "block"
@@ -1491,16 +1492,20 @@ export default function CullPage({
               <div
                 style={{
                   position: "absolute",
-                  bottom: "16px",
-                  left: "16px",
+                  bottom: "12px",
+                  left: "12px",
+                  right: isMobile ? "12px" : "auto",
+                  maxWidth: "calc(100% - 24px)",
                   background: "rgba(10, 10, 15, 0.85)",
                   backdropFilter: "blur(12px)",
-                  padding: "8px 16px",
+                  padding: isMobile ? "6px 10px" : "8px 16px",
                   borderRadius: "10px",
                   border: "1px solid rgba(255, 255, 255, 0.08)",
                   display: "flex",
-                  gap: "16px",
-                  fontSize: "12px",
+                  flexWrap: "wrap",
+                  alignItems: "center",
+                  gap: isMobile ? "8px" : "16px",
+                  fontSize: isMobile ? "11px" : "12px",
                   color: "#fff",
                   boxShadow: "0 8px 32px rgba(0, 0, 0, 0.3)"
                 }}

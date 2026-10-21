@@ -562,7 +562,7 @@ export function BatchPage({ dm, cardBg, cardBdr, inputSt, isMobile = false,
               </div>
 
               {/* Tab/Pack Selector */}
-              <div style={{ display: "flex", gap: "4px", background: dm ? '#2a2a2a' : '#f2f2f8', padding: "3px", borderRadius: "8px", alignSelf: "flex-start", flexWrap: "wrap" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "4px", background: dm ? '#2a2a2a' : '#f2f2f8', padding: "4px", borderRadius: "8px", width: "100%" }}>
                 {[
                   { id: "all", label: "⚡ All" },
                   { id: "arena", label: "🏟️ Arena" },
@@ -575,12 +575,15 @@ export function BatchPage({ dm, cardBg, cardBdr, inputSt, isMobile = false,
                   return (
                     <button key={tab.id} onClick={() => setBatchLutTab(tab.id)}
                       style={{
-                        padding: "5px 10px", fontSize: "11px", fontWeight: 600, border: "none", cursor: "pointer", fontFamily: "inherit",
+                        width: "100%", minWidth: 0, padding: "5px 4px", fontSize: "11px", fontWeight: 600, border: "none", cursor: "pointer", fontFamily: "inherit",
                         background: active ? (dm ? '#444' : '#fff') : 'transparent',
                         color: active ? "#6c63ff" : dm ? "#ccc" : "#666",
                         borderRadius: "6px",
                         boxShadow: active ? "0 1px 3px rgba(0,0,0,.1)" : "none",
-                        transition: "all .15s"
+                        transition: "all .15s",
+                        whiteSpace: "nowrap",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis"
                       }}>
                       {tab.label}
                     </button>
@@ -589,7 +592,7 @@ export function BatchPage({ dm, cardBg, cardBdr, inputSt, isMobile = false,
               </div>
 
               {batchLutTab !== 'all' && (
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "2px", width: "100%" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "2px", width: "100%", flexWrap: "wrap", gap: "6px" }}>
                   <span style={{ fontSize: "11px", color: dm ? "#aaa" : "#555", fontWeight: 600 }}>
                     {batchLutTab === 'arena' && "🏟️ Arena Pack (6 LUTs)"}
                     {batchLutTab === 'action' && "🏈 Action Pack (6 LUTs)"}
@@ -608,7 +611,7 @@ export function BatchPage({ dm, cardBg, cardBdr, inputSt, isMobile = false,
               )}
               
               {/* Presets Grid */}
-              <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", maxHeight: "190px", overflowY: "auto", paddingRight: "4px", scrollbarWidth: "thin" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "6px", maxHeight: "210px", overflowY: "auto", paddingRight: "4px", scrollbarWidth: "thin" }}>
                 {LUT_PRESETS.filter(p => {
                   if (p.id === 'none') return true;
                   if (batchLutTab === 'all') return true;
@@ -618,15 +621,16 @@ export function BatchPage({ dm, cardBg, cardBdr, inputSt, isMobile = false,
                   return (
                     <button key={p.id} onClick={() => setBatchLutId(p.id)}
                       style={{
-                        flex: "1 0 calc(33% - 6px)", padding: "8px 4px", minWidth: "70px",
+                        width: "100%", minWidth: 0, minHeight: "56px", padding: "8px 4px",
                         border: `1.5px solid ${active ? accent : cardBdr}`,
                         background: active ? (dm ? '#1e1a3a' : '#faf9ff') : dm ? '#252525' : '#fff',
                         borderRadius: "8px", textAlign: "center", cursor: "pointer",
                         transition: "all .15s", fontFamily: "inherit",
+                        display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "2px",
                         boxShadow: active ? `0 0 8px rgba(108,99,255,.2)` : "none"
                       }}>
-                      <div style={{ fontSize: "16px", marginBottom: "2px" }}>{p.icon}</div>
-                      <div style={{ fontSize: "9px", fontWeight: 700, color: active ? accent : dm ? '#aaa' : '#666', whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.name}</div>
+                      <div style={{ fontSize: "16px", lineHeight: 1.1 }}>{p.icon}</div>
+                      <div style={{ fontSize: "9.5px", fontWeight: 700, color: active ? accent : dm ? '#aaa' : '#666', lineHeight: 1.15, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", wordBreak: "break-word" }}>{p.name}</div>
                     </button>
                   );
                 })}
@@ -634,16 +638,17 @@ export function BatchPage({ dm, cardBg, cardBdr, inputSt, isMobile = false,
                 <button
                   onClick={() => document.getElementById('batch-cube-upload-input')?.click()}
                   style={{
-                    flex: "1 0 calc(33% - 6px)", padding: "8px 4px", minWidth: "70px",
+                    width: "100%", minWidth: 0, minHeight: "56px", padding: "8px 4px",
                     border: `1.5px dashed ${batchLutId === 'custom' ? accent : cardBdr}`,
                     background: batchLutId === 'custom' ? (dm ? '#1e1a3a' : '#faf9ff') : dm ? '#252525' : '#fff',
                     borderRadius: "8px", textAlign: "center", cursor: "pointer",
                     transition: "all .15s", fontFamily: "inherit",
+                    display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "2px",
                     boxShadow: batchLutId === 'custom' ? `0 0 8px rgba(108,99,255,.2)` : "none"
                   }}>
-                  <div style={{ fontSize: "16px", marginBottom: "2px" }}>📂</div>
-                  <div style={{ fontSize: "9px", fontWeight: 700, color: batchLutId === 'custom' ? accent : dm ? '#aaa' : '#666', whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                    {batchCustomLutName ? batchCustomLutName.slice(0, 8) : 'Upload'}
+                  <div style={{ fontSize: "16px", lineHeight: 1.1 }}>📂</div>
+                  <div style={{ fontSize: "9.5px", fontWeight: 700, color: batchLutId === 'custom' ? accent : dm ? '#aaa' : '#666', lineHeight: 1.15, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", wordBreak: "break-word" }}>
+                    {batchCustomLutName ? batchCustomLutName.slice(0, 10) : 'Upload'}
                   </div>
                 </button>
                 <input id="batch-cube-upload-input" type="file" accept=".cube" style={{ display: "none" }}
@@ -1190,9 +1195,9 @@ export function BatchPage({ dm, cardBg, cardBdr, inputSt, isMobile = false,
   const desktopSplitView = batchPreviewOpen && !isMobile;
 
   return (
-    <div style={{ height: "calc(100vh - 52px)", overflowY: desktopSplitView ? "hidden" : "auto", display: "flex", flexDirection: "column", background: bg }}>
-      <div style={{ background: panelBg, borderBottom: `1px solid ${cardBdr}`, padding: "14px 24px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "16px", flexWrap: "wrap", position: "sticky", top: 0, zIndex: 20 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "20px" }}>
+    <div style={{ height: "calc(100dvh - 52px)", overflowY: desktopSplitView ? "hidden" : "auto", overflowX: "hidden", display: "flex", flexDirection: "column", background: bg }}>
+      <div style={{ background: panelBg, borderBottom: `1px solid ${cardBdr}`, padding: isMobile ? "12px 14px" : "14px 24px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", flexWrap: "wrap", position: "sticky", top: 0, zIndex: 20 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: isMobile ? "10px" : "20px", flexWrap: "wrap" }}>
           <div>
             <div style={{ fontSize: "16px", fontWeight: 700, color: dm ? '#f0f0f0' : '#1a1a2e', marginBottom: "2px" }}>📦 {isRaw ? "RAW Batch Processor" : "Standard Batch Processor"}</div>
             <div style={{ fontSize: "12px", color: "#999" }}>
@@ -1222,7 +1227,7 @@ export function BatchPage({ dm, cardBg, cardBdr, inputSt, isMobile = false,
             </button>
           </div>
         </div>
-        <div style={{ display: "flex", gap: "8px", alignItems: "center", flexShrink: 0 }}>
+        <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
           {filteredCurrentFiles.length > 1 && !batchProcessing && (
             <label style={{ display: "flex", alignItems: "center", gap: "6px", cursor: "pointer", fontSize: "13px", fontWeight: 600, color: dm ? "#ccc" : "#555", marginRight: "8px" }}>
               <input type="checkbox" id="verify-first-checkbox" checked={batchConfirmFirst} onChange={e => setBatchConfirmFirst(e.target.checked)} style={{ width: "16px", height: "16px", accentColor: accent, cursor: "pointer" }} />
@@ -1363,7 +1368,7 @@ export function BatchPage({ dm, cardBg, cardBdr, inputSt, isMobile = false,
             
             {/* Vertical Sidebar Preview List */}
             <div style={{
-              width: "240px",
+              width: "clamp(160px, 18vw, 240px)",
               height: "100%",
               overflowY: "auto",
               borderRight: `1px solid ${cardBdr}`,
@@ -1518,7 +1523,7 @@ export function BatchPage({ dm, cardBg, cardBdr, inputSt, isMobile = false,
           </div>
 
           {/* Right Workspace: Scrollable sidebar settings */}
-          <div style={{ width: "420px", height: "100%", overflowY: "auto", borderLeft: `1px solid ${cardBdr}`, background: panelBg, padding: "20px", boxSizing: "border-box", display: "flex", flexDirection: "column", gap: "16px" }}>
+          <div style={{ width: "clamp(280px, 32vw, 420px)", flexShrink: 0, height: "100%", overflowY: "auto", borderLeft: `1px solid ${cardBdr}`, background: panelBg, padding: "20px", boxSizing: "border-box", display: "flex", flexDirection: "column", gap: "16px" }}>
             {renderSourceFolderCard()}
             {renderRawBatchPanel()}
             {renderOutputFolderCard()}
@@ -1679,7 +1684,7 @@ export function BatchPage({ dm, cardBg, cardBdr, inputSt, isMobile = false,
           )}
 
           {!batchPreviewOpen && (
-            <div style={{ borderBottom: `1px solid ${cardBdr}`, background: dm ? '#1a1a1a' : '#fff', padding: "10px 24px", display: "flex", alignItems: "center", gap: "12px" }}>
+            <div style={{ borderBottom: `1px solid ${cardBdr}`, background: dm ? '#1a1a1a' : '#fff', padding: isMobile ? "10px 14px" : "10px 24px", display: "flex", alignItems: "center", gap: "12px" }}>
               <span style={{ fontSize: "11px", fontWeight: 700, color: dm ? '#aaa' : '#888', textTransform: "uppercase", letterSpacing: ".06em", whiteSpace: "nowrap" }}>
                 🎨 Presets
               </span>
@@ -1709,11 +1714,13 @@ export function BatchPage({ dm, cardBg, cardBdr, inputSt, isMobile = false,
 
           <div style={{
             display: "grid",
-            gridTemplateColumns: isMobile ? "1fr" : "280px 260px 1fr 260px",
+            gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fit, minmax(260px, 1fr))",
             gap: "16px",
-            padding: "20px 24px 40px",
+            padding: isMobile ? "14px 12px 32px" : "20px 24px 40px",
             maxWidth: "1400px",
-            margin: "0 auto"
+            width: "100%",
+            margin: "0 auto",
+            boxSizing: "border-box"
           }}>
             <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
               {renderSourceFolderCard()}

@@ -1,0 +1,211 @@
+rules_version = '2';
+
+// ===============================================================
+// Assumed Data Model
+// ===============================================================
+//
+// This security rules file assumes the following data structures:
+//
+// Collection: users
+// Document ID: {userId} (matches request.auth.uid)
+// Fields:
+//   - uid: string (required, immutable, 1..128 chars, must equal userId) - Firebase Auth UID
+//   - email: string (required, immutable, 3..254 chars, valid email format) - User email address (PII)
+//   - tier: string (required, immutable by client, enum: ['free', 'pro', 'team']) - Subscription tier; must be 'free' on client create
+//   - billingPeriod: string (required, immutable by client, enum: ['monthly', 'annual']) - Client billing preference; must be 'monthly' on client create
+//   - offlineLeaseExpires: string or null (required, nullable on create, ISO 8601 date string up to 64 chars on update) - Offline lease expiration timestamp
+//   - createdAt: string (required, immutable, ISO 8601 date string up to 64 chars) - Account creation timestamp
+//   - billingCycle: string (optional, immutable by client, written by Admin SDK, enum: ['monthly', 'annual']) - Active Stripe billing interval
+//   - stripeCustomerId: string (optional, immutable by client, written by Admin SDK, 1..128 chars) - Stripe Customer ID
+//   - stripeSubscriptionId: string (optional, immutable by client, written by Admin SDK, 1..128 chars) - Stripe Subscription ID
+//   - updatedAt: timestamp (optional, immutable by client, written by Admin SDK) - Server timestamp of last webhook update
+//
+// ===============================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+
+    // Check if the user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Check if user owns the resource based on path parameter
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // Check if user is owner based on existing document's uid field
+    function isDocOwner() {
+      return isAuthenticated() && request.auth.uid == resource.data.uid;
+    }
+
+    // Verify UID hasn't been tampered with on create
+    function uidUnchanged(userId) {
+      return 'uid' in request.resource.data &&
+        request.resource.data.uid is string &&
+        request.resource.data.uid == userId &&
+        request.resource.data.uid == request.auth.uid;
+    }
+
+    // Ensure uid field is not modified on update
+    function uidNotModified() {
+      return 'uid' in request.resource.data &&
+        request.resource.data.uid == resource.data.uid;
+    }
+
+    // Validate required fields exist
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+
+    // Validate that the document contains only the allowed fields
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    // Validate that immutable fields have not been modified
+    function areImmutableFieldsUnchanged(fields) {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(fields);
+    }
+
+    // Validate string length bounds to prevent resource exhaustion / 1MB DoS attacks
+    function validStringLength(field, minLen, maxLen) {
+      return request.resource.data[field] is string &&
+        request.resource.data[field].size() >= minLen &&
+        request.resource.data[field].size() <= maxLen;
+    }
+
+    // Validate optional string (if present, must be string and within length bounds)
+    function isValidOptionalString(field, minLen, maxLen) {
+      return !(field in request.resource.data) ||
+        (request.resource.data[field] is string &&
+         request.resource.data[field].size() >= minLen &&
+         request.resource.data[field].size() <= maxLen);
+    }
+
+    // Validate email format
+    function isValidEmail(email) {
+      return email is string &&
+        email.size() >= 3 &&
+        email.size() <= 254 &&
+        email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    // Validate ISO 8601 date string format (YYYY-MM-DDTHH:MM:SS...)
+    function isValidDateString(dateStr) {
+      return dateStr is string &&
+        dateStr.size() >= 19 &&
+        dateStr.size() <= 64 &&
+        dateStr.matches("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}.*Z?$");
+    }
+
+    // ===============================================================
+    // Domain Validators (Used in both create and update)
+    // ===============================================================
+
+    function isValidUser(data, userId) {
+      let requiredFields = ['uid', 'email', 'tier', 'billingPeriod', 'offlineLeaseExpires', 'createdAt'];
+      let allowedFields = [
+        'uid',
+        'email',
+        'tier',
+        'billingPeriod',
+        'offlineLeaseExpires',
+        'createdAt',
+        'billingCycle',
+        'stripeCustomerId',
+        'stripeSubscriptionId',
+        'updatedAt'
+      ];
+
+      return hasRequiredFields(requiredFields) &&
+        hasOnlyAllowedFields(allowedFields) &&
+        data.uid is string &&
+        data.uid == userId &&
+        validStringLength('uid', 1, 128) &&
+        data.email is string &&
+        isValidEmail(data.email) &&
+        data.tier is string &&
+        data.tier in ['free', 'pro', 'team'] &&
+        data.billingPeriod is string &&
+        data.billingPeriod in ['monthly', 'annual'] &&
+        (data.offlineLeaseExpires == null || isValidDateString(data.offlineLeaseExpires)) &&
+        data.createdAt is string &&
+        isValidDateString(data.createdAt) &&
+        (!('billingCycle' in data) || (data.billingCycle is string && data.billingCycle in ['monthly', 'annual'])) &&
+        isValidOptionalString('stripeCustomerId', 1, 128) &&
+        isValidOptionalString('stripeSubscriptionId', 1, 128) &&
+        (!('updatedAt' in data) || data.updatedAt is timestamp);
+    }
+
+    // ===============================================================
+    // Collection Rules: /users/{userId}
+    // ===============================================================
+
+    match /users/{userId} {
+      // 1. Read: Authenticated user may get ONLY their own document.
+      // Disallow list across the users collection to prevent user enumeration / PII leaks.
+      allow get: if isOwner(userId);
+      allow list: if false;
+
+      // 2. Create: Authenticated user may initialize ONLY their own free-tier profile on first sign-in.
+      allow create: if isOwner(userId) &&
+        uidUnchanged(userId) &&
+        isValidUser(request.resource.data, userId) &&
+        request.resource.data.keys().hasOnly([
+          'uid',
+          'email',
+          'tier',
+          'billingPeriod',
+          'offlineLeaseExpires',
+          'createdAt'
+        ]) &&
+        request.resource.data.uid == userId &&
+        request.resource.data.email is string &&
+        request.resource.data.tier == 'free' &&
+        request.resource.data.billingPeriod == 'monthly' &&
+        request.resource.data.offlineLeaseExpires == null &&
+        request.resource.data.createdAt is string;
+
+      // 3. Update: Privileged billing fields (tier, stripeCustomerId, stripeSubscriptionId, billingCycle)
+      // are written exclusively by the backend firebase-admin SDK in /api/stripe-webhook.js.
+      // From the client SDK, an authenticated owner on an active paid tier ('pro' or 'team')
+      // may ONLY update offlineLeaseExpires to a valid ISO date string.
+      allow update: if isOwner(userId) &&
+        isDocOwner() &&
+        uidNotModified() &&
+        isValidUser(request.resource.data, userId) &&
+        resource.data.tier in ['pro', 'team'] &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['offlineLeaseExpires']) &&
+        areImmutableFieldsUnchanged([
+          'uid',
+          'email',
+          'tier',
+          'billingPeriod',
+          'billingCycle',
+          'createdAt',
+          'stripeCustomerId',
+          'stripeSubscriptionId',
+          'updatedAt'
+        ]) &&
+        request.resource.data.offlineLeaseExpires is string &&
+        isValidDateString(request.resource.data.offlineLeaseExpires);
+
+      // 4. Delete: Disallowed from client SDK.
+      allow delete: if false;
+    }
+
+    // ===============================================================
+    // Default Deny All Other Paths
+    // ===============================================================
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

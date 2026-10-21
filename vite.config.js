@@ -11,15 +11,10 @@ export default defineConfig(({ mode }) => ({
     topLevelAwait(),
     ...(mode === 'desktop' ? [{ name: 'desktop-html', transformIndexHtml: html => html.replace(/<link rel="manifest"[^>]*>/, '').replace(/<link[^>]+https:\/\/fonts\.(googleapis|gstatic)\.com[^>]*>/g, '').replace(/<title>.*?<\/title>/, '<title>PHOTOlab Desktop Preview</title>') }] : [])
   ],
-  build: { outDir: mode === 'desktop' ? 'dist-desktop' : 'dist' },
   server: {
     host: '0.0.0.0',
     port: 3000,
-    allowedHosts: true,
-    headers: {
-      "Cross-Origin-Opener-Policy": "same-origin",
-      "Cross-Origin-Embedder-Policy": "require-corp"
-    }
+    allowedHosts: true
   },
   optimizeDeps: {
     include: ["react", "react-dom"],
@@ -27,5 +22,20 @@ export default defineConfig(({ mode }) => ({
   },
   resolve: {
     dedupe: ["react", "react-dom"]
+  },
+  build: {
+    outDir: mode === 'desktop' ? 'dist-desktop' : 'dist',
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes("node_modules")) {
+            if (id.includes("firebase") || id.includes("@firebase")) return "vendor-firebase";
+            if (id.includes("@mediapipe")) return "vendor-mediapipe";
+            if (id.includes("@xenova") || id.includes("@huggingface") || id.includes("onnxruntime")) return "vendor-ai";
+            if (id.includes("react-dom") || id.includes("react/")) return "vendor-react";
+          }
+        }
+      }
+    }
   }
 }))

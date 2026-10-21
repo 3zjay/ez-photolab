@@ -42,13 +42,23 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method Not Allowed' });
   }
 
-  if (!process.env.STRIPE_SECRET_KEY) {
-    return res.status(500).json({ error: 'STRIPE_SECRET_KEY environment variable is missing.' });
+  if (!process.env.STRIPE_SECRET_KEY || !process.env.STRIPE_WEBHOOK_SECRET) {
+    return res.status(500).json({ error: 'Stripe environment variables (STRIPE_SECRET_KEY / STRIPE_WEBHOOK_SECRET) are missing.' });
   }
 
   const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
   const sig = req.headers['stripe-signature'];
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+
+  const resolveTierFromPrice = (price) => {
+    const priceId = price?.id;
+    if (!priceId) return 'pro';
+    const teamIds = [process.env.STRIPE_PRICE_TEAM, process.env.STRIPE_PRICE_TEAM_ANNUAL].filter(Boolean);
+    const proIds = [process.env.STRIPE_PRICE_PRO, process.env.STRIPE_PRICE_PRO_ANNUAL].filter(Boolean);
+    if (teamIds.includes(priceId)) return 'team';
+    if (proIds.includes(priceId)) return 'pro';
+    return 'pro';
+  };
 
   let event;
   try {
@@ -75,20 +85,16 @@ export default async function handler(req, res) {
 
         // Fetch session line items to resolve price ID
         const lineItems = await stripe.checkout.sessions.listLineItems(session.id);
-        const priceId = lineItems.data[0]?.price?.id;
-
-        let tier = 'pro'; // default fallback
-        if (priceId === process.env.STRIPE_PRICE_TEAM) {
-          tier = 'team';
-        } else if (priceId === process.env.STRIPE_PRICE_PRO) {
-          tier = 'pro';
-        }
+        const priceObj = lineItems.data[0]?.price;
+        const tier = resolveTierFromPrice(priceObj);
+        const isAnnual = priceObj?.recurring?.interval === 'year';
 
         const expiry = new Date();
-        expiry.setDate(expiry.getDate() + 30);
+        expiry.setDate(expiry.getDate() + (isAnnual ? 365 : 30));
 
         await db.collection('users').doc(userId).set({
           tier,
+          billingCycle: isAnnual ? 'annual' : 'monthly',
           stripeCustomerId,
           stripeSubscriptionId,
           offlineLeaseExpires: expiry.toISOString(),
@@ -120,19 +126,16 @@ export default async function handler(req, res) {
         // Check if subscription status is active/trialing
         const status = subscription.status;
         if (status === 'active' || status === 'trialing') {
-          const priceId = subscription.items.data[0]?.price?.id;
-          let tier = 'pro';
-          if (priceId === process.env.STRIPE_PRICE_TEAM) {
-            tier = 'team';
-          } else if (priceId === process.env.STRIPE_PRICE_PRO) {
-            tier = 'pro';
-          }
+          const priceObj = subscription.items.data[0]?.price;
+          const tier = resolveTierFromPrice(priceObj);
+          const isAnnual = priceObj?.recurring?.interval === 'year';
 
           const expiry = new Date();
-          expiry.setDate(expiry.getDate() + 30);
+          expiry.setDate(expiry.getDate() + (isAnnual ? 365 : 30));
 
           await userDoc.ref.set({
             tier,
+            billingCycle: isAnnual ? 'annual' : 'monthly',
             offlineLeaseExpires: expiry.toISOString(),
             updatedAt: admin.firestore.FieldValue.serverTimestamp(),
           }, { merge: true });

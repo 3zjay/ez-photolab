@@ -102,23 +102,29 @@ export function calcBatchDims(natW, natH, mode, preset, customW, customH, keepAs
 
 // ── CSS filter from state ─────────────────────────────────────────────────────
 export function toCSSFilter(f) {
-  const ev = 1 + (f.exposure || 0)/100;
-  const bv = ((f.brightness ?? 100)/100)*ev;
-  const hlAdj = (f.highlights || 0) > 0 ? 1 + f.highlights*0.002 : 1 + (f.highlights || 0)*0.003;
-  const shAdj = (f.shadows || 0) > 0 ? 1 + f.shadows*0.003 : 1 + (f.shadows || 0)*0.002;
-  const wAdj = (f.whites || 0) > 0 ? 1 + f.whites*0.002 : 1 + (f.whites || 0)*0.002;
-  const bAdj = (f.blacks || 0) > 0 ? 1 + f.blacks*0.002 : 1 + (f.blacks || 0)*0.002;
-  const contrastFactor = ((f.contrast ?? 100)/100) * (f.haze ? (1 + f.haze*0.003) : 1);
-  let s = `brightness(${(bv*hlAdj*shAdj*wAdj*bAdj).toFixed(3)}) contrast(${contrastFactor.toFixed(3)}) saturate(${(((f.saturation ?? 100)/100) * ((f.vibrance ?? 100)/100)).toFixed(3)})`;
+  if (!f) return "none";
+  const ev = 1 + (f.exposure ?? 0) / 100;
+  const bv = ((f.brightness ?? 100) / 100) * ev;
+  const hl = f.highlights ?? 0;
+  const sh = f.shadows ?? 0;
+  const wh = f.whites ?? 0;
+  const bl = f.blacks ?? 0;
+  const hlAdj = hl > 0 ? 1 + hl * 0.0022 : 1 + hl * 0.003;
+  const shAdj = sh > 0 ? 1 + sh * 0.003 : 1 + sh * 0.0022;
+  const wAdj = wh > 0 ? 1 + wh * 0.0022 : 1 + wh * 0.0022;
+  const bAdj = bl > 0 ? 1 + bl * 0.0022 : 1 + bl * 0.0022;
+  const contrastFactor = ((f.contrast ?? 100) / 100) * (f.haze ? (1 + f.haze * 0.0035) : 1);
+  const satFactor = Math.max(0, ((f.saturation ?? 100) / 100) * ((f.vibrance ?? 100) / 100));
+  let s = `brightness(${Math.max(0.05, bv * hlAdj * shAdj * wAdj * bAdj).toFixed(3)}) contrast(${Math.max(0.05, contrastFactor).toFixed(3)}) saturate(${satFactor.toFixed(3)})`;
   if (f.hue && f.hue !== 0) s += ` hue-rotate(${f.hue}deg)`;
-  if (f.denoise && f.denoise > 0) s += ` blur(${(f.denoise*0.05).toFixed(2)}px)`;
-  if (f.sharpness && f.sharpness > 0) s += ` contrast(${(1+f.sharpness*0.022).toFixed(3)})`;
-  if (f.clarity && f.clarity > 0) s += ` contrast(${(1+f.clarity*0.016).toFixed(3)})`;
-  if (f.glow && f.glow > 0) s += ` drop-shadow(0 0 ${(f.glow*0.12).toFixed(1)}px rgba(255,255,255,0.45))`;
+  if (f.denoise && f.denoise > 0) s += ` blur(${(f.denoise * 0.05).toFixed(2)}px)`;
+  if (f.sharpness && f.sharpness > 0) s += ` contrast(${(1 + f.sharpness * 0.022).toFixed(3)})`;
+  if (f.clarity && f.clarity !== 0) s += ` contrast(${Math.max(0.4, 1 + f.clarity * 0.016).toFixed(3)})`;
+  if (f.glow && f.glow > 0) s += ` drop-shadow(0 0 ${(f.glow * 0.12).toFixed(1)}px rgba(255,255,255,0.45))`;
   if (f.tint && f.tint !== 0) {
     const tintSign = f.tint > 0 ? 120 : 300;
-    const tintAmt  = Math.abs(f.tint)/400;
-    s += ` sepia(${tintAmt.toFixed(3)}) hue-rotate(${tintSign}deg) sepia(0)`;
+    const tintAmt = Math.abs(f.tint) / 400;
+    s += ` sepia(${tintAmt.toFixed(3)}) hue-rotate(${tintSign}deg) saturate(${(1 + tintAmt * 1.4).toFixed(3)})`;
   }
   return s;
 }
@@ -457,13 +463,13 @@ export async function renderFinal(
   }
 
   const canvas = document.createElement('canvas');
-  canvas.width = W; canvas.height = H;
+  canvas.width = rotW; canvas.height = rotH;
   const ctx = canvas.getContext('2d');
 
   // Apply rotation + flip
   ctx.save();
-  ctx.translate(W / 2, H / 2);
-  ctx.rotate(rotation * Math.PI / 180);
+  ctx.translate(rotW / 2, rotH / 2);
+  if (rotation) ctx.rotate((rotation * Math.PI) / 180);
   ctx.scale(flipH ? -1 : 1, flipV ? -1 : 1);
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = 'high';
@@ -479,7 +485,7 @@ export async function renderFinal(
   const transformedMask = mask => {
     const result = document.createElement('canvas'); result.width = W; result.height = H;
     const context = result.getContext('2d');
-    context.translate(W / 2, H / 2); context.rotate(rotation * Math.PI / 180); context.scale(flipH ? -1 : 1, flipV ? -1 : 1);
+    context.translate(W / 2, H / 2); context.rotate((rotation || 0) * Math.PI / 180); context.scale(flipH ? -1 : 1, flipV ? -1 : 1);
     context.drawImage(mask, -drawW / 2, -drawH / 2, drawW, drawH);
     return result;
   };
@@ -574,16 +580,83 @@ export async function renderFinal(
     if (prequelFx.vhs) applyVhsOverlay(canvas, ctx, W, H, true);
   }
 
-  // Text overlays
-  texts.forEach(t => {
-    if (!t.content.trim()) return;
-    const sz = Math.round(t.fontSize * (W / 800));
+  // Text, Badge & Graphic Layers
+  for (const t of texts) {
+    if (t.visible === false) continue;
+    const x = (t.x / 100) * W;
+    const y = (t.y / 100) * H;
+    const layerOpacity = typeof t.opacity === 'number' ? t.opacity : 1;
+    const layerRot = ((t.rotation || 0) * Math.PI) / 180;
+
+    if (t.type === 'graphic' && t.imageSrc) {
+      try {
+        const gImg = await loadImageFromSrc(t.imageSrc);
+        const gW = Math.round(((t.fontSize || 80) / 400) * W);
+        const gH = Math.round((gImg.naturalHeight / (gImg.naturalWidth || 1)) * gW);
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.rotate(layerRot);
+        ctx.globalAlpha = layerOpacity;
+        if (t.shadow) {
+          ctx.shadowColor = 'rgba(0,0,0,0.35)';
+          ctx.shadowBlur = Math.max(4, W * 0.01);
+          ctx.shadowOffsetY = Math.max(2, W * 0.004);
+        }
+        ctx.drawImage(gImg, -gW / 2, -gH / 2, gW, gH);
+        ctx.restore();
+      } catch (e) {
+        console.warn('Graphic layer load failed:', e);
+      }
+      continue;
+    }
+
+    if (!t.content || !t.content.trim()) continue;
+    const sz = Math.round((t.fontSize || 48) * (W / 800));
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(layerRot);
+    ctx.globalAlpha = layerOpacity;
     ctx.font = `${t.bold ? 'bold ' : ''}${t.italic ? 'italic ' : ''}${sz}px ${FONT_MAP[t.font] || FONT_MAP.System}`;
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    const x = t.x / 100 * W, y = t.y / 100 * H;
-    if (t.stroke) { ctx.strokeStyle = 'rgba(0,0,0,0.6)'; ctx.lineWidth = sz * 0.08; ctx.strokeText(t.content, x, y); }
-    ctx.fillStyle = t.color; ctx.fillText(t.content, x, y);
-  });
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+
+    if (t.bgEnabled) {
+      const metrics = ctx.measureText(t.content);
+      const padX = Math.round(sz * 0.45);
+      const padY = Math.round(sz * 0.28);
+      const boxW = metrics.width + padX * 2;
+      const boxH = sz + padY * 2;
+      const rad = Math.min(boxH / 2, Math.round((t.bgRadius ?? 12) * (W / 800)));
+      ctx.save();
+      if (t.shadow !== false) {
+        ctx.shadowColor = 'rgba(0,0,0,0.28)';
+        ctx.shadowBlur = Math.max(6, W * 0.012);
+        ctx.shadowOffsetY = Math.max(2, W * 0.004);
+      }
+      ctx.fillStyle = t.bgColor || '#111827';
+      ctx.beginPath();
+      if (ctx.roundRect) {
+        ctx.roundRect(-boxW / 2, -boxH / 2, boxW, boxH, rad);
+      } else {
+        ctx.rect(-boxW / 2, -boxH / 2, boxW, boxH);
+      }
+      ctx.fill();
+      ctx.restore();
+    } else if (t.shadow) {
+      ctx.shadowColor = 'rgba(0,0,0,0.6)';
+      ctx.shadowBlur = Math.max(4, sz * 0.15);
+      ctx.shadowOffsetY = Math.max(1, sz * 0.04);
+    }
+
+    if (t.stroke) {
+      ctx.strokeStyle = 'rgba(0,0,0,0.65)';
+      ctx.lineWidth = sz * 0.08;
+      ctx.strokeText(t.content, 0, 0);
+    }
+    ctx.fillStyle = t.color || '#ffffff';
+    ctx.fillText(t.content, 0, 0);
+    ctx.restore();
+  }
 
   // Logo watermark overlay
   if (logo) {
@@ -619,6 +692,382 @@ export async function renderFinal(
   return { canvas, W, H };
 }
 
+export function drawPhotoroomScene(ctx, W, H, sceneId = "podium_light") {
+  const horizonY = Math.round(H * 0.72);
+  ctx.save();
+
+  if (sceneId === "podium_light") {
+    const wall = ctx.createLinearGradient(0, 0, 0, horizonY);
+    wall.addColorStop(0, "#f8fafc");
+    wall.addColorStop(1, "#e2e8f0");
+    ctx.fillStyle = wall;
+    ctx.fillRect(0, 0, W, horizonY);
+
+    const floor = ctx.createLinearGradient(0, horizonY, 0, H);
+    floor.addColorStop(0, "#cbd5e1");
+    floor.addColorStop(0.18, "#e2e8f0");
+    floor.addColorStop(1, "#f8fafc");
+    ctx.fillStyle = floor;
+    ctx.fillRect(0, horizonY, W, H - horizonY);
+
+    const spot = ctx.createRadialGradient(W * 0.5, H * 0.42, W * 0.05, W * 0.5, H * 0.5, W * 0.65);
+    spot.addColorStop(0, "rgba(255,255,255,0.65)");
+    spot.addColorStop(1, "rgba(255,255,255,0)");
+    ctx.fillStyle = spot;
+    ctx.fillRect(0, 0, W, H);
+  } else if (sceneId === "sunbeam_wall") {
+    const wall = ctx.createLinearGradient(0, 0, 0, horizonY);
+    wall.addColorStop(0, "#fdfbf7");
+    wall.addColorStop(1, "#ece3d5");
+    ctx.fillStyle = wall;
+    ctx.fillRect(0, 0, W, horizonY);
+
+    const floor = ctx.createLinearGradient(0, horizonY, 0, H);
+    floor.addColorStop(0, "#d8cbb8");
+    floor.addColorStop(1, "#f3ede2");
+    ctx.fillStyle = floor;
+    ctx.fillRect(0, horizonY, W, H - horizonY);
+
+    // Diagonal warm window sunlight beams
+    ctx.save();
+    ctx.globalCompositeOperation = "overlay";
+    ctx.fillStyle = "rgba(255, 244, 214, 0.55)";
+    for (let i = -2; i < 6; i++) {
+      ctx.beginPath();
+      const startX = W * (0.12 + i * 0.18);
+      ctx.moveTo(startX, 0);
+      ctx.lineTo(startX + W * 0.09, 0);
+      ctx.lineTo(startX + W * 0.42, H);
+      ctx.lineTo(startX + W * 0.30, H);
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.restore();
+  } else if (sceneId === "marble_luxury") {
+    const bg = ctx.createLinearGradient(0, 0, W, H);
+    bg.addColorStop(0, "#ffffff");
+    bg.addColorStop(0.65, "#f3f4f6");
+    bg.addColorStop(1, "#e5e7eb");
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, W, H);
+
+    // Subtle marble veins
+    ctx.strokeStyle = "rgba(156, 163, 175, 0.16)";
+    ctx.lineWidth = Math.max(1.5, W * 0.002);
+    for (let v = 0; v < 7; v++) {
+      ctx.beginPath();
+      let vx = (W * (v + 0.5)) / 7;
+      ctx.moveTo(vx, 0);
+      for (let y = 0; y <= H; y += H / 8) {
+        vx += Math.sin(y * 0.02 + v) * (W * 0.025);
+        ctx.lineTo(vx, y);
+      }
+      ctx.stroke();
+    }
+
+    const floor = ctx.createLinearGradient(0, horizonY, 0, H);
+    floor.addColorStop(0, "rgba(209, 213, 219, 0.55)");
+    floor.addColorStop(1, "rgba(255, 255, 255, 0.9)");
+    ctx.fillStyle = floor;
+    ctx.fillRect(0, horizonY, W, H - horizonY);
+  } else if (sceneId === "wood_table") {
+    const wall = ctx.createLinearGradient(0, 0, 0, horizonY);
+    wall.addColorStop(0, "#f4f1ea");
+    wall.addColorStop(1, "#ded6c8");
+    ctx.fillStyle = wall;
+    ctx.fillRect(0, 0, W, horizonY);
+
+    const wood = ctx.createLinearGradient(0, horizonY, 0, H);
+    wood.addColorStop(0, "#9c6b3b");
+    wood.addColorStop(0.15, "#b58350");
+    wood.addColorStop(1, "#85582c");
+    ctx.fillStyle = wood;
+    ctx.fillRect(0, horizonY, W, H - horizonY);
+
+    // Subtle wood plank lines
+    ctx.strokeStyle = "rgba(68, 38, 12, 0.15)";
+    ctx.lineWidth = Math.max(1, H * 0.002);
+    for (let y = horizonY + 8; y < H; y += Math.max(8, Math.round((H - horizonY) / 9))) {
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(W, y);
+      ctx.stroke();
+    }
+  } else if (sceneId === "botanical_bokeh") {
+    const g = ctx.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, "#d9f99d");
+    g.addColorStop(0.45, "#86efac");
+    g.addColorStop(0.75, "#4ade80");
+    g.addColorStop(1, "#dcfce7");
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, W, H);
+
+    // Dreamy bokeh circles
+    const orbs = [
+      [0.15, 0.2, 0.14, "rgba(254, 240, 138, 0.45)"],
+      [0.82, 0.18, 0.18, "rgba(255, 255, 255, 0.4)"],
+      [0.48, 0.28, 0.12, "rgba(254, 249, 195, 0.5)"],
+      [0.25, 0.55, 0.16, "rgba(187, 247, 208, 0.45)"],
+      [0.75, 0.48, 0.15, "rgba(254, 240, 138, 0.4)"]
+    ];
+    orbs.forEach(([ox, oy, orad, col]) => {
+      const rg = ctx.createRadialGradient(W * ox, H * oy, 0, W * ox, H * oy, W * orad);
+      rg.addColorStop(0, col);
+      rg.addColorStop(1, "rgba(255,255,255,0)");
+      ctx.fillStyle = rg;
+      ctx.fillRect(0, 0, W, H);
+    });
+
+    // Clean bright podium floor at base
+    const floor = ctx.createLinearGradient(0, horizonY, 0, H);
+    floor.addColorStop(0, "rgba(240, 253, 244, 0.85)");
+    floor.addColorStop(1, "#ffffff");
+    ctx.fillStyle = floor;
+    ctx.fillRect(0, horizonY, W, H - horizonY);
+  } else if (sceneId === "golden_sunset") {
+    const wall = ctx.createLinearGradient(0, 0, 0, horizonY);
+    wall.addColorStop(0, "#fed7aa");
+    wall.addColorStop(0.6, "#fdba74");
+    wall.addColorStop(1, "#fde68a");
+    ctx.fillStyle = wall;
+    ctx.fillRect(0, 0, W, horizonY);
+
+    const floor = ctx.createLinearGradient(0, horizonY, 0, H);
+    floor.addColorStop(0, "#f59e0b");
+    floor.addColorStop(0.2, "#fbbf24");
+    floor.addColorStop(1, "#fef3c7");
+    ctx.fillStyle = floor;
+    ctx.fillRect(0, horizonY, W, H - horizonY);
+
+    const sun = ctx.createRadialGradient(W * 0.5, horizonY, W * 0.02, W * 0.5, horizonY, W * 0.55);
+    sun.addColorStop(0, "rgba(255, 251, 235, 0.8)");
+    sun.addColorStop(1, "rgba(255, 251, 235, 0)");
+    ctx.fillStyle = sun;
+    ctx.fillRect(0, 0, W, H);
+  } else if (sceneId === "neon_cyber") {
+    const bg = ctx.createLinearGradient(0, 0, 0, H);
+    bg.addColorStop(0, "#090a10");
+    bg.addColorStop(0.72, "#111827");
+    bg.addColorStop(1, "#030712");
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, W, H);
+
+    const cyanRim = ctx.createRadialGradient(W * 0.18, H * 0.45, 0, W * 0.18, H * 0.45, W * 0.5);
+    cyanRim.addColorStop(0, "rgba(6, 182, 212, 0.35)");
+    cyanRim.addColorStop(1, "rgba(6, 182, 212, 0)");
+    ctx.fillStyle = cyanRim;
+    ctx.fillRect(0, 0, W, H);
+
+    const pinkRim = ctx.createRadialGradient(W * 0.82, H * 0.45, 0, W * 0.82, H * 0.45, W * 0.5);
+    pinkRim.addColorStop(0, "rgba(236, 72, 153, 0.35)");
+    pinkRim.addColorStop(1, "rgba(236, 72, 153, 0)");
+    ctx.fillStyle = pinkRim;
+    ctx.fillRect(0, 0, W, H);
+
+    ctx.strokeStyle = "rgba(108, 99, 255, 0.5)";
+    ctx.lineWidth = Math.max(2, H * 0.003);
+    ctx.beginPath();
+    ctx.moveTo(0, horizonY);
+    ctx.lineTo(W, horizonY);
+    ctx.stroke();
+  } else if (sceneId === "spotlight_dark") {
+    ctx.fillStyle = "#090d16";
+    ctx.fillRect(0, 0, W, H);
+
+    const cone = ctx.createRadialGradient(W * 0.5, H * 0.35, W * 0.04, W * 0.5, H * 0.55, W * 0.55);
+    cone.addColorStop(0, "rgba(255, 255, 255, 0.28)");
+    cone.addColorStop(0.5, "rgba(148, 163, 184, 0.10)");
+    cone.addColorStop(1, "rgba(0, 0, 0, 0)");
+    ctx.fillStyle = cone;
+    ctx.fillRect(0, 0, W, H);
+
+    const floorPool = ctx.createRadialGradient(W * 0.5, H * 0.82, W * 0.05, W * 0.5, H * 0.82, W * 0.45);
+    floorPool.addColorStop(0, "rgba(255, 255, 255, 0.22)");
+    floorPool.addColorStop(1, "rgba(0, 0, 0, 0)");
+    ctx.fillStyle = floorPool;
+    ctx.fillRect(0, horizonY - H * 0.05, W, H - horizonY + H * 0.05);
+  }
+
+  ctx.restore();
+}
+
+export function renderPhotoroomCutoutComposite(origImg, subImg, opts = {}) {
+  const mode = opts.mode || "transparent";
+  const color = opts.color || "#ffffff";
+  const blur = opts.blur ?? 14;
+  const sceneId = opts.sceneId || opts.scene || "podium_light";
+  const customBgImg = opts.customBgImg || null;
+  const shadowType = opts.shadowType || "contact";
+  const rawShadowOpacity = opts.shadowOpacity ?? 0.55;
+  const alpha = Math.min(1, Math.max(0, rawShadowOpacity > 1 ? rawShadowOpacity / 100 : rawShadowOpacity));
+  const shadowBlur = opts.shadowBlur ?? 24;
+  const shadowX = opts.shadowX ?? opts.shadowOffsetX ?? 0;
+  const shadowY = opts.shadowY ?? opts.shadowOffsetY ?? 12;
+  const outlineWidth = opts.outlineWidth ?? 0;
+  const outlineColor = opts.outlineColor || "#ffffff";
+  const rawScale = opts.subjectScale ?? 1.0;
+  const subjectScale = rawScale > 2.5 ? rawScale / 100 : rawScale;
+  const subjectX = opts.subjectX ?? 0;
+  const subjectY = opts.subjectY ?? 0;
+
+  const W = origImg.naturalWidth || origImg.width;
+  const H = origImg.naturalHeight || origImg.height;
+  const c = document.createElement("canvas");
+  c.width = W;
+  c.height = H;
+  const ctx = c.getContext("2d");
+
+  // 1. Render Background Layer
+  if (mode === "color") {
+    ctx.fillStyle = color;
+    ctx.fillRect(0, 0, W, H);
+  } else if (mode === "scene") {
+    drawPhotoroomScene(ctx, W, H, sceneId);
+  } else if (mode === "blur") {
+    ctx.save();
+    ctx.filter = `blur(${blur}px)`;
+    ctx.drawImage(origImg, -30, -30, W + 60, H + 60);
+    ctx.restore();
+  } else if ((mode === "custom" || mode === "custom_bg") && customBgImg) {
+    const bNatW = customBgImg.naturalWidth || customBgImg.width || W;
+    const bNatH = customBgImg.naturalHeight || customBgImg.height || H;
+    const scale = Math.max(W / bNatW, H / bNatH);
+    const bW = bNatW * scale;
+    const bH = bNatH * scale;
+    ctx.drawImage(customBgImg, (W - bW) / 2, (H - bH) / 2, bW, bH);
+  }
+
+  // 2. Compute Subject placement & alpha bounding box (for realistic floor contact shadow)
+  const sW = Math.round(W * subjectScale);
+  const sH = Math.round(H * subjectScale);
+  const drawX = Math.round((W - sW) / 2 + (subjectX / 100) * W);
+  const drawY = Math.round((H - sH) / 2 + (subjectY / 100) * H);
+
+  // Measure alpha bounds of subject on a compact 256px sample grid
+  const sampleW = 256;
+  const sampleH = Math.max(1, Math.round((H / W) * sampleW));
+  const sCanvas = document.createElement("canvas");
+  sCanvas.width = sampleW;
+  sCanvas.height = sampleH;
+  const sCtx = sCanvas.getContext("2d");
+  sCtx.drawImage(subImg, 0, 0, sampleW, sampleH);
+  const sData = sCtx.getImageData(0, 0, sampleW, sampleH).data;
+
+  let minX = sampleW, maxX = 0, maxY = 0;
+  for (let y = 0; y < sampleH; y++) {
+    for (let x = 0; x < sampleW; x++) {
+      if (sData[(y * sampleW + x) * 4 + 3] > 35) {
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+        if (y > maxY) maxY = y;
+      }
+    }
+  }
+  if (maxX <= minX) {
+    minX = sampleW * 0.25;
+    maxX = sampleW * 0.75;
+    maxY = sampleH * 0.85;
+  }
+
+  const baseCenterX = drawX + ((minX + maxX) / 2 / sampleW) * sW + (shadowX / 100) * W * 0.25;
+  const baseBottomY = drawY + (maxY / sampleH) * sH + (shadowY / 100) * H * 0.1;
+  const subjectSpanW = Math.max(W * 0.15, ((maxX - minX) / sampleW) * sW);
+
+  // 3. Render Photoroom AI Shadow
+  if (shadowType === "contact" && alpha > 0) {
+    const rxOuter = subjectSpanW * 0.56;
+    const ryOuter = Math.max(6, H * 0.032 * (shadowBlur / 24 + 0.4));
+
+    ctx.save();
+    ctx.translate(baseCenterX, baseBottomY);
+    ctx.scale(1, ryOuter / rxOuter);
+    const gOuter = ctx.createRadialGradient(0, 0, rxOuter * 0.05, 0, 0, rxOuter);
+    gOuter.addColorStop(0, `rgba(0, 0, 0, ${(alpha * 0.75).toFixed(3)})`);
+    gOuter.addColorStop(0.45, `rgba(0, 0, 0, ${(alpha * 0.35).toFixed(3)})`);
+    gOuter.addColorStop(1, "rgba(0, 0, 0, 0)");
+    ctx.fillStyle = gOuter;
+    ctx.beginPath();
+    ctx.arc(0, 0, rxOuter, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    const rxCore = subjectSpanW * 0.34;
+    const ryCore = Math.max(3, H * 0.012);
+    ctx.save();
+    ctx.translate(baseCenterX, baseBottomY - ryCore * 0.2);
+    ctx.scale(1, ryCore / rxCore);
+    const gCore = ctx.createRadialGradient(0, 0, 0, 0, 0, rxCore);
+    gCore.addColorStop(0, `rgba(0, 0, 0, ${Math.min(0.92, alpha * 0.95).toFixed(3)})`);
+    gCore.addColorStop(1, "rgba(0, 0, 0, 0)");
+    ctx.fillStyle = gCore;
+    ctx.beginPath();
+    ctx.arc(0, 0, rxCore, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  } else if (shadowType === "floating" && alpha > 0) {
+    const floatY = Math.min(H - 8, baseBottomY + H * 0.055);
+    const rx = subjectSpanW * 0.48;
+    const ry = Math.max(6, H * 0.025 * (shadowBlur / 24 + 0.5));
+    ctx.save();
+    ctx.translate(baseCenterX, floatY);
+    ctx.scale(1, ry / rx);
+    const g = ctx.createRadialGradient(0, 0, rx * 0.05, 0, 0, rx);
+    g.addColorStop(0, `rgba(0, 0, 0, ${(alpha * 0.7).toFixed(3)})`);
+    g.addColorStop(0.55, `rgba(0, 0, 0, ${(alpha * 0.25).toFixed(3)})`);
+    g.addColorStop(1, "rgba(0, 0, 0, 0)");
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(0, 0, rx, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  } else if (shadowType === "drop" && alpha > 0) {
+    const silCanvas = document.createElement("canvas");
+    silCanvas.width = W;
+    silCanvas.height = H;
+    const silCtx = silCanvas.getContext("2d");
+    const offX = Math.round((shadowX / 100) * W * 0.14);
+    const offY = Math.round((shadowY / 100) * H * 0.14);
+    silCtx.drawImage(subImg, drawX + offX, drawY + offY, sW, sH);
+    silCtx.globalCompositeOperation = "source-in";
+    silCtx.fillStyle = `rgba(0, 0, 0, ${alpha.toFixed(3)})`;
+    silCtx.fillRect(0, 0, W, H);
+
+    ctx.save();
+    const scaledBlur = Math.max(2, Math.round((shadowBlur / 800) * Math.max(W, H)));
+    ctx.filter = `blur(${scaledBlur}px)`;
+    ctx.drawImage(silCanvas, 0, 0);
+    ctx.restore();
+  }
+
+  // 4. Render Sticker / Cutout Outline if enabled
+  if (outlineWidth > 0) {
+    const rad = Math.max(2, Math.round((outlineWidth / 750) * Math.max(W, H)));
+    const sil = document.createElement("canvas");
+    sil.width = sW;
+    sil.height = sH;
+    const sCtx2 = sil.getContext("2d");
+    sCtx2.drawImage(subImg, 0, 0, sW, sH);
+    sCtx2.globalCompositeOperation = "source-in";
+    sCtx2.fillStyle = outlineColor || "#ffffff";
+    sCtx2.fillRect(0, 0, sW, sH);
+
+    ctx.save();
+    const steps = 16;
+    for (let i = 0; i < steps; i++) {
+      const angle = (i / steps) * Math.PI * 2;
+      const ox = Math.cos(angle) * rad;
+      const oy = Math.sin(angle) * rad;
+      ctx.drawImage(sil, drawX + ox, drawY + oy);
+    }
+    ctx.restore();
+  }
+
+  // 5. Draw Crisp Foreground Subject Cutout
+  ctx.drawImage(subImg, drawX, drawY, sW, sH);
+
+  return c.toDataURL("image/png");
+}
+
 export function getExportDims(natW,natH,scaleVal){
   if(scaleVal==="8k"){const s=7680/Math.max(natW,natH);return{W:Math.round(natW*s),H:Math.round(natH*s)};}
   return{W:Math.round(natW*scaleVal),H:Math.round(natH*scaleVal)};
@@ -636,31 +1085,36 @@ export async function applyBeautyPipeline(canvas, ctx, W, H, smooth, clarity, gl
     targetCtx.drawImage(canvas, 0, 0);
   }
 
-  if (smooth > 0) applyNoiseReduction(targetCanvas, targetCtx, W, H, smooth * 0.5);
-  applyAutoLevels(targetCtx, W, H);
-  targetCtx.globalCompositeOperation = 'overlay';
-  targetCtx.fillStyle = `rgba(255,200,150,${glow * 0.012})`;
-  targetCtx.fillRect(0, 0, W, H);
-  targetCtx.globalCompositeOperation = 'source-over';
+  if (smooth > 0) {
+    applyNoiseReduction(targetCanvas, targetCtx, W, H, smooth * 0.48);
+  }
 
-  if (clarity > 0) applyUnsharpMask(targetCanvas, targetCtx, W, H, clarity * 0.15, 1.2);
+  if (clarity > 0) {
+    applyUnsharpMask(targetCanvas, targetCtx, W, H, clarity * 0.18, 1.3);
+  }
 
   if (glow > 0) {
+    targetCtx.globalCompositeOperation = 'overlay';
+    targetCtx.fillStyle = `rgba(255, 205, 165, ${(glow * 0.018).toFixed(3)})`;
+    targetCtx.fillRect(0, 0, W, H);
+    targetCtx.globalCompositeOperation = 'source-over';
+
     const glowCanvas = document.createElement('canvas');
     glowCanvas.width = W; glowCanvas.height = H;
     const gCtx = glowCanvas.getContext('2d');
-    gCtx.filter = `blur(${Math.round(glow * 3)}px) brightness(1.15)`;
+    gCtx.filter = `blur(${Math.max(2, Math.round(glow * 2.5))}px) brightness(1.12)`;
     gCtx.drawImage(targetCanvas, 0, 0);
     gCtx.filter = 'none';
     targetCtx.globalCompositeOperation = 'screen';
-    targetCtx.globalAlpha = glow * 0.025;
+    targetCtx.globalAlpha = glow * 0.032;
     targetCtx.drawImage(glowCanvas, 0, 0);
-    targetCtx.globalAlpha = 1; targetCtx.globalCompositeOperation = 'source-over';
+    targetCtx.globalAlpha = 1;
+    targetCtx.globalCompositeOperation = 'source-over';
   }
 
   if (maskCanvas) {
     targetCtx.globalCompositeOperation = 'destination-in';
-    targetCtx.drawImage(maskCanvas, 0, 0);
+    targetCtx.drawImage(maskCanvas, 0, 0, W, H);
     targetCtx.globalCompositeOperation = 'source-over';
     ctx.drawImage(targetCanvas, 0, 0);
   }
@@ -668,22 +1122,23 @@ export async function applyBeautyPipeline(canvas, ctx, W, H, smooth, clarity, gl
 
 export async function applyStructureAi(canvas, ctx, W, H, structureAmt, faceMaskCanvas = null) {
   if (structureAmt <= 0) return;
-  
+
   const tempCanvas = document.createElement('canvas');
   tempCanvas.width = W;
   tempCanvas.height = H;
   const tempCtx = tempCanvas.getContext('2d');
   tempCtx.drawImage(canvas, 0, 0);
-  
-  // Apply a combination of unsharp mask and contrast boost for structure (using a safe 0.015 multiplier to avoid noise)
-  applyUnsharpMask(tempCanvas, tempCtx, W, H, structureAmt * 0.015, 1.4);
-  
+
+  // Dual-band local micro-contrast + fine detail sharpening
+  applyUnsharpMask(tempCanvas, tempCtx, W, H, structureAmt * 0.028, 2.2);
+  applyUnsharpMask(tempCanvas, tempCtx, W, H, structureAmt * 0.014, 0.9);
+
   if (faceMaskCanvas) {
     tempCtx.globalCompositeOperation = 'destination-out';
-    tempCtx.drawImage(faceMaskCanvas, 0, 0);
+    tempCtx.drawImage(faceMaskCanvas, 0, 0, W, H);
     tempCtx.globalCompositeOperation = 'source-over';
   }
-  
+
   ctx.drawImage(tempCanvas, 0, 0);
 }
 
@@ -691,36 +1146,102 @@ function drawSkyPattern(skyId, W, H) {
   const c = document.createElement('canvas');
   c.width = W; c.height = H;
   const ctx = c.getContext('2d');
+
   if (skyId === 'sunset') {
     const g = ctx.createLinearGradient(0, 0, 0, H);
-    g.addColorStop(0, '#2e0854'); // Dark purple
-    g.addColorStop(0.4, '#d85b7b'); // Pink
-    g.addColorStop(0.8, '#ff7e5f'); // Orange
-    g.addColorStop(1, '#feb47b'); // Pale yellow
+    g.addColorStop(0, '#1e1035');
+    g.addColorStop(0.3, '#4a154b');
+    g.addColorStop(0.55, '#c0392b');
+    g.addColorStop(0.78, '#f39c12');
+    g.addColorStop(1, '#fce38a');
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, W, H);
+
+    // Warm setting sun disc & atmospheric horizon glow
+    const sunX = W * 0.45;
+    const sunY = H * 0.65;
+    const sunGlow = ctx.createRadialGradient(sunX, sunY, 0, sunX, sunY, W * 0.45);
+    sunGlow.addColorStop(0, 'rgba(255, 250, 220, 0.9)');
+    sunGlow.addColorStop(0.2, 'rgba(255, 200, 100, 0.45)');
+    sunGlow.addColorStop(0.6, 'rgba(255, 120, 50, 0.15)');
+    sunGlow.addColorStop(1, 'rgba(255, 100, 50, 0)');
+    ctx.fillStyle = sunGlow;
+    ctx.fillRect(0, 0, W, H);
+
+    // Soft sunset cloud bands
+    ctx.fillStyle = 'rgba(240, 140, 120, 0.18)';
+    for (let i = 0; i < 4; i++) {
+      ctx.beginPath();
+      const cy = H * (0.28 + i * 0.12);
+      ctx.ellipse(W * (0.2 + i * 0.22), cy, W * 0.35, H * 0.04, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
   } else if (skyId === 'blue') {
     const g = ctx.createLinearGradient(0, 0, 0, H);
-    g.addColorStop(0, '#1a75ff'); // Deep blue
-    g.addColorStop(0.7, '#66a3ff'); // Sky blue
-    g.addColorStop(1, '#e6f0ff'); // Horizon white
+    g.addColorStop(0, '#0052d4');
+    g.addColorStop(0.4, '#4364f7');
+    g.addColorStop(0.75, '#6fb1fc');
+    g.addColorStop(1, '#e3f2fd');
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, W, H);
+
+    // Soft sun flare in top corner
+    const sunGlow = ctx.createRadialGradient(W * 0.85, H * 0.15, 0, W * 0.85, H * 0.15, W * 0.45);
+    sunGlow.addColorStop(0, 'rgba(255, 255, 255, 0.85)');
+    sunGlow.addColorStop(0.3, 'rgba(255, 250, 220, 0.35)');
+    sunGlow.addColorStop(1, 'rgba(255, 255, 255, 0)');
+    ctx.fillStyle = sunGlow;
+    ctx.fillRect(0, 0, W, H);
+
+    // Realistic fluffy cumulus cloud clusters
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.45)';
+    const cloudPuffs = [
+      [0.25, 0.35, 0.16, 0.05],
+      [0.32, 0.33, 0.12, 0.06],
+      [0.18, 0.36, 0.10, 0.04],
+      [0.68, 0.42, 0.20, 0.05],
+      [0.76, 0.40, 0.15, 0.06]
+    ];
+    cloudPuffs.forEach(([cx, cy, rx, ry]) => {
+      ctx.beginPath();
+      ctx.ellipse(W * cx, H * cy, W * rx, H * ry, 0, 0, Math.PI * 2);
+      ctx.fill();
+    });
   } else if (skyId === 'stormy') {
     const g = ctx.createLinearGradient(0, 0, 0, H);
-    g.addColorStop(0, '#1c2833'); // Charcoal
-    g.addColorStop(0.6, '#34495e'); // Slate
-    g.addColorStop(1, '#566573'); // Light grey
+    g.addColorStop(0, '#141824');
+    g.addColorStop(0.4, '#242c3d');
+    g.addColorStop(0.75, '#404b5c');
+    g.addColorStop(1, '#697484');
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, W, H);
+
+    // Dark moody cloud billows
+    ctx.fillStyle = 'rgba(15, 20, 30, 0.35)';
+    for (let i = 0; i < 5; i++) {
+      ctx.beginPath();
+      ctx.ellipse(W * (0.15 + i * 0.2), H * (0.2 + (i % 2) * 0.12), W * 0.25, H * 0.07, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
   } else if (skyId === 'galaxy') {
-    ctx.fillStyle = '#06061a';
+    ctx.fillStyle = '#050512';
     ctx.fillRect(0, 0, W, H);
-    ctx.fillStyle = '#ffffff';
-    for (let i = 0; i < 80; i++) {
-      const x = Math.random() * W;
-      const y = Math.random() * H;
-      const r = Math.random() * 1.5;
+
+    // Cosmic nebula glow
+    const neb = ctx.createRadialGradient(W * 0.5, H * 0.35, 0, W * 0.5, H * 0.35, W * 0.6);
+    neb.addColorStop(0, 'rgba(139, 92, 246, 0.35)');
+    neb.addColorStop(0.4, 'rgba(6, 182, 212, 0.18)');
+    neb.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = neb;
+    ctx.fillRect(0, 0, W, H);
+
+    // Twinkling stars with varying sizes
+    for (let i = 0; i < 140; i++) {
+      const x = ((i * 137.5) % W);
+      const y = ((i * 73.3) % (H * 0.75));
+      const r = (i % 4 === 0) ? 1.4 : 0.75;
+      const alpha = (i % 3 === 0) ? 0.95 : 0.65;
+      ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
       ctx.beginPath();
       ctx.arc(x, y, r, 0, Math.PI * 2);
       ctx.fill();
@@ -729,29 +1250,62 @@ function drawSkyPattern(skyId, W, H) {
   return c;
 }
 
-export async function applySkyReplacement(canvas, ctx, W, H, skyId, skyMaskCanvas, customSkyUrl = null, opacity = 1.0, matchIntensity = 0.5) {
-  if (skyId === 'none' || !skyMaskCanvas) return;
-
-  // Calculate the percentage of sky pixels in the mask to avoid replacing ceilings/court lights in indoor photos
-  const maskCtx = skyMaskCanvas.getContext('2d');
-  const maskData = maskCtx.getImageData(0, 0, skyMaskCanvas.width, skyMaskCanvas.height).data;
-  let skyPixels = 0;
-  for (let i = 3; i < maskData.length; i += 4) {
-    if (maskData[i] > 15) skyPixels++;
+function buildFallbackSkyMask(sourceCanvas, W, H) {
+  const m = document.createElement('canvas');
+  m.width = W;
+  m.height = H;
+  const mCtx = m.getContext('2d');
+  // Smooth upper-horizon sky gradient mask weighted by luminance
+  const srcCtx = sourceCanvas.getContext('2d');
+  const srcData = srcCtx.getImageData(0, 0, W, H).data;
+  const outImg = mCtx.createImageData(W, H);
+  const od = outImg.data;
+  const horizonLimit = H * 0.62;
+  for (let y = 0; y < H; y++) {
+    const vWeight = y < horizonLimit ? Math.pow(1 - y / horizonLimit, 1.35) : 0;
+    if (vWeight <= 0.01) continue;
+    for (let x = 0; x < W; x++) {
+      const idx = (y * W + x) * 4;
+      const lum = (0.299 * srcData[idx] + 0.587 * srcData[idx + 1] + 0.114 * srcData[idx + 2]) / 255;
+      // Favor brighter / upper backdrop regions while feathering across the top
+      const lumWeight = 0.45 + 0.55 * lum;
+      const alpha = Math.min(255, Math.max(0, Math.round(vWeight * lumWeight * 235)));
+      od[idx] = 255;
+      od[idx + 1] = 255;
+      od[idx + 2] = 255;
+      od[idx + 3] = alpha;
+    }
   }
-  const skyRatio = skyPixels / (skyMaskCanvas.width * skyMaskCanvas.height);
-  if (skyRatio < 0.045) {
-    // Less than 4.5% of the image is sky - skip replacement to protect gym/indoor pictures
-    return;
+  mCtx.putImageData(outImg, 0, 0);
+  return m;
+}
+
+export async function applySkyReplacement(canvas, ctx, W, H, skyId, skyMaskCanvas, customSkyUrl = null, opacity = 1.0, matchIntensity = 0.5) {
+  if (skyId === 'none') return;
+
+  let activeMask = skyMaskCanvas;
+  if (activeMask) {
+    const maskCtx = activeMask.getContext('2d');
+    const maskData = maskCtx.getImageData(0, 0, activeMask.width, activeMask.height).data;
+    let skyPixels = 0;
+    for (let i = 3; i < maskData.length; i += 4) {
+      if (maskData[i] > 15) skyPixels++;
+    }
+    const skyRatio = skyPixels / (activeMask.width * activeMask.height);
+    if (skyRatio < 0.015) {
+      activeMask = buildFallbackSkyMask(canvas, W, H);
+    }
+  } else {
+    activeMask = buildFallbackSkyMask(canvas, W, H);
   }
 
   // Create a feathered version of the sky mask to smooth horizon replacement boundaries
   const featheredMask = document.createElement('canvas');
   featheredMask.width = W; featheredMask.height = H;
   const fCtx = featheredMask.getContext('2d');
-  const horizonBlur = Math.max(1, Math.round(W * 0.003));
+  const horizonBlur = Math.max(2, Math.round(W * 0.005));
   fCtx.filter = `blur(${horizonBlur}px)`;
-  fCtx.drawImage(skyMaskCanvas, 0, 0, W, H);
+  fCtx.drawImage(activeMask, 0, 0, W, H);
   fCtx.filter = 'none';
 
   const skyBg = document.createElement('canvas');
@@ -772,7 +1326,7 @@ export async function applySkyReplacement(canvas, ctx, W, H, skyId, skyMaskCanva
     skyCtx.drawImage(pattern, 0, 0, W, H);
   }
 
-  // Mask the sky background with the feathered sky mask (applying opacity)
+  // Mask the sky background with the feathered sky mask
   const maskedSkyBg = document.createElement('canvas');
   maskedSkyBg.width = W; maskedSkyBg.height = H;
   const maskedSkyCtx = maskedSkyBg.getContext('2d');
@@ -800,12 +1354,13 @@ export async function applySkyReplacement(canvas, ctx, W, H, skyId, skyMaskCanva
     const p = tinyCtx.getImageData(0, 0, 1, 1).data;
     
     fgCtx.globalCompositeOperation = 'source-atop';
-    fgCtx.fillStyle = `rgba(${p[0]}, ${p[1]}, ${p[2]}, ${matchIntensity * 0.12})`;
+    fgCtx.fillStyle = `rgba(${p[0]}, ${p[1]}, ${p[2]}, ${matchIntensity * 0.14})`;
     fgCtx.fillRect(0, 0, W, H);
     fgCtx.globalCompositeOperation = 'source-over';
   }
 
   // Combine background & foreground
+
   ctx.save();
   ctx.globalAlpha = opacity;
   ctx.drawImage(maskedSkyBg, 0, 0);
@@ -815,17 +1370,27 @@ export async function applySkyReplacement(canvas, ctx, W, H, skyId, skyMaskCanva
 
 export function applyRelight(canvas, ctx, W, H, depthMapCanvas, nearVal, farVal) {
   if (nearVal === 0 && farVal === 0) return;
-  if (!depthMapCanvas) return;
 
   const dCanvas = document.createElement('canvas');
   dCanvas.width = W; dCanvas.height = H;
   const dCtx = dCanvas.getContext('2d');
-  
-  // Apply a soft blur to turn the depth map into a smooth relighting volume gradient
-  const blurRad = Math.max(10, Math.round(Math.min(W, H) * 0.035));
-  dCtx.filter = `blur(${blurRad}px)`;
-  dCtx.drawImage(depthMapCanvas, 0, 0, W, H);
-  dCtx.filter = 'none';
+
+  if (depthMapCanvas) {
+    const blurRad = Math.max(10, Math.round(Math.min(W, H) * 0.035));
+    dCtx.filter = `blur(${blurRad}px)`;
+    dCtx.drawImage(depthMapCanvas, 0, 0, W, H);
+    dCtx.filter = 'none';
+  } else {
+    // Instant center-foreground radial depth map fallback so 3D Relight works immediately
+    dCtx.fillStyle = '#000000';
+    dCtx.fillRect(0, 0, W, H);
+    const rg = dCtx.createRadialGradient(W * 0.5, H * 0.52, Math.min(W, H) * 0.06, W * 0.5, H * 0.52, Math.max(W, H) * 0.56);
+    rg.addColorStop(0, '#ffffff');
+    rg.addColorStop(0.55, '#a0a0a0');
+    rg.addColorStop(1, '#000000');
+    dCtx.fillStyle = rg;
+    dCtx.fillRect(0, 0, W, H);
+  }
 
   const imgData = ctx.getImageData(0, 0, W, H);
   const depthData = dCtx.getImageData(0, 0, W, H);
@@ -838,7 +1403,7 @@ export function applyRelight(canvas, ctx, W, H, depthMapCanvas, nearVal, farVal)
   for (let i = 0; i < d.length; i += 4) {
     const z = dd[i] / 255; // 0 is far, 1 is near
     const factor = z * nearFactor + (1 - z) * farFactor;
-    const mult = 1 + factor;
+    const mult = Math.max(0.15, 1 + factor * 0.85);
 
     d[i] = Math.min(255, Math.max(0, d[i] * mult));
     d[i+1] = Math.min(255, Math.max(0, d[i+1] * mult));
@@ -1086,6 +1651,130 @@ export function applyThermalHeatmap(canvas, ctx, W, H, amount) {
   }
 
   ctx.putImageData(imgData, 0, 0);
+}
+
+/**
+ * Fast, 100% offline salient-subject background cutout fallback.
+ * Uses perimeter color-clustering, distance thresholds, and morphological feathering.
+ */
+export function extractSalientCutoutFallback(sourceCanvas) {
+  const natW = sourceCanvas.width;
+  const natH = sourceCanvas.height;
+  if (!natW || !natH) return sourceCanvas;
+
+  // Process on a fast 400px proxy canvas for instant <15ms execution
+  const maxDim = 400;
+  const scale = Math.min(1, maxDim / Math.max(natW, natH));
+  const sW = Math.max(1, Math.round(natW * scale));
+  const sH = Math.max(1, Math.round(natH * scale));
+
+  const proxyCanvas = document.createElement('canvas');
+  proxyCanvas.width = sW;
+  proxyCanvas.height = sH;
+  const pCtx = proxyCanvas.getContext('2d');
+  pCtx.drawImage(sourceCanvas, 0, 0, sW, sH);
+  const pData = pCtx.getImageData(0, 0, sW, sH).data;
+
+  // 1. Collect perimeter border samples and cluster into <= 14 unique centroids
+  const rawSamples = [];
+  const step = Math.max(1, Math.round(Math.min(sW, sH) / 32));
+
+  for (let x = 0; x < sW; x += step) {
+    let idx = x * 4;
+    rawSamples.push([pData[idx], pData[idx + 1], pData[idx + 2]]);
+    idx = ((sH - 1) * sW + x) * 4;
+    rawSamples.push([pData[idx], pData[idx + 1], pData[idx + 2]]);
+  }
+  for (let y = 0; y < sH; y += step) {
+    let idx = (y * sW) * 4;
+    rawSamples.push([pData[idx], pData[idx + 1], pData[idx + 2]]);
+    idx = (y * sW + (sW - 1)) * 4;
+    rawSamples.push([pData[idx], pData[idx + 1], pData[idx + 2]]);
+  }
+
+  // Quantize to representative centroids
+  const centroids = [];
+  for (const [r, g, b] of rawSamples) {
+    let match = false;
+    for (const c of centroids) {
+      const dr = r - c[0], dg = g - c[1], db = b - c[2];
+      if (dr * dr + dg * dg + db * db < 650) {
+        match = true;
+        break;
+      }
+    }
+    if (!match && centroids.length < 16) {
+      centroids.push([r, g, b]);
+    }
+  }
+
+  // 2. Generate mask on proxy canvas
+  const maskCanvas = document.createElement('canvas');
+  maskCanvas.width = sW;
+  maskCanvas.height = sH;
+  const mCtx = maskCanvas.getContext('2d');
+  const maskImgData = mCtx.createImageData(sW, sH);
+  const md = maskImgData.data;
+
+  const cx = sW * 0.5;
+  const cy = sH * 0.52;
+
+  for (let y = 0; y < sH; y++) {
+    const rowOff = y * sW;
+    const dy = (y - cy) / cy;
+    for (let x = 0; x < sW; x++) {
+      const idx = (rowOff + x) * 4;
+      const r = pData[idx];
+      const g = pData[idx + 1];
+      const b = pData[idx + 2];
+
+      let minColorDist = 999999;
+      for (let s = 0; s < centroids.length; s++) {
+        const c = centroids[s];
+        const dr = r - c[0];
+        const dg = g - c[1];
+        const db = b - c[2];
+        const dist = dr * dr + dg * dg + db * db;
+        if (dist < minColorDist) minColorDist = dist;
+      }
+
+      const dx = (x - cx) / cx;
+      const centerFactor = Math.min(1, Math.sqrt(dx * dx + dy * dy));
+      const thresh = 800 + centerFactor * 1300;
+      let alpha = 0;
+      if (minColorDist > thresh) {
+        const ramp = Math.min(1, (minColorDist - thresh) / 750);
+        alpha = Math.round(255 * ramp);
+      }
+
+      md[idx] = 255;
+      md[idx + 1] = 255;
+      md[idx + 2] = 255;
+      md[idx + 3] = alpha;
+    }
+  }
+  mCtx.putImageData(maskImgData, 0, 0);
+
+  // 3. Smooth / feather mask edges
+  const featherCanvas = document.createElement('canvas');
+  featherCanvas.width = sW;
+  featherCanvas.height = sH;
+  const fCtx = featherCanvas.getContext('2d');
+  fCtx.filter = 'blur(2.5px)';
+  fCtx.drawImage(maskCanvas, 0, 0);
+  fCtx.filter = 'none';
+
+  // 4. Composite smoothed mask onto full resolution source
+  const outCanvas = document.createElement('canvas');
+  outCanvas.width = natW;
+  outCanvas.height = natH;
+  const outCtx = outCanvas.getContext('2d');
+  outCtx.drawImage(sourceCanvas, 0, 0);
+  outCtx.globalCompositeOperation = 'destination-in';
+  outCtx.drawImage(featherCanvas, 0, 0, natW, natH);
+  outCtx.globalCompositeOperation = 'source-over';
+
+  return outCanvas;
 }
 
 

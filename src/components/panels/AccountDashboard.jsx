@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { Spin } from "../ui/common";
 
-export function AccountDashboard({ user, onLogin, onLogout, onCancelSubscription, onChangeBillingPeriod, onChangeTier, onRenewLease, dm }) {
+export function AccountDashboard({ user, onLogin, onLogout, onRenewLease, onUpgrade, dm }) {
   const [isRenewing, setIsRenewing] = useState(false);
-  const [showPortalModal, setShowPortalModal] = useState(false);
+  const [isOpeningPortal, setIsOpeningPortal] = useState(false);
+  const [portalError, setPortalError] = useState("");
 
   if (!user || !user.loggedIn) {
     return (
@@ -318,7 +319,7 @@ export function AccountDashboard({ user, onLogin, onLogout, onCancelSubscription
             <p style={{ fontSize: "12.5px", color: dm ? "#cbd5e1" : "#4b5563", maxWidth: "480px", lineHeight: 1.5 }}>
               You are currently utilizing our zero-cost offline sandbox. Standard camera culling is capped at 10 batch images, and RAW developer file decodes utilize standard limits.
             </p>
-            <div style={{ display: "flex", gap: "10px", marginTop: "8px" }}>
+            <div style={{ display: "flex", gap: "10px", marginTop: "8px", flexWrap: "wrap", justifyContent: "center" }}>
               <span style={{ fontSize: "11px", background: dm ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.03)", padding: "4px 10px", borderRadius: "20px", fontWeight: 600, color: dm ? "#a1a1aa" : "#4b5563" }}>
                 🔒 Zero Cloud Uploads
               </span>
@@ -326,6 +327,20 @@ export function AccountDashboard({ user, onLogin, onLogout, onCancelSubscription
                 📱 Offline Installed
               </span>
             </div>
+            {onUpgrade && (
+              <button
+                onClick={onUpgrade}
+                className="portal-btn"
+                style={{
+                  marginTop: "6px",
+                  background: "linear-gradient(135deg, #f97316 0%, #facc15 100%)",
+                  color: "#ffffff",
+                  boxShadow: "0 4px 14px rgba(249, 115, 22, 0.25)"
+                }}
+              >
+                ⚡ View Creator Pro &amp; Studio Team Plans
+              </button>
+            )}
           </div>
         ) : (
           <div style={{
@@ -352,21 +367,58 @@ export function AccountDashboard({ user, onLogin, onLogout, onCancelSubscription
                   {theme.title}
                 </h3>
                 <p style={{ fontSize: "12.5px", color: dm ? "#cbd5e1" : "#4b5563", marginTop: "6px", lineHeight: 1.5 }}>
-                  Billed <strong>{user.billingPeriod === "annual" ? "Annually" : "Monthly"}</strong> via secure card payment. Auto-renews unless cancelled.
+                  Billed <strong>{user.billingPeriod === "annual" ? "Annually" : "Monthly"}</strong> via Stripe Checkout. Auto-renews unless cancelled in your Stripe Customer Portal.
                 </p>
+                {portalError && (
+                  <div style={{ marginTop: "8px", fontSize: "11.5px", color: "#ef4444", fontWeight: 600 }}>
+                    ⚠️ {portalError}
+                  </div>
+                )}
               </div>
 
               <button 
-                onClick={() => setShowPortalModal(true)}
+                onClick={async () => {
+                  setPortalError("");
+                  setIsOpeningPortal(true);
+                  try {
+                    const res = await fetch("/api/create-portal-session", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        stripeCustomerId: user.stripeCustomerId,
+                        customerEmail: user.email,
+                        returnUrl: `${window.location.origin}/?portal=returned`,
+                      }),
+                    });
+                    const data = await res.json().catch(() => ({}));
+                    if (!res.ok || !data?.url) {
+                      throw new Error(data?.error || `Failed to open Stripe Billing Portal (HTTP ${res.status}).`);
+                    }
+                    window.location.href = data.url;
+                  } catch (err) {
+                    console.error("Portal session error:", err);
+                    setPortalError(err.message || "Unable to open Stripe Billing Portal.");
+                    setIsOpeningPortal(false);
+                  }
+                }}
+                disabled={isOpeningPortal}
                 className="portal-btn"
                 style={{
                   background: 'linear-gradient(135deg, #f97316 0%, #facc15 100%)',
                   color: '#ffffff',
                   alignSelf: "flex-start",
-                  boxShadow: "0 4px 12px rgba(249, 115, 22, 0.2)"
+                  boxShadow: "0 4px 12px rgba(249, 115, 22, 0.2)",
+                  opacity: isOpeningPortal ? 0.75 : 1
                 }}
               >
-                ⚙ Manage Stripe Billing Portal
+                {isOpeningPortal ? (
+                  <>
+                    <Spin color="#ffffff" />
+                    <span>Opening Stripe Portal...</span>
+                  </>
+                ) : (
+                  <span>⚙ Manage Stripe Billing Portal</span>
+                )}
               </button>
             </div>
 
@@ -501,142 +553,6 @@ export function AccountDashboard({ user, onLogin, onLogout, onCancelSubscription
           </table>
         </div>
       </div>
-
-      {/* Simulated Stripe Billing Portal Modal */}
-      {showPortalModal && (
-        <div className="portal-modal">
-          <div className="portal-box">
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                <span style={{ fontSize: "20px" }}>⚙</span>
-                <span style={{ fontSize: "14px", fontWeight: 800, color: "#f97316", textTransform: "uppercase", letterSpacing: "1px" }}>
-                  Stripe Customer Portal
-                </span>
-              </div>
-              <button 
-                onClick={() => setShowPortalModal(false)}
-                style={{
-                  background: "transparent",
-                  border: "none",
-                  color: dm ? "#9ca3af" : "#4b5563",
-                  fontSize: "20px",
-                  cursor: "pointer",
-                  fontWeight: 700
-                }}
-              >
-                ×
-              </button>
-            </div>
-
-            <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
-              <h3 style={{ fontSize: "18px", fontWeight: 900, color: dm ? "#ffffff" : "#111827", letterSpacing: "-0.5px" }}>
-                Manage Subscription Details
-              </h3>
-              <p style={{ fontSize: "13px", color: dm ? "#cbd5e1" : "#4b5563", lineHeight: 1.5 }}>
-                Welcome to your Stripe billing credentials panel. You can update payment cards, toggle billing cycles, change tiers, or cancel your renewal.
-              </p>
-
-              {/* Card info */}
-              <div style={{
-                background: dm ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)",
-                padding: "16px",
-                borderRadius: "14px",
-                border: `1px solid ${dm ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)"}`,
-                fontSize: "13px",
-                color: dm ? "#cbd5e1" : "#4b5563"
-              }}>
-                💳 <strong>Visa ending in 4242</strong> (Expires 12/2030)
-              </div>
-
-              {/* Subscription actions */}
-              <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginTop: "8px" }}>
-                
-                {/* Switch Period Action */}
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px" }}>
-                  <span style={{ fontSize: "13px", fontWeight: 700, color: dm ? "#ffffff" : "#111827" }}>
-                    Billing Cycle: {user.billingPeriod === "annual" ? "Annually" : "Monthly"}
-                  </span>
-                  <button 
-                    onClick={() => {
-                      const nextPeriod = user.billingPeriod === "annual" ? "monthly" : "annual";
-                      onChangeBillingPeriod(nextPeriod);
-                      alert(`Billing cycle successfully updated in Stripe! Changed from ${user.billingPeriod} to ${nextPeriod}.`);
-                    }}
-                    className="portal-btn"
-                    style={{
-                      background: dm ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.05)",
-                      color: dm ? "#ffffff" : "#111827",
-                      padding: "8px 14px",
-                      fontSize: "12px"
-                    }}
-                  >
-                    Switch to {user.billingPeriod === "annual" ? "Monthly" : "Annually"}
-                  </button>
-                </div>
-
-                <div style={{ height: "1px", background: dm ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)" }} />
-
-                {/* Plan Toggle (Pro ⇆ Team) */}
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px" }}>
-                  <span style={{ fontSize: "13px", fontWeight: 700, color: dm ? "#ffffff" : "#111827" }}>
-                    Current Tier: {theme.title}
-                  </span>
-                  <button 
-                    onClick={() => {
-                      const nextTier = user.tier === "pro" ? "team" : "pro";
-                      onChangeTier(nextTier);
-                      alert(`Subscription tier successfully updated in Stripe! Changed from ${theme.title} to ${getTierTheme(nextTier).title}.`);
-                    }}
-                    className="portal-btn"
-                    style={{
-                      background: dm ? "rgba(255, 255, 255, 0.08)" : "rgba(0, 0, 0, 0.05)",
-                      color: dm ? "#ffffff" : "#111827",
-                      padding: "8px 14px",
-                      fontSize: "12px"
-                    }}
-                  >
-                    Change to {user.tier === "pro" ? "Studio Team" : "Creator Pro"}
-                  </button>
-                </div>
-
-                <div style={{ height: "1px", background: dm ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)" }} />
-
-                {/* Cancel Action */}
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px" }}>
-                  <div>
-                    <span style={{ fontSize: "13px", fontWeight: 700, color: dm ? "#ffffff" : "#111827", display: "block" }}>
-                      Cancel Auto-Renewal
-                    </span>
-                    <span style={{ fontSize: "11px", color: dm ? "#9ca3af" : "#6b7280" }}>
-                      Instantly downgrade back to Hobbyist Free.
-                    </span>
-                  </div>
-                  <button 
-                    onClick={() => {
-                      if (window.confirm("Are you sure you want to cancel your secure Stripe subscription? All Premium limits will be locked at the end of the billing period.")) {
-                        onCancelSubscription();
-                        setShowPortalModal(false);
-                        alert("Subscription cancelled successfully. You have been downgraded back to the Free Hobbyist Sandbox.");
-                      }
-                    }}
-                    className="portal-btn"
-                    style={{
-                      background: "rgba(239, 68, 68, 0.1)",
-                      color: "#ef4444",
-                      border: "1.5px solid rgba(239, 68, 68, 0.2)",
-                      padding: "8px 14px",
-                      fontSize: "12px"
-                    }}
-                  >
-                    Cancel Subscription
-                  </button>
-                </div>
-
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
     </div>
   );

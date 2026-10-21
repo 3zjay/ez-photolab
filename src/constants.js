@@ -394,9 +394,67 @@ export const FB_MODES = [
   { id:"story",     label:"Story/Reel",    desc:"1080 × 1920",  w:1080, h:1920  },
 ];
 
-export const FONTS = ["System","Serif","Mono","Impact","Georgia","Arial Black"];
-export const FONT_MAP = { System:"-apple-system,sans-serif", Serif:"Georgia,serif", Mono:"'Courier New',monospace", Impact:"Impact,sans-serif", Georgia:"Georgia,serif", "Arial Black":"'Arial Black',sans-serif" };
-export const BG_COLORS = ["#ffffff","#f5f5f5","#000000","#1a1a2e","#2d4a3e","#4a1a2e","#1a3a4a","#fff8e7"];
+export const FONTS = ["Montserrat", "Outfit", "System", "Serif", "Mono", "Impact", "Georgia", "Arial Black"];
+export const FONT_MAP = {
+  Montserrat: "'Plus Jakarta Sans', -apple-system, sans-serif",
+  Outfit: "'Outfit', -apple-system, sans-serif",
+  System: "-apple-system, BlinkMacSystemFont, sans-serif",
+  Serif: "Georgia, 'Times New Roman', serif",
+  Mono: "'Courier New', monospace",
+  Impact: "Impact, 'Arial Black', sans-serif",
+  Georgia: "Georgia, serif",
+  "Arial Black": "'Arial Black', Impact, sans-serif"
+};
+export const BG_COLORS = [
+  "#ffffff", "#f8fafc", "#f3f4f6", "#faf6f0", "#fef3c7", "#fce7f3",
+  "#ede9fe", "#e0f2fe", "#ecfdf5", "#18181b", "#0f172a", "#000000",
+  "#1e3a8a", "#065f46", "#7f1d1d", "#581c87"
+];
+
+export const PHOTOROOM_SCENES = [
+  { id: "podium_light", name: "Minimal Studio Podium", icon: "🏛️", desc: "Clean cyclorama studio wall + soft tabletop horizon", preview: "linear-gradient(180deg, #f8fafc 0%, #cbd5e1 100%)" },
+  { id: "sunbeam_wall", name: "Sunlight Window", icon: "🌤️", desc: "Warm cream backdrop with diagonal window sunbeams", preview: "linear-gradient(135deg, #fdfbf7 0%, #d8cbb8 100%)" },
+  { id: "marble_luxury", name: "Luxury Gallery", icon: "🤍", desc: "Bright architectural marble & soft floor reflection", preview: "linear-gradient(135deg, #ffffff 0%, #e5e7eb 100%)" },
+  { id: "wood_table", name: "Oak Tabletop", icon: "🪵", desc: "Warm natural wood table surface + soft studio wall", preview: "linear-gradient(180deg, #ece3d5 0%, #9c6b3b 100%)" },
+  { id: "botanical_bokeh", name: "Garden Bokeh", icon: "🌿", desc: "Sunlit organic outdoor greenery depth-of-field", preview: "linear-gradient(135deg, #d9f99d 0%, #4ade80 100%)" },
+  { id: "golden_sunset", name: "Golden Hour Glow", icon: "🌅", desc: "Warm amber studio horizon & soft rim bloom", preview: "linear-gradient(180deg, #fed7aa 0%, #f59e0b 100%)" },
+  { id: "neon_cyber", name: "Cyber Neon Studio", icon: "⚡", desc: "Dark obsidian floor with cyan & magenta rim lights", preview: "linear-gradient(135deg, #06b6d4 0%, #111827 50%, #ec4899 100%)" },
+  { id: "spotlight_dark", name: "Dramatic Spotlight", icon: "🎭", desc: "Dark studio stage with overhead radial key light", preview: "radial-gradient(circle, #475569 0%, #090d16 100%)" }
+];
+
+export const PHOTOROOM_SHADOWS = [
+  { id: "none", name: "No Shadow", icon: "⊘", desc: "Clean isolated cutout" },
+  { id: "contact", name: "Soft Contact", icon: "🛋️", desc: "Grounds subject naturally onto the floor" },
+  { id: "drop", name: "3D Drop Shadow", icon: "☀️", desc: "Directional studio wall & floor shadow" },
+  { id: "floating", name: "Floating Levitate", icon: "🛸", desc: "Detached soft oval shadow below subject" }
+];
+
+export const PHOTOROOM_CANVAS_PRESETS = [
+  { id: "shopify_sq", name: "Shopify / Product", desc: "2048 × 2048 · 1:1", w: 2048, h: 2048, ratio: "1:1", icon: "🛍️" },
+  { id: "amazon_sq", name: "Amazon Listing", desc: "2000 × 2000 · 1:1", w: 2000, h: 2000, ratio: "1:1", icon: "📦", forceBg: "#ffffff" },
+  { id: "ig_portrait", name: "IG / FB Portrait", desc: "1080 × 1350 · 4:5", w: 1080, h: 1350, ratio: "4:5", icon: "📸" },
+  { id: "ig_story", name: "Story / Reels / TikTok", desc: "1080 × 1920 · 9:16", w: 1080, h: 1920, ratio: "9:16", icon: "📱" },
+  { id: "ig_square", name: "Instagram Square", desc: "1080 × 1080 · 1:1", w: 1080, h: 1080, ratio: "1:1", icon: "🟦" },
+  { id: "etsy_listing", name: "Etsy / eBay", desc: "2000 × 1500 · 4:3", w: 2000, h: 1500, ratio: "4:3", icon: "🏷️" },
+  { id: "yt_thumb", name: "YouTube / Wide", desc: "1920 × 1080 · 16:9", w: 1920, h: 1080, ratio: "16:9", icon: "▶️" },
+  { id: "pinterest", name: "Pinterest Pin", desc: "1000 × 1500 · 2:3", w: 1000, h: 1500, ratio: "2:3", icon: "📌" }
+];
+
+export const PHOTOROOM_BADGE_PRESETS = [
+  { id: "sale_50", label: "🔥 SALE -50%", content: "SALE -50%", color: "#ffffff", bgColor: "#ef4444", font: "Impact", fontSize: 42, bold: true, bgEnabled: true, bgRadius: 12, stroke: false },
+  { id: "new_arrival", label: "✨ NEW ARRIVAL", content: "NEW ARRIVAL", color: "#ffffff", bgColor: "#111827", font: "Montserrat", fontSize: 34, bold: true, bgEnabled: true, bgRadius: 999, stroke: false },
+  { id: "best_seller", label: "⭐ BEST SELLER", content: "★ BEST SELLER", color: "#111827", bgColor: "#facc15", font: "Montserrat", fontSize: 34, bold: true, bgEnabled: true, bgRadius: 10, stroke: false },
+  { id: "limited", label: "💎 LIMITED EDITION", content: "LIMITED EDITION", color: "#ffffff", bgColor: "#6c63ff", font: "Montserrat", fontSize: 32, bold: true, bgEnabled: true, bgRadius: 8, stroke: false },
+  { id: "free_ship", label: "🚚 FREE SHIPPING", content: "FREE SHIPPING", color: "#ffffff", bgColor: "#16a34a", font: "Montserrat", fontSize: 32, bold: true, bgEnabled: true, bgRadius: 999, stroke: false },
+  { id: "price_tag", label: "💲 $49.99 Tag", content: "$49.99", color: "#ffffff", bgColor: "#0f172a", font: "Arial Black", fontSize: 52, bold: true, bgEnabled: true, bgRadius: 16, stroke: false }
+];
+
+export const PHOTOROOM_TEXT_PRESETS = [
+  { id: "headline", name: "Bold Headline", label: "Bold Headline", content: "STUDIO COLLECTION", color: "#ffffff", bgColor: "#000000", font: "Impact", fontSize: 64, bold: true, italic: false, stroke: true, bgEnabled: false, bgRadius: 10 },
+  { id: "editorial", name: "Editorial Serif", label: "Editorial Serif", content: "Autumn / Winter", color: "#ffffff", bgColor: "#111827", font: "Georgia", fontSize: 52, bold: false, italic: true, stroke: true, bgEnabled: false, bgRadius: 8 },
+  { id: "pill_callout", name: "Pill Callout", label: "Pill Callout", content: "Tap to Customize", color: "#111827", bgColor: "#ffffff", font: "Montserrat", fontSize: 36, bold: true, italic: false, stroke: false, bgEnabled: true, bgRadius: 999 },
+  { id: "minimal_wm", name: "Minimal Caption", label: "Minimal Caption", content: "@YOURBRAND", color: "#ffffff", bgColor: "#000000", font: "Mono", fontSize: 28, bold: true, italic: false, stroke: true, bgEnabled: false, bgRadius: 6 }
+];
 
 export const BATCH_RESIZE_PRESETS = [
   { id:"ig_sq",    label:"Instagram Square",    w:1080, h:1080 },
