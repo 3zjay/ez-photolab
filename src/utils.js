@@ -463,12 +463,12 @@ export async function renderFinal(
   }
 
   const canvas = document.createElement('canvas');
-  canvas.width = rotW; canvas.height = rotH;
+  canvas.width = W; canvas.height = H;
   const ctx = canvas.getContext('2d');
 
   // Apply rotation + flip
   ctx.save();
-  ctx.translate(rotW / 2, rotH / 2);
+  ctx.translate(W / 2, H / 2);
   if (rotation) ctx.rotate((rotation * Math.PI) / 180);
   ctx.scale(flipH ? -1 : 1, flipV ? -1 : 1);
   ctx.imageSmoothingEnabled = true;

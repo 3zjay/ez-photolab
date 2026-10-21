@@ -1167,7 +1167,6 @@ export default function App() {
       console.error("Apply crop failed:", e);
     }
   };
-  };
 
   const addText = () => {
     const id = Date.now();
@@ -2990,41 +2989,6 @@ export default function App() {
           ) : activeTab === "account" ? (
             <div style={{ display: "flex", justifyContent: "center", minHeight: "calc(100dvh - 52px)", overflowY: "auto", overflowX: "hidden", background: dm ? "#0a0e17" : "#f3f4f6" }}>
               {isDesktop ? <DesktopAccount /> : <AccountDashboard user={user} onLogin={handleLogin} onLogout={handleLogout} onRenewLease={handleRenewLease} onUpgrade={() => { setActiveTab("home"); setTimeout(() => document.getElementById("pricing-container")?.scrollIntoView({ behavior: "smooth" }), 100); }} dm={dm} />}
-            </div>
-          ) : (
-            <div style={{ display: "flex", flexDirection: "column", height: "calc(100dvh - 52px)", width: "100%", maxWidth: "100vw", overflow: "hidden" }}>
-              {image ? (
-                <>
-                  <div style={{ height: "42dvh", minWidth: 0, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", padding: "8px 12px 36px", position: "relative", overflow: "hidden", borderBottom: `1px solid ${dm ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'}` }}>
-                    <Preview {...previewProps} />
-                  </div>
-                  <div className="glass-panel" style={{ flex: 1, minWidth: 0, overflowY: "auto", overflowX: "hidden", WebkitOverflowScrolling: "touch", borderTop: `1px solid ${dm ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'}` }}>
-                    {renderPanel(true)}
-                  </div>
-                </>
-              ) : (
-                <div style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", justifyContent: "center", padding: "16px", position: "relative", overflow: "hidden" }}>
-                  <Preview {...previewProps} />
-                </div>
-              )}
-            </div>
-          )
-        )}
-      </Suspense>
-            <div style={{ height: "calc(100dvh - 52px)", overflowY: "auto", overflowX: "hidden" }}>
-              <LandingPage {...{ dm, loadImage, setActiveTab, handleInstallClick, deferredPrompt, isIOS, isInstalled }} onSelectPlan={(plan) => setCheckoutPlan(plan)} />
-            </div>
-          ) : activeTab === "batch" ? (
-            <div style={{ height: "calc(100dvh - 52px)", overflowY: "auto", overflowX: "hidden" }}>
-              <BatchPage {...{ dm, cardBg, cardBdr, inputSt, isMobile: true, user, setActiveTab, sourceHandle, outputHandle, batchImages, selectSourceFolder, selectRawSourceFolder, selectOutputFolder, batchResizeMode, setBatchResizeMode, batchResizePreset, setBatchResizePreset, batchCustomW, setBatchCustomW, batchCustomH, setBatchCustomH, batchKeepAspect, setBatchKeepAspect, batchLongEdgePx, setBatchLongEdgePx, batchAutoLevels, setBatchAutoLevels, batchAutoContrast, setBatchAutoContrast, batchSharpen, setBatchSharpen, batchSharpenAmt, setBatchSharpenAmt, batchSharpenRad, setBatchSharpenRad, batchDenoise, setBatchDenoise, batchDenoiseAmt, setBatchDenoiseAmt, batchLogo, setBatchLogo, batchLogoFile, setBatchLogoFile, handleBatchLogoUpload, batchLogoScale, setBatchLogoScale, batchLogoScalePortrait, setBatchLogoScalePortrait, batchLogoOpacity, setBatchLogoOpacity, batchLogoPos, setBatchLogoPos, batchLogoMargin, setBatchLogoMargin, batchOutputFmt, setBatchOutputFmt, batchOutputQ, setBatchOutputQ, batchPrefix, setBatchPrefix, batchSuffix, setBatchSuffix, batchProcessing, batchProgress, batchDone, handleBatchProcess, batchPreviewIdx, batchPreviewOrigUrl, batchPreviewAfterUrl, batchPreviewLoading, batchPreviewSplit, setBatchPreviewSplit, batchPreviewDragging, setBatchPreviewDragging, batchPreviewOpen, setBatchPreviewOpen, generateBatchPreview, filters, setFilters, resetAll, batchFilterGroup, setBatchFilterGroup, calcBatchDims, batchAiUpscale, setBatchAiUpscale, batchAiBeauty, setBatchAiBeauty, batchAiScale, setBatchAiScale, batchAiBeautySmooth, setBatchAiBeautySmooth, batchAiBeautyClarity, setBatchAiBeautyClarity, batchAiBeautyGlow, setBatchAiBeautyGlow, batchAiFaceRestore, setBatchAiFaceRestore, batchAiBeautyUseMask, setBatchAiBeautyUseMask, batchSection, setBatchSection, batchRawFiles, setBatchRawFiles, handleRawBatchProcess, batchLogs, addBatchLog, batchConfirmFirst, setBatchConfirmFirst, batchConfirmData, batchCancelRequested, handleCancelBatch, continueBatchProcess, cancelBatchProcess, batchStats, batchLutId, setBatchLutId, batchLutIntensity, setBatchLutIntensity, batchCustomLutData, setBatchCustomLutData, batchCustomLutName, setBatchCustomLutName, batchFbOptimize, setBatchFbOptimize, importOutputsToCull, batchCullFilter, setBatchCullFilter, batchCullSort, setBatchCullSort, cullResults }} />
-            </div>
-          ) : activeTab === "cull" ? (
-            <div style={{ height: "calc(100dvh - 52px)", overflowY: "auto", overflowX: "hidden", padding: "12px" }}>
-              <CullPage {...{ dm, cardBg, cardBdr, inputSt, sourceHandle: cullSourceHandle, outputHandle, batchImages: cullImages, selectSourceFolder: selectCullSourceFolder, selectRawSourceFolder, selectOutputFolder, batchLogs, addBatchLog, batchSection, setBatchSection, isMobile: true, user, setActiveTab, cullResults, setCullResults, groups, setGroups, activeGroupIndex: cullActiveGroupIndex, setActiveGroupIndex: setCullActiveGroupIndex, activeAlternateIndex: cullActiveAlternateIndex, setActiveAlternateIndex: setCullActiveAlternateIndex }} />
-            </div>
-          ) : activeTab === "account" ? (
-            <div style={{ display: "flex", justifyContent: "center", minHeight: "calc(100dvh - 52px)", overflowY: "auto", overflowX: "hidden", background: dm ? "#0a0e17" : "#f3f4f6" }}>
-              <AccountDashboard user={user} onLogin={handleLogin} onLogout={handleLogout} onRenewLease={handleRenewLease} onUpgrade={() => { setActiveTab("home"); setTimeout(() => document.getElementById("pricing-container")?.scrollIntoView({ behavior: "smooth" }), 100); }} dm={dm} />
             </div>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", height: "calc(100dvh - 52px)", width: "100%", maxWidth: "100vw", overflow: "hidden" }}>
