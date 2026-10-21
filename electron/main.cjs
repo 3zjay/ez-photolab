@@ -100,6 +100,12 @@ async function createWindow() {
     } catch { return new Response('Asset not found', { status: 404 }); }
   });
   mainWindow = new BrowserWindow({ width: 1440, height: 940, minWidth: 1050, minHeight: 720, show: false, backgroundColor: '#10121a', title: 'PHOTOlab Desktop Preview', webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true, webSecurity: true } });
+  mainWindow.webContents.on('console-message', (_event, level, message, line, sourceId) => {
+    console.log(`[Renderer] ${message}`);
+  });
+  mainWindow.webContents.on('did-fail-load', (_event, errorCode, errorDescription, validatedURL) => {
+    console.error(`[Load Failed] ${errorCode}: ${errorDescription} (${validatedURL})`);
+  });
   mainWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   mainWindow.webContents.on('will-navigate', (event, url) => { if (!url.startsWith(`${APP_ORIGIN}/`)) event.preventDefault(); });
   mainWindow.on('close', async event => {
