@@ -5,7 +5,7 @@ export const webOrigin = () => new URL(process.env.NEXT_PUBLIC_APP_URL || 'https
 export function services() {
   if (!admin.apps.length) {
     const { FIREBASE_PROJECT_ID: projectId, FIREBASE_CLIENT_EMAIL: clientEmail, FIREBASE_PRIVATE_KEY: privateKey } = process.env;
-    if (!projectId || !clientEmail || !privateKey) throw new Error('Firebase Admin is not configured on the server.');
+    if (!projectId || !clientEmail || !privateKey) throw httpError(503, 'Account services are not configured on the server. Please contact support.');
     admin.initializeApp({ credential: admin.credential.cert({ projectId, clientEmail, privateKey: privateKey.replace(/\\n/g, '\n') }) });
   }
   const databaseId = process.env.FIREBASE_DATABASE_ID || process.env.VITE_FIREBASE_DATABASE_ID;
@@ -25,7 +25,16 @@ export async function authenticated(req, getServices = services) {
   const token = /^Bearer ([^\s]+)$/.exec(req.headers.authorization || '')?.[1];
   if (!token) throw httpError(401, 'Sign in before using this service.');
   try { return await getServices().auth.verifyIdToken(token, true); }
-  catch { throw httpError(401, 'Your sign-in has expired. Sign in again.'); }
+  catch (error) {
+    if (error.status === 503) throw error;
+    if (['auth/id-token-expired', 'auth/id-token-revoked', 'auth/invalid-id-token', 'auth/argument-error', 'auth/user-not-found'].includes(error.code)) {
+      throw httpError(401, 'Your sign-in needs to be refreshed. Sign in again.');
+    }
+    if (error.code === 'auth/user-disabled') throw httpError(403, 'This account is disabled. Please contact support.');
+    // Log only a bounded diagnostic code, never tokens or credential contents.
+    console.error('Account verification unavailable:', /^[a-z/-]{1,100}$/i.test(error.code || '') ? error.code : 'server-configuration-or-network');
+    throw httpError(503, 'Account verification is temporarily unavailable on the server. Please try again later.');
+  }
 }
 export function returnUrl(candidate, fallback) {
   if (!candidate) return `${webOrigin()}/${fallback}`;

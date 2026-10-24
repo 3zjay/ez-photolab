@@ -6,7 +6,18 @@ import { createHandler, matchesChallenge } from '../api/desktop-auth.js';
 import { configuredPrice } from '../api/create-checkout-session.js';
 import checkout from '../api/create-checkout-session.js';
 import portal from '../api/create-portal-session.js';
+import { authenticated, httpError } from '../api/_lib/server.js';
 const require = createRequire(import.meta.url);
+test('authentication keeps server failures distinct from expired or revoked sessions', async () => {
+  const req = { headers: { authorization: 'Bearer test-token' } };
+  for (const code of ['auth/id-token-expired', 'auth/id-token-revoked', 'auth/invalid-id-token']) {
+    await assert.rejects(authenticated(req, () => ({ auth: { verifyIdToken: async () => { throw Object.assign(new Error('test'), { code }); } } })), error => error.status === 401);
+  }
+  await assert.rejects(authenticated(req, () => { throw httpError(503, 'Account services are not configured on the server.'); }), error => error.status === 503 && error.message.includes('not configured'));
+  for (const code of ['auth/invalid-credential', 'auth/insufficient-permission', 'app/invalid-credential', 'app/network-error']) {
+    await assert.rejects(authenticated(req, () => ({ auth: { verifyIdToken: async () => { throw Object.assign(new Error('private credential detail'), { code }); } } })), error => error.status === 503 && !error.message.includes('private credential'));
+  }
+});
 const { signIn, validExternalUrl } = require('../electron/auth-service.cjs');
 const verifier = 'a'.repeat(43), state = 'b'.repeat(43);
 const challenge = createHash('sha256').update(verifier).digest('base64url');
