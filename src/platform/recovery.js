@@ -24,7 +24,7 @@ async function encode(value) {
   if (value == null || ['number', 'boolean', 'string'].includes(typeof value)) return typeof value === 'string' && value.startsWith('blob:') ? null : value;
   if (value.photoLabNative) return { $nativeHandle: { id: value.id, name: value.name, kind: value.kind } };
   if (value instanceof File) {
-    if (value.photoLabId) return { $nativeFile: value.photoLabId };
+    if (value.photoLabId) return { $nativeFile: value.photoLabId, name: value.name, size: value.size, lastModified: value.lastModified };
     return { $file: { name: value.name, type: value.type, lastModified: value.lastModified, data: await new Promise((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(reader.result); reader.onerror = () => reject(reader.error); reader.readAsDataURL(value); }) } };
   }
   if (value instanceof HTMLImageElement) return { $image: value.src };
@@ -36,7 +36,7 @@ async function decode(value) {
   if (!value || typeof value !== 'object') return value;
   if (value instanceof Blob || value instanceof Float32Array || (value.kind && typeof value.queryPermission === 'function')) return value;
   if (value.$nativeHandle) return nativeHandle(value.$nativeHandle);
-  if (value.$nativeFile) return nativeHandle({ id: value.$nativeFile, kind: 'file' }).getFile();
+  if (value.$nativeFile) return nativeHandle({ id: value.$nativeFile, kind: 'file', name: value.name, size: value.size, lastModified: value.lastModified }).getFile();
   if (value.$file) { const file = value.$file; return new File([await (await fetch(file.data)).blob()], file.name, { type: file.type, lastModified: file.lastModified }); }
   if (value.$image) { const image = new Image(); image.src = value.$image; await image.decode(); return image; }
   if (value.$float32) return new Float32Array(value.$float32);

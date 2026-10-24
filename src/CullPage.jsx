@@ -643,14 +643,30 @@ export default function CullPage({
     }
 
     let url = null;
+    let cancelled = false;
     if (activePhoto.previewUrl) {
       setActivePhotoUrl(activePhoto.previewUrl);
+    } else if (activePhoto.thumbnailUrl) {
+      setActivePhotoUrl(activePhoto.thumbnailUrl);
+      if (activePhoto.file) {
+        activePhoto.file.arrayBuffer().then(buf => {
+          if (!cancelled) {
+            url = URL.createObjectURL(new Blob([buf], { type: activePhoto.file.type || 'image/jpeg' }));
+            setActivePhotoUrl(url);
+          }
+        }).catch(err => console.warn("Failed to load full photo", err));
+      }
     } else if (activePhoto.file) {
-      url = URL.createObjectURL(activePhoto.file);
-      setActivePhotoUrl(url);
+      activePhoto.file.arrayBuffer().then(buf => {
+        if (!cancelled) {
+          url = URL.createObjectURL(new Blob([buf], { type: activePhoto.file.type || 'image/jpeg' }));
+          setActivePhotoUrl(url);
+        }
+      }).catch(err => console.warn("Failed to load photo", err));
     }
 
     return () => {
+      cancelled = true;
       if (url) {
         URL.revokeObjectURL(url);
       }

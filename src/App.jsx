@@ -910,10 +910,9 @@ export default function App() {
     if (isRaw) {
       setRawLoading(true);
       setRawProgressMsg("Initializing RAW parser...");
-      const reader = new FileReader();
-      reader.onload = async e => {
+      (async () => {
         try {
-          const buffer = e.target.result;
+          const buffer = await file.arrayBuffer();
           const result = await decodeRaw(buffer, (msg) => {
             setRawProgressMsg(msg);
           });
@@ -975,48 +974,52 @@ export default function App() {
           setRawLoading(false);
           setRawProgressMsg("");
         }
-      };
-      reader.onerror = () => {
-        alert("Failed to read RAW file.");
-        setRawLoading(false);
-        setRawProgressMsg("");
-      };
-      reader.readAsArrayBuffer(file);
+      })();
     } else {
-      const reader = new FileReader();
-      reader.onload = e => {
-        resetAll();
-        setImage(e.target.result);
-        setOriginalImage(e.target.result);
-        setActiveTab("edit");
-        setFilters(DEFAULT_FILTERS);
-        setRotation(0);
-        setFlipH(false);
-        setFlipV(false);
-        setLutId('none');
-        setLutIntensity(1.0);
-        setCustomLutData(null);
-        setCustomLutName('');
-        setTexts([]);
-        setSelText(null);
-        setCropMode(false);
-        setCropBox({ x: 0, y: 0, w: 100, h: 100 });
-        setBgStatus("idle");
-        setBgSubUrl(null);
-        setBgResult(null);
-        setEraseHistory([]);
-        setAccentAi(0);
-        setStructureAi(0);
-        setSkyMode('none');
-        setRelightNear(0);
-        setRelightFar(0);
-        setAiBeautySmooth(0);
-        setAiBeautyClarity(0);
-        setAiBeautyGlow(0);
-        setSplitPos(50);
-        setShowBefore(false);
-      };
-      reader.readAsDataURL(file);
+      (async () => {
+        try {
+          const buffer = await file.arrayBuffer();
+          const blob = new Blob([buffer], { type: file.type || 'image/jpeg' });
+          const reader = new FileReader();
+          reader.onload = e => {
+            resetAll();
+            setImage(e.target.result);
+            setOriginalImage(e.target.result);
+            setActiveTab("edit");
+            setFilters(DEFAULT_FILTERS);
+            setRotation(0);
+            setFlipH(false);
+            setFlipV(false);
+            setLutId('none');
+            setLutIntensity(1.0);
+            setCustomLutData(null);
+            setCustomLutName('');
+            setTexts([]);
+            setSelText(null);
+            setCropMode(false);
+            setCropBox({ x: 0, y: 0, w: 100, h: 100 });
+            setBgStatus("idle");
+            setBgSubUrl(null);
+            setBgResult(null);
+            setEraseHistory([]);
+            setAccentAi(0);
+            setStructureAi(0);
+            setSkyMode('none');
+            setRelightNear(0);
+            setRelightFar(0);
+            setAiBeautySmooth(0);
+            setAiBeautyClarity(0);
+            setAiBeautyGlow(0);
+            setSplitPos(50);
+            setShowBefore(false);
+          };
+          reader.onerror = () => alert("Failed to read image file.");
+          reader.readAsDataURL(blob);
+        } catch (err) {
+          console.error("Failed to read photo:", err);
+          alert("Error reading photo: " + err.message);
+        }
+      })();
     }
   };
 
@@ -1555,14 +1558,32 @@ export default function App() {
     try {
       const handle = await pickDirectory();
       setSourceHandle(handle);
-      const files = [];
+      setCullSourceHandle(handle);
+      const stdFiles = [];
+      const rawFiles = [];
+      const cullAllFiles = [];
       const imageRegex = /\.(jpg|jpeg|png|webp)$/i;
+      const rawRegex = RAW_REGEX || /\.(nef|nrw|cr2|cr3|crw|arw|srf|sr2|dng|orf|raf|rw2|pef|x3f)$/i;
       const scan = async (dirHandle, depth = 0) => {
         for await (const entry of dirHandle.values()) {
-          if (entry.kind === 'file' && entry.name.match(imageRegex)) {
+          if (entry.kind === 'file') {
             try {
-              const file = await entry.getFile();
-              files.push({ name: entry.name, file });
+              if (entry.name.match(imageRegex)) {
+                const file = await entry.getFile();
+                const item = { name: entry.name, file };
+                stdFiles.push(item);
+                cullAllFiles.push(item);
+              } else if (entry.name.match(rawRegex)) {
+                const file = await entry.getFile();
+                const item = { name: entry.name, file, isRaw: true };
+                cullAllFiles.push(item);
+                rawFiles.push({
+                  name: entry.name,
+                  file,
+                  previewUrl: null,
+                  metadata: { model: 'RAW File', iso: '...', width: 0, height: 0 }
+                });
+              }
             } catch (fileErr) {
               console.warn(`Could not read ${entry.name}:`, fileErr);
             }
@@ -1576,12 +1597,18 @@ export default function App() {
         }
       };
       await scan(handle);
-      setBatchImages(files);
+      setBatchImages(stdFiles);
+      setBatchRawFiles(rawFiles);
+      setCullImages(cullAllFiles);
       setBatchDone(false);
-      if (files.length === 0) {
-        addBatchLog("⚠️ No JPG/PNG/WebP images found in the selected folder.", "warning");
+      if (rawFiles.length > 0 && stdFiles.length === 0) {
+        setBatchSection("raw");
+      }
+      const totalCount = stdFiles.length + rawFiles.length;
+      if (totalCount === 0) {
+        addBatchLog("⚠️ No images or RAW files found in the selected folder.", "warning");
       } else {
-        addBatchLog(`✅ Loaded ${files.length} images from folder.`, "success");
+        addBatchLog(`✅ Loaded ${totalCount} photos (${stdFiles.length} standard, ${rawFiles.length} RAW) from folder.`, "success");
       }
     } catch (err) {
       if (err.name !== 'AbortError') {
@@ -1595,6 +1622,7 @@ export default function App() {
     try {
       const handle = await pickDirectory();
       setCullSourceHandle(handle);
+      setSourceHandle(handle);
       setGroups([]);
       setCullResults([]);
       setCullActiveGroupIndex(0);
@@ -1603,7 +1631,7 @@ export default function App() {
       const stdFiles = [];
       const rawFiles = [];
       const imageRegex = /\.(jpg|jpeg|png|webp)$/i;
-      const rawRegex = RAW_REGEX || /\.(nef|cr2|cr3|arw|dng|orf|raf|rw2|pef|x3f)$/i;
+      const rawRegex = RAW_REGEX || /\.(nef|nrw|cr2|cr3|crw|arw|srf|sr2|dng|orf|raf|rw2|pef|x3f)$/i;
       const scan = async (dirHandle, depth = 0) => {
         for await (const entry of dirHandle.values()) {
           if (entry.kind === 'file') {
@@ -1638,12 +1666,13 @@ export default function App() {
       };
       await scan(handle);
       setCullImages(files);
-
-      if (batchImages.length === 0 && batchRawFiles.length === 0) {
-        setSourceHandle(handle);
-        if (stdFiles.length > 0) setBatchImages(stdFiles);
-        if (rawFiles.length > 0) setBatchRawFiles(rawFiles);
+      setBatchImages(stdFiles);
+      setBatchRawFiles(rawFiles);
+      if (rawFiles.length > 0 && stdFiles.length === 0) {
+        setBatchSection("raw");
       }
+      setBatchDone(false);
+      addBatchLog(`✅ Loaded ${files.length} photos ready for culling.`, "success");
     } catch (err) {
       if (err.name !== 'AbortError') console.error(err);
     }
@@ -1702,15 +1731,32 @@ export default function App() {
     try {
       const handle = await pickDirectory();
       setSourceHandle(handle);
-      const files = [];
-      
-      addBatchLog("Scanning folder for RAW files...", "info");
+      setCullSourceHandle(handle);
+      const stdFiles = [];
+      const rawFiles = [];
+      const cullAllFiles = [];
+      const imageRegex = /\.(jpg|jpeg|png|webp)$/i;
+      const rawRegex = RAW_REGEX || /\.(nef|nrw|cr2|cr3|crw|arw|srf|sr2|dng|orf|raf|rw2|pef|x3f)$/i;
       const scan = async (dirHandle, depth = 0) => {
         for await (const entry of dirHandle.values()) {
-          if (entry.kind === 'file' && entry.name.match(RAW_REGEX)) {
+          if (entry.kind === 'file') {
             try {
-              const file = await entry.getFile();
-              files.push({ name: entry.name, file });
+              if (entry.name.match(rawRegex)) {
+                const file = await entry.getFile();
+                const item = { name: entry.name, file, isRaw: true };
+                cullAllFiles.push(item);
+                rawFiles.push({
+                  name: entry.name,
+                  file,
+                  previewUrl: null,
+                  metadata: { model: 'RAW File', iso: '...', width: 0, height: 0 }
+                });
+              } else if (entry.name.match(imageRegex)) {
+                const file = await entry.getFile();
+                const item = { name: entry.name, file };
+                stdFiles.push(item);
+                cullAllFiles.push(item);
+              }
             } catch (fileErr) {
               console.warn(`Could not read ${entry.name}:`, fileErr);
             }
@@ -1724,26 +1770,16 @@ export default function App() {
         }
       };
       await scan(handle);
-      
-      if (files.length === 0) {
-        addBatchLog("⚠️ No RAW files found in the selected folder.", "warning");
-      } else {
-        addBatchLog(`✅ Found ${files.length} RAW files. Ready for processing.`, "success");
-      }
-
-      const rawQueue = files.map(f => ({
-        name: f.name,
-        file: f.file,
-        previewUrl: null,
-        metadata: { model: 'RAW File', iso: '...', width: 0, height: 0 }
-      }));
-      
-      setBatchRawFiles(rawQueue);
+      setBatchRawFiles(rawFiles);
+      setBatchImages(stdFiles);
+      setCullImages(cullAllFiles);
+      setBatchSection("raw");
       setBatchDone(false);
-    } catch (err) { 
+      addBatchLog(`✅ Found ${rawFiles.length} RAW files. Ready for processing.`, "success");
+    } catch (err) {
       if (err.name !== 'AbortError') {
         addBatchLog(`❌ Folder Error: ${err.message}`, "error");
-        console.error(err); 
+        console.error(err);
       }
     }
   };
@@ -1813,12 +1849,9 @@ export default function App() {
           setBatchRawFiles(prev => prev.map((f, i) => i === idx ? { ...f, previewUrl: result.url, metadata: { ...f.metadata, orientation } } : f));
         }
       } else {
-        origUrl = await new Promise((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = e => resolve(e.target.result);
-          reader.onerror = reject;
-          reader.readAsDataURL(targetFile.file);
-        });
+        const buffer = await targetFile.file.arrayBuffer();
+        const blob = new Blob([buffer], { type: targetFile.file.type || 'image/jpeg' });
+        origUrl = URL.createObjectURL(blob);
       }
 
       const img = await new Promise((resolve, reject) => {
@@ -2034,16 +2067,24 @@ export default function App() {
       const { name, file } = filesToProcess[i];
       setBatchProgress({ current: i + 1, total: filesToProcess.length, currentFile: name });
       try {
-        const img = await new Promise((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = (e) => {
+        const img = await new Promise(async (resolve, reject) => {
+          try {
+            const buffer = await file.arrayBuffer();
+            const blob = new Blob([buffer], { type: file.type || 'image/jpeg' });
+            const blobUrl = URL.createObjectURL(blob);
             const image = new Image();
-            image.onload = () => resolve(image);
-            image.onerror = reject;
-            image.src = e.target.result;
-          };
-          reader.onerror = reject;
-          reader.readAsDataURL(file);
+            image.onload = () => {
+              URL.revokeObjectURL(blobUrl);
+              resolve(image);
+            };
+            image.onerror = (e) => {
+              URL.revokeObjectURL(blobUrl);
+              reject(new Error(`Failed to decode image ${name}`));
+            };
+            image.src = blobUrl;
+          } catch (err) {
+            reject(err);
+          }
         });
 
         let { W, H } = calcBatchDims(

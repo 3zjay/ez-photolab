@@ -342,7 +342,9 @@ export async function analyzePhotoExposure(imgObj, darkThreshold = 46) {
         const blob = await response.blob();
         imageBitmap = await createImageBitmap(blob);
       } else {
-        imageBitmap = await createImageBitmap(imgObj.file);
+        const buffer = await imgObj.file.arrayBuffer();
+        const blob = new Blob([buffer], { type: imgObj.file.type || 'image/jpeg' });
+        imageBitmap = await createImageBitmap(blob);
       }
     } else if (imgObj.previewUrl) {
       const response = await fetch(imgObj.previewUrl);
@@ -556,7 +558,9 @@ export async function cullBatch(images, options = {}, onProgress) {
           imageBitmap = await createImageBitmap(blob);
           previewUrl = decoded.url; // Use the extracted preview JPEG for UI display
         } else {
-          imageBitmap = await createImageBitmap(imgObj.file);
+          const buffer = await imgObj.file.arrayBuffer();
+          const blob = new Blob([buffer], { type: imgObj.file.type || 'image/jpeg' });
+          imageBitmap = await createImageBitmap(blob);
         }
       } else if (imgObj.previewUrl) {
         const response = await fetch(imgObj.previewUrl);

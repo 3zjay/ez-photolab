@@ -43,7 +43,10 @@ class FileService {
     const id = randomUUID();
     this.handles.set(id, entry);
     const name = path.basename(entry.path) || entry.path;
-    return { id, kind: entry.kind, name };
+    const res = { id, kind: entry.kind, name };
+    if (entry.size !== undefined) res.size = entry.size;
+    if (entry.lastModified !== undefined) res.lastModified = entry.lastModified;
+    return res;
   }
   async grantDirectory(filename, writable = false) {
     const real = await fs.realpath(filename).catch(() => path.resolve(filename));
@@ -53,8 +56,9 @@ class FileService {
   }
   async grantFile(filename) {
     const real = await fs.realpath(filename).catch(() => path.resolve(filename));
+    const stat = await fs.stat(real).catch(() => null);
     this.protectedFiles.add(key(real));
-    return this.add({ path: real, root: path.dirname(real), kind: 'file', writable: false });
+    return this.add({ path: real, root: path.dirname(real), kind: 'file', writable: false, size: stat?.size || 0, lastModified: stat?.mtimeMs || Date.now() });
   }
   async get(id, kind) {
     const entry = this.handles.get(id);
@@ -73,9 +77,20 @@ class FileService {
   async list(id) {
     const directory = await this.get(id, 'directory');
     const entries = await fs.readdir(directory.path, { withFileTypes: true });
-    return entries.filter(item => !item.isSymbolicLink() && (item.isFile() || item.isDirectory()))
-      .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }))
-      .map(item => this.add({ ...directory, path: path.join(directory.path, item.name), kind: item.isDirectory() ? 'directory' : 'file' }));
+    const items = entries.filter(item => !item.isSymbolicLink() && (item.isFile() || item.isDirectory()))
+      .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+    return Promise.all(items.map(async item => {
+      const fullPath = path.join(directory.path, item.name);
+      let size = 0, lastModified = Date.now();
+      if (item.isFile()) {
+        try {
+          const stat = await fs.stat(fullPath);
+          size = stat.size;
+          lastModified = stat.mtimeMs;
+        } catch {}
+      }
+      return this.add({ ...directory, path: fullPath, kind: item.isDirectory() ? 'directory' : 'file', size, lastModified });
+    }));
   }
   async child(id, name, kind, create = false) {
     validName(name);
@@ -87,7 +102,7 @@ class FileService {
     const stat = await fs.lstat(filename).catch(error => { if (error.code !== 'ENOENT') throw error; return null; });
     if (!stat && !create) { const error = new Error('File does not exist.'); error.code = 'ENOENT'; throw error; }
     if (stat?.isSymbolicLink() || (stat && (kind === 'directory' ? !stat.isDirectory() : !stat.isFile()))) throw new Error('Unsupported file or folder link.');
-    return this.add({ ...parent, path: filename, kind });
+    return this.add({ ...parent, path: filename, kind, size: stat?.size || 0, lastModified: stat?.mtimeMs || Date.now() });
   }
   async read(id) {
     const entry = await this.get(id, 'file');

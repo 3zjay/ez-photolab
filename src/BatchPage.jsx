@@ -260,7 +260,7 @@ export function BatchPage({ dm, cardBg, cardBdr, inputSt, isMobile = false,
       );
     });
   }, [isRaw, currentFiles, filteredCurrentFiles, batchPreviewIdx, dm, cardBdr]);
-  const canProcess = !batchProcessing && sourceHandle && outputHandle && filteredCurrentFiles.length > 0;
+  const canProcess = !batchProcessing && sourceHandle && outputHandle && (filteredCurrentFiles.length > 0 || (!isRaw && batchRawFiles.length > 0));
 
   const activeEnhancements = [
     batchResizeMode !== "none" && "📐 Resize",
@@ -289,7 +289,20 @@ export function BatchPage({ dm, cardBg, cardBdr, inputSt, isMobile = false,
               <div style={{ fontSize: "11px", color: "#aaa" }}>{isRaw ? "NEF · CR2 · ARW" : "JPG · PNG · WebP"}</div>
             </div>
           </div>
-          : <div style={{ fontSize: "11px", color: "#bbb", textAlign: "center", padding: "6px 0" }}>{isRaw ? "Professional RAW formats" : "JPG, PNG, WebP accepted"}</div>}
+          : !isRaw && batchRawFiles.length > 0
+            ? <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 12px", background: dm ? '#1a2a3a' : '#eff6ff', border: "1.5px solid #93c5fd", borderRadius: "8px", gap: "8px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <span style={{ fontSize: "20px" }}>📸</span>
+                  <div>
+                    <div style={{ fontSize: "13px", fontWeight: 700, color: "#2563eb" }}>{batchRawFiles.length} RAW files detected</div>
+                    <div style={{ fontSize: "11px", color: dm ? "#94a3b8" : "#64748b" }}>Switch to RAW Batch mode to process</div>
+                  </div>
+                </div>
+                <button onClick={() => setBatchSection("raw")} style={{ padding: "6px 12px", background: "#3b82f6", color: "#fff", border: "none", borderRadius: "6px", fontSize: "12px", fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>
+                  Switch to RAW →
+                </button>
+              </div>
+            : <div style={{ fontSize: "11px", color: "#bbb", textAlign: "center", padding: "6px 0" }}>{isRaw ? "Professional RAW formats" : "JPG, PNG, WebP accepted"}</div>}
       </Card>
     );
   };
@@ -1278,7 +1291,15 @@ export function BatchPage({ dm, cardBg, cardBdr, inputSt, isMobile = false,
             </button>
           )}
           <button
-            onClick={() => isRaw ? handleRawBatchProcess(0) : handleBatchProcess(0)}
+            onClick={() => {
+              if (isRaw) {
+                handleRawBatchProcess(0);
+              } else if (batchImages.length === 0 && batchRawFiles.length > 0) {
+                handleRawBatchProcess(0);
+              } else {
+                handleBatchProcess(0);
+              }
+            }}
             disabled={!canProcess}
             style={{ padding: "10px 24px", border: "none", borderRadius: "10px", fontFamily: "inherit", fontWeight: 700, fontSize: "14px", cursor: canProcess ? "pointer" : "not-allowed",
               background: canProcess ? "linear-gradient(135deg,#6c63ff,#a78bfa)" : (dm ? '#333' : '#ddd'),
@@ -1288,7 +1309,11 @@ export function BatchPage({ dm, cardBg, cardBdr, inputSt, isMobile = false,
             {batchProcessing
               ? <><Spin />Processing {batchProgress.current}/{batchProgress.total}…</>
               : batchDone ? "✅ Done — Run Again"
-                : canProcess ? `⚡ Process ${filteredCurrentFiles.length} Image${filteredCurrentFiles.length !== 1 ? "s" : ""}`
+                : canProcess ? (
+                    !isRaw && batchImages.length === 0 && batchRawFiles.length > 0
+                      ? `⚡ Process ${batchRawFiles.length} RAW File${batchRawFiles.length !== 1 ? "s" : ""}`
+                      : `⚡ Process ${filteredCurrentFiles.length} Image${filteredCurrentFiles.length !== 1 ? "s" : ""}`
+                  )
                   : !sourceHandle ? "Select source folder →"
                     : !outputHandle ? "Select output folder →"
                       : "Add images to source folder"}

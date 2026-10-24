@@ -8,7 +8,31 @@ export async function unwrap(result) {
   }
   return response.value;
 }
-const mimeType = name => ({ jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp', xmp: 'application/xml' })[name.split('.').pop().toLowerCase()] || 'application/octet-stream';
+const mimeType = name => {
+  if (!name || typeof name !== 'string') return 'application/octet-stream';
+  const ext = name.split('.').pop()?.toLowerCase();
+  return ({
+    jpg: 'image/jpeg',
+    jpeg: 'image/jpeg',
+    png: 'image/png',
+    webp: 'image/webp',
+    xmp: 'application/xml',
+    nef: 'image/x-nikon-nef',
+    nrw: 'image/x-nikon-nrw',
+    cr2: 'image/x-canon-cr2',
+    cr3: 'image/x-canon-cr3',
+    crw: 'image/x-canon-crw',
+    arw: 'image/x-sony-arw',
+    srf: 'image/x-sony-srf',
+    sr2: 'image/x-sony-sr2',
+    dng: 'image/x-adobe-dng',
+    orf: 'image/x-olympus-orf',
+    raf: 'image/x-fuji-raf',
+    rw2: 'image/x-panasonic-rw2',
+    pef: 'image/x-pentax-pef'
+  })[ext] || 'application/octet-stream';
+};
+
 export function nativeHandle(descriptor) {
   if (!descriptor) throw new DOMException('Selection cancelled', 'AbortError');
   const handle = {
@@ -17,9 +41,42 @@ export function nativeHandle(descriptor) {
     queryPermission: async () => 'granted',
     requestPermission: async () => 'granted',
     getFile: async () => {
-      const data = await unwrap(window.photoLab.read(descriptor.id));
-      const file = new File([data.bytes], data.name, { type: mimeType(data.name), lastModified: data.lastModified });
+      let cachedBytes = null;
+      const getBytes = async () => {
+        if (!cachedBytes) {
+          const data = await unwrap(window.photoLab.read(descriptor.id));
+          cachedBytes = data.bytes;
+        }
+        return cachedBytes;
+      };
+      const fileName = descriptor.name || 'image.jpg';
+      const file = new File([], fileName, {
+        type: mimeType(fileName),
+        lastModified: descriptor.lastModified || Date.now()
+      });
+      Object.defineProperty(file, 'size', { value: descriptor.size || 0, configurable: true });
       Object.defineProperty(file, 'photoLabId', { value: descriptor.id });
+      file.arrayBuffer = async () => {
+        const bytes = await getBytes();
+        return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+      };
+      file.text = async () => new TextDecoder().decode(await getBytes());
+      file.slice = (start = 0, end, contentType) => {
+        if (cachedBytes) {
+          const sliceBytes = cachedBytes.slice(start, end !== undefined ? end : cachedBytes.length);
+          return new Blob([sliceBytes], { type: contentType || mimeType(fileName) });
+        }
+        return new Blob([], { type: contentType || mimeType(fileName) });
+      };
+      file.stream = () => {
+        return new ReadableStream({
+          async start(controller) {
+            const bytes = await getBytes();
+            controller.enqueue(bytes);
+            controller.close();
+          }
+        });
+      };
       return file;
     },
     getFileHandle: async (name, options = {}) => nativeHandle(await unwrap(window.photoLab.child(descriptor.id, name, 'file', Boolean(options.create)))),
@@ -65,5 +122,9 @@ export async function pickDirectory(options = {}) {
 }
 export async function openDesktopPhoto() {
   const descriptor = await unwrap(window.photoLab.openPhoto());
-  return descriptor ? nativeHandle(descriptor).getFile() : null;
+  if (!descriptor) return null;
+  const data = await unwrap(window.photoLab.read(descriptor.id));
+  const file = new File([data.bytes], data.name, { type: mimeType(data.name), lastModified: data.lastModified });
+  Object.defineProperty(file, 'photoLabId', { value: descriptor.id });
+  return file;
 }
