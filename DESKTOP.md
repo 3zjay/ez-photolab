@@ -1,10 +1,18 @@
-# PHOTOlab Desktop v2.9.0
+# PHOTOlab Desktop v2.9.1
+
+## October 24 desktop fix
+
+Restored the canvas resize, rotate and flip handlers lost during the editor merge. A populated editor now loads instead of reporting `applyCanvasPreset is not defined`.
+
+The Electron smoke test now exercises the actual application: native photo import, brightness editing and live preview, project save to disk, undo/redo, renderer reload, project reopen, and PNG export. It verifies restored settings, exported dimensions and edited pixels, and that the source photo remains unchanged. OS file selections are substituted only inside the development smoke test; the real preload, IPC handlers and file/project services are used. Results and generated fixtures remain in `.desktop-test/`.
+
+This patch is maintained on `codex/windows-desktop`; it does not update `main` or deploy the live web app. The desktop packager uses version 2.9.1 independently of the shared web package version.
 
 This is a separate Windows x64 preview built from the existing React editor. Desktop development is maintained on `codex/windows-desktop`. See [DESKTOP_MOVE_TO_ANOTHER_PC.md](DESKTOP_MOVE_TO_ANOTHER_PC.md) to clone this branch and set up another computer. No production Firebase or Stripe configuration has been changed as part of this desktop work.
 
 ## Use the preview
 
-Build an installer with `npm run desktop:dist`. The current configuration creates `release/PHOTOlab-Desktop-Preview-2.9.0-x64-Setup.exe`. Alternatively, run `release/win-unpacked/PHOTOlab Desktop Preview.exe` with the rest of that folder beside it. Generated installers are local build outputs and are not stored in Git. The installer is unsigned and intended for internal testing.
+Build an installer with `npm run desktop:dist`. The current configuration creates `release/PHOTOlab-Desktop-Preview-2.9.1-x64-Setup.exe`. Alternatively, run `release/win-unpacked/PHOTOlab Desktop Preview.exe` with the rest of that folder beside it. Generated installers are local build outputs and are not stored in Git. The installer is unsigned and intended for internal testing.
 
 Use **Open photo** to import a picture, then **Save project** to save an editable `.photolab` file. Export creates a rendered JPEG, PNG, or WebP. Opening an existing project restores its embedded images and editing settings. Projects embed a developed image for RAW imports; they are not a RAW processing recipe that re-develops the camera file.
 
@@ -54,7 +62,7 @@ $env:ELECTRON_BUILDER_CACHE = 'C:\ez-photolab\.desktop-test\builder-cache'
 npx electron-builder --win nsis --x64 --publish never
 ```
 
-Validation: 15 Node tests cover file capabilities, collision handling, backups, project parsing, crop geometry, and request restrictions. Seven Electron renderer tests cover actual canvas exports, HSL/curves, sky opacity, XMP preservation, sidecar conflicts, and culling decisions. The Electron smoke test also checks application mounting, preload access, cross-origin isolation, renderer sandboxing, and blocked production requests. The packaged window was opened and its editor observed with a photo loaded. Interactive installer installation/uninstallation and all native-dialog paths have not been comprehensively exercised.
+Validation: 18 Node tests cover file capabilities, folder access, collision handling, backups, project parsing, crop geometry, and request restrictions. Seven Electron renderer tests cover actual canvas exports, HSL/curves, sky opacity, XMP preservation, sidecar conflicts, and culling decisions. The Electron smoke test also checks the full photo workflow described above, preload access, cross-origin isolation, renderer sandboxing, and blocked production requests. Interactive installer installation/uninstallation and all native-dialog paths are not covered by the automated tests.
 
 ## Before a customer release
 

@@ -30,7 +30,7 @@ To create the Windows installer:
 npm run desktop:dist
 ```
 
-The expected output is `release/PHOTOlab-Desktop-Preview-2.9.0-x64-Setup.exe`. Installer tools are downloaded on the first packaging run. `npm run test:desktop:smoke` runs the Electron renderer checks. `npm run build` only builds the web version locally; these commands do not publish a website.
+The expected output is `release/PHOTOlab-Desktop-Preview-2.9.1-x64-Setup.exe`. Installer tools are downloaded on the first packaging run. `npm run test:desktop:smoke` runs the Electron renderer checks. `npm run build` only builds the web version locally; these commands do not publish a website.
 
 ## What is in GitHub
 

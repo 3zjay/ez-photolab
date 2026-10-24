@@ -8,7 +8,7 @@ const buttonStyle = { padding: '6px 10px', border: '1px solid #73738e', borderRa
 
 export function DesktopHome({ onEdit, onCull, onBatch }) {
   return <main style={{ maxWidth: 760, margin: '70px auto', padding: 32 }}>
-    <p style={{ color: '#a49dff', fontSize: 13, letterSpacing: 2, fontWeight: 700 }}>WINDOWS DESKTOP v2.9.0 · FULL AI STUDIO</p>
+    <p style={{ color: '#a49dff', fontSize: 13, letterSpacing: 2, fontWeight: 700 }}>WINDOWS DESKTOP v2.9.1 · FULL AI STUDIO</p>
     <h1 style={{ fontSize: 40, margin: '18px 0' }}>Professional AI Photo Studio for Windows</h1>
     <p style={{ lineHeight: 1.7, opacity: .85 }}>Fully updated with 100% on-device AI Magic Retouch, smart cutouts, tone curves, multi-layer compositing, and native folder access for fast culling and batch exports.</p>
     <div style={{ display: 'flex', gap: 12, margin: '28px 0' }}>
@@ -19,14 +19,14 @@ export function DesktopHome({ onEdit, onCull, onBatch }) {
 }
 export function DesktopAccount() {
   return <div style={{ padding: 24, border: '1px solid #666680', borderRadius: 12, lineHeight: 1.7 }}>
-    <strong>PHOTOlab Desktop v2.9.0 Status</strong>
+    <strong>PHOTOlab Desktop v2.9.1 Status</strong>
     <p>This desktop installation runs locally with full hardware acceleration. All Edit Studio features, 100% on-device AI Magic Retouch, smart cutout, tone curves, and multi-layer editing are fully active.</p>
     <p style={{ opacity: .7, marginTop: 8 }}>Local editing tools are available for preview. AI tools may need an internet connection to download models. Batch queues and culling sessions are not included in project recovery yet.</p>
   </div>;
 }
 
 export function DesktopWorkspace({ document: current, restore, loadPhoto, exportPhoto }) {
-  const [status, setStatus] = useState('PHOTOlab Desktop v2.9.0 · Local workspace');
+  const [status, setStatus] = useState('PHOTOlab Desktop v2.9.1 · Local workspace');
   const [recovery, setRecovery] = useState(null);
   const [historyState, setHistoryState] = useState({ back: 0, forward: 0 });
   const [busy, setBusy] = useState(false);

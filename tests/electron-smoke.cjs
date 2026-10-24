@@ -13,6 +13,7 @@ exports.run = async window => {
   assert.equal(window.webContents.getLastWebPreferences().contextIsolation, true);
   const dirty = await window.webContents.executeJavaScript('window.photoLab.setDirty(false)'); assert.equal(dirty.ok, true);
   const blocked = await window.webContents.executeJavaScript("fetch('https://ez-photolab.vercel.app/api/test').then(() => false).catch(() => true)"); assert.equal(blocked, true);
+  const workflow = await require('./editor-workflow.cjs').run(window);
   await window.loadURL('photolab://app/tests/renderer.html');
   let results;
   for (let i = 0; i < 150; i++) {
@@ -21,7 +22,7 @@ exports.run = async window => {
     await new Promise(resolve => setTimeout(resolve, 200));
   }
   assert.ok(results, 'Renderer test timed out');
-  const report = { app: { mounted: true, bridge: true, isolated: true, sandbox: true, productionBlocked: true }, renderer: results };
+  const report = { app: { mounted: true, bridge: true, isolated: true, sandbox: true, productionBlocked: true }, workflow, renderer: results };
   await fs.writeFile('.desktop-test/smoke-results.json', JSON.stringify(report, null, 2));
   console.log(JSON.stringify(report, null, 2));
   assert.equal(results.failed.length, 0, JSON.stringify(results.failed));

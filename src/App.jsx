@@ -1168,6 +1168,187 @@ export default function App() {
     }
   };
 
+  const applyCanvasPreset = async (preset, paddingPct = 8, fillMode = "color", fillColor = "#ffffff") => {
+    if (!image || !preset) return;
+    try {
+      // Save un-padded snapshot on first Smart Canvas Resize so switching templates/margins is non-destructive
+      if (!preCanvasImageRef.current) {
+        preCanvasImageRef.current = {
+          image,
+          bgStatus,
+          bgSubUrl,
+          bgResult
+        };
+      }
+      const snap = preCanvasImageRef.current;
+      if (preset.id === "original" || !preset.w || !preset.h) {
+        setImage(snap.image);
+        setBgStatus(snap.bgStatus);
+        setBgSubUrl(snap.bgSubUrl);
+        setBgResult(snap.bgResult);
+        return;
+      }
+
+      let baseSrc = (snap.bgStatus === "done" && snap.bgResult) ? snap.bgResult : snap.image;
+      if (rotation !== 0 || flipH || flipV) {
+        baseSrc = await cropSingleImageUrl(baseSrc, { x: 0, y: 0, w: 100, h: 100 }, rotation, flipH, flipV);
+        setRotation(0);
+        setFlipH(false);
+        setFlipV(false);
+      }
+      const img = await loadImageFromSrc(baseSrc);
+      const targetW = preset.w;
+      const targetH = preset.h;
+      const c = document.createElement("canvas");
+      c.width = targetW;
+      c.height = targetH;
+      const ctx = c.getContext("2d");
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = "high";
+
+      if (fillMode === "color") {
+        ctx.fillStyle = fillColor || "#ffffff";
+        ctx.fillRect(0, 0, targetW, targetH);
+      } else if (fillMode === "blur") {
+        let origSrc = originalImage || baseSrc;
+        if (rotation !== 0 || flipH || flipV) {
+          origSrc = await cropSingleImageUrl(origSrc, { x: 0, y: 0, w: 100, h: 100 }, rotation, flipH, flipV);
+        }
+        const origImg = await loadImageFromSrc(origSrc);
+        const coverScale = Math.max(targetW / origImg.naturalWidth, targetH / origImg.naturalHeight) * 1.1;
+        const bw = origImg.naturalWidth * coverScale;
+        const bh = origImg.naturalHeight * coverScale;
+        ctx.save();
+        ctx.filter = "blur(28px) brightness(0.95)";
+        ctx.drawImage(origImg, (targetW - bw) / 2, (targetH - bh) / 2, bw, bh);
+        ctx.restore();
+      }
+
+      const padFraction = Math.max(0, Math.min(0.45, (paddingPct || 0) / 100));
+      const availW = targetW * (1 - padFraction * 2);
+      const availH = targetH * (1 - padFraction * 2);
+      const fitScale = Math.min(availW / img.naturalWidth, availH / img.naturalHeight);
+      const drawW = Math.round(img.naturalWidth * fitScale);
+      const drawH = Math.round(img.naturalHeight * fitScale);
+      const drawX = Math.round((targetW - drawW) / 2);
+      const drawY = Math.round((targetH - drawH) / 2);
+
+      ctx.drawImage(img, drawX, drawY, drawW, drawH);
+      const resizedUrl = c.toDataURL("image/png");
+
+      if (snap.bgStatus === "done" && snap.bgSubUrl) {
+        let bakedSubUrl = snap.bgSubUrl;
+        if (rotation !== 0 || flipH || flipV) {
+          bakedSubUrl = await cropSingleImageUrl(bakedSubUrl, { x: 0, y: 0, w: 100, h: 100 }, rotation, flipH, flipV);
+        }
+        const subImg = await loadImageFromSrc(bakedSubUrl);
+        const subCanvas = document.createElement("canvas");
+        subCanvas.width = targetW;
+        subCanvas.height = targetH;
+        const sCtx = subCanvas.getContext("2d");
+        sCtx.imageSmoothingEnabled = true;
+        sCtx.imageSmoothingQuality = "high";
+        sCtx.drawImage(subImg, drawX, drawY, drawW, drawH);
+        const resizedSubUrl = subCanvas.toDataURL("image/png");
+        setBgSubUrl(resizedSubUrl);
+        setBgResult(resizedUrl);
+        if (fillMode === "color" && bgMode === "transparent") {
+          setBgMode("color");
+          setBgColor(fillColor || "#ffffff");
+        } else if (fillMode === "transparent" && bgMode === "color") {
+          setBgMode("transparent");
+        }
+      }
+      setImage(resizedUrl);
+      setCropMode(false);
+      setCropBox({ x: 0, y: 0, w: 100, h: 100 });
+    } catch (e) {
+      console.error("Smart canvas resize failed:", e);
+    }
+  };
+
+  const handleRotateStep = async (deg) => {
+    if (!image) return;
+    try {
+      const rot = (deg + 360) % 360;
+      const [newMain, newOrig] = await Promise.all([
+        cropSingleImageUrl(image, { x: 0, y: 0, w: 100, h: 100 }, rot, false, false),
+        originalImage ? cropSingleImageUrl(originalImage, { x: 0, y: 0, w: 100, h: 100 }, rot, false, false) : null
+      ]);
+      setImage(newMain);
+      if (newOrig) setOriginalImage(newOrig);
+
+      if (bgStatus === "done" && bgSubUrl) {
+        const [newSub, newRes] = await Promise.all([
+          cropSingleImageUrl(bgSubUrl, { x: 0, y: 0, w: 100, h: 100 }, rot, false, false),
+          bgResult ? cropSingleImageUrl(bgResult, { x: 0, y: 0, w: 100, h: 100 }, rot, false, false) : null
+        ]);
+        setBgSubUrl(newSub);
+        if (newRes) setBgResult(newRes);
+      }
+
+      // Rotate existing text layers so they stay locked to visual positions on the photo
+      setTexts(prev => prev.map(t => {
+        let nx = t.x;
+        let ny = t.y;
+        if (rot === 90) {
+          nx = 100 - t.y;
+          ny = t.x;
+        } else if (rot === 180) {
+          nx = 100 - t.x;
+          ny = 100 - t.y;
+        } else if (rot === 270) {
+          nx = t.y;
+          ny = 100 - t.x;
+        }
+        return {
+          ...t,
+          x: Math.round(nx * 10) / 10,
+          y: Math.round(ny * 10) / 10,
+          rotation: ((t.rotation || 0) + rot) % 360
+        };
+      }));
+
+      setCropBox({ x: 0, y: 0, w: 100, h: 100 });
+      preCanvasImageRef.current = null;
+    } catch (e) {
+      console.error("Rotate step failed:", e);
+    }
+  };
+
+  const handleFlipStep = async (axis) => {
+    if (!image) return;
+    try {
+      const fH = axis === 'H';
+      const fV = axis === 'V';
+      const [newMain, newOrig] = await Promise.all([
+        cropSingleImageUrl(image, { x: 0, y: 0, w: 100, h: 100 }, 0, fH, fV),
+        originalImage ? cropSingleImageUrl(originalImage, { x: 0, y: 0, w: 100, h: 100 }, 0, fH, fV) : null
+      ]);
+      setImage(newMain);
+      if (newOrig) setOriginalImage(newOrig);
+
+      if (bgStatus === "done" && bgSubUrl) {
+        const [newSub, newRes] = await Promise.all([
+          cropSingleImageUrl(bgSubUrl, { x: 0, y: 0, w: 100, h: 100 }, 0, fH, fV),
+          bgResult ? cropSingleImageUrl(bgResult, { x: 0, y: 0, w: 100, h: 100 }, 0, fH, fV) : null
+        ]);
+        setBgSubUrl(newSub);
+        if (newRes) setBgResult(newRes);
+      }
+
+      setTexts(prev => prev.map(t => ({
+        ...t,
+        x: fH ? (100 - t.x) : t.x,
+        y: fV ? (100 - t.y) : t.y
+      })));
+
+      preCanvasImageRef.current = null;
+    } catch (e) {
+      console.error("Flip step failed:", e);
+    }
+  };
+
   const addText = () => {
     const id = Date.now();
     setTexts(p => [
