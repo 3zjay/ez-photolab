@@ -7,3 +7,6 @@ dist-desktop/
 release/
 .desktop-test/
 package-lock.json
+transfer/
+run-stderr.log
+run-stdout.log

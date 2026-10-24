@@ -1,10 +1,10 @@
 # PHOTOlab Desktop v2.9.0
 
-This is a separate Windows x64 preview built from the existing React editor. Work is on `codex/windows-desktop`. No changes have been pushed, no Vercel deployment has been performed, and no production Firebase or Stripe configuration has been changed.
+This is a separate Windows x64 preview built from the existing React editor. Desktop development is maintained on `codex/windows-desktop`. See [DESKTOP_MOVE_TO_ANOTHER_PC.md](DESKTOP_MOVE_TO_ANOTHER_PC.md) to clone this branch and set up another computer. No production Firebase or Stripe configuration has been changed as part of this desktop work.
 
 ## Use the preview
 
-Run the installer in `release/final/PHOTOlab-Desktop-Preview-0.1.0-x64-Setup.exe`, or run `release/final/win-unpacked/PHOTOlab Desktop Preview.exe` with the rest of that folder beside it. The installer is unsigned and intended for internal testing. It has not been installed on this machine as part of development.
+Build an installer with `npm run desktop:dist`. The current configuration creates `release/PHOTOlab-Desktop-Preview-2.9.0-x64-Setup.exe`. Alternatively, run `release/win-unpacked/PHOTOlab Desktop Preview.exe` with the rest of that folder beside it. Generated installers are local build outputs and are not stored in Git. The installer is unsigned and intended for internal testing.
 
 Use **Open photo** to import a picture, then **Save project** to save an editable `.photolab` file. Export creates a rendered JPEG, PNG, or WebP. Opening an existing project restores its embedded images and editing settings. Projects embed a developed image for RAW imports; they are not a RAW processing recipe that re-develops the camera file.
 
