@@ -129,6 +129,7 @@ const TimelineItem = memo(({ grp, idx, isCurrent, onClick, accent, darkThreshold
 });
 
 export default function CullPage({
+  cullOptions, setCullOptions,
   dm,
   cardBg,
   cardBdr,
@@ -155,13 +156,14 @@ export default function CullPage({
   activeAlternateIndex,
   setActiveAlternateIndex
 }) {
+  const option = key => [cullOptions[key], value => setCullOptions(previous => ({ ...previous, [key]: typeof value === "function" ? value(previous[key]) : value }))];
   // Option Parameters
-  const [sensitivity, setSensitivity] = useState(12);
-  const [blurCutoff, setBlurCutoff] = useState(50);
-  const [useFaceLandmarks, setUseFaceLandmarks] = useState(true);
-  const [darkThreshold, setDarkThreshold] = useState(46);
-  const [enableExposureCheck, setEnableExposureCheck] = useState(true);
-  const [separateExposureGroups, setSeparateExposureGroups] = useState(true);
+  const [sensitivity, setSensitivity] = option("sensitivity");
+  const [blurCutoff, setBlurCutoff] = option("blurCutoff");
+  const [useFaceLandmarks, setUseFaceLandmarks] = option("useFaceLandmarks");
+  const [darkThreshold, setDarkThreshold] = option("darkThreshold");
+  const [enableExposureCheck, setEnableExposureCheck] = option("enableExposureCheck");
+  const [separateExposureGroups, setSeparateExposureGroups] = option("separateExposureGroups");
 
   // 1. Organizes results into matching duplicate clusters with strict exposure separation
   const rebuildGroups = useCallback((results, customThreshold = darkThreshold, customSep = separateExposureGroups) => {

@@ -1,5 +1,7 @@
-import { isDesktop, previewUser, pickDirectory } from "./platform/desktop";
-import { DesktopWorkspace, DesktopHome, DesktopAccount } from "./platform/DesktopWorkspace";
+import { isDesktop, pickDirectory, unwrap } from "./platform/desktop";
+import { DesktopWorkspace } from "./platform/DesktopWorkspace";
+import { APP_VERSION } from './version';
+import { AISetup } from './components/ui/AISetup';
 import { useState, useRef, useEffect, useCallback, useMemo, lazy, Suspense } from "react";
 import { ToolsPanel } from "./components/panels/ToolsPanel";
 import { AdjustPanel } from "./components/panels/AdjustPanel";
@@ -24,7 +26,7 @@ import { segmentSky } from "./skySegmenter";
 import { estimateDepth } from "./depthEstimator";
 import { StripeCheckout } from "./components/ui/StripeCheckout";
 import { auth, db, googleProvider } from "./firebase";
-import { signInWithPopup, signInWithRedirect, getRedirectResult, signOut as firebaseSignOut, onAuthStateChanged } from "firebase/auth";
+import { signInWithCustomToken, signInWithPopup, signInWithRedirect, getRedirectResult, signOut as firebaseSignOut, onAuthStateChanged } from "firebase/auth";
 import { doc, onSnapshot, setDoc } from "firebase/firestore";
 
 const LandingPage = lazy(() => import("./LandingPage").then(m => ({ default: m.LandingPage })));
@@ -220,7 +222,7 @@ export default function App() {
   const [cropAspect, setCropAspect] = useState("free");
   const [texts, setTexts] = useState([]);
   const [selText, setSelText] = useState(null);
-  const [activeTab, setActiveTab] = useState(isDesktop ? "edit" : "home");
+  const [activeTab, setActiveTab] = useState("home");
   const [filterGroup, setFilterGroup] = useState("basic");
   const [hslMixer, setHslMixer] = useState(DEFAULT_HSL_MIXER);
   const [curves, setCurves] = useState({
@@ -348,6 +350,7 @@ export default function App() {
   const [cullSourceHandle, setCullSourceHandle] = useState(null);
   const [cullImages, setCullImages] = useState([]);
   const [cullResults, setCullResults] = useState([]);
+  const [cullOptions, setCullOptions] = useState({ sensitivity: 12, blurCutoff: 50, useFaceLandmarks: true, darkThreshold: 46, enableExposureCheck: true, separateExposureGroups: true });
   const [groups, setGroups] = useState([]);
   const [cullActiveGroupIndex, setCullActiveGroupIndex] = useState(0);
   const [cullActiveAlternateIndex, setCullActiveAlternateIndex] = useState(0);
@@ -363,26 +366,7 @@ export default function App() {
   // ─── SaaS Subscription State ───────────────────────────────────────
 
   const [user, setUser] = useState(() => {
-    if (isDesktop) return previewUser;
     try {
-      const params = new URLSearchParams(window.location.search);
-      if (params.get("admin") === "true") {
-        const expiry = new Date();
-        expiry.setDate(expiry.getDate() + 365); // 1-year admin lease
-        const adminUser = { 
-          loggedIn: true, 
-          email: "admin@ez-photolab.internal", 
-          tier: "admin", 
-          billingPeriod: "annual", 
-          offlineLeaseExpires: expiry.toISOString() 
-        };
-        localStorage.setItem("photolab_saas_user", JSON.stringify(adminUser));
-        try {
-          const newUrl = window.location.pathname + window.location.hash;
-          window.history.replaceState({}, document.title, newUrl);
-        } catch (e) { console.error(e); }
-        return adminUser;
-      }
       const stored = localStorage.getItem("photolab_saas_user");
       if (stored) return JSON.parse(stored);
     } catch (e) { console.error(e); }
@@ -393,11 +377,10 @@ export default function App() {
 
   // Sync state in real time with Firebase Authentication and Firestore database
   useEffect(() => {
-    if (isDesktop) return;
     let unsubscribeSnapshot = null;
 
     // Handle any pending redirect sign-in results gracefully
-    getRedirectResult(auth).catch((err) => {
+    if (!isDesktop) getRedirectResult(auth).catch((err) => {
       console.warn("Redirect sign-in check:", err);
     });
 
@@ -473,6 +456,11 @@ export default function App() {
 
   const handleLogin = async () => {
     try {
+      if (isDesktop) {
+        const { customToken } = await unwrap(window.photoLab.signIn());
+        await signInWithCustomToken(auth, customToken);
+        return;
+      }
       await signInWithPopup(auth, googleProvider);
     } catch (e) {
       // User closed the popup intentionally or dismissed the dialog
@@ -580,7 +568,7 @@ export default function App() {
   const preCanvasImageRef = useRef(null);
   const maskLastPtRef = useRef(null);
 
-  // AI Face Restore (fal.ai)
+  // Local AI Face Restore
   const [aiFaceRestoreStatus, setAiFaceRestoreStatus] = useState('idle');
   const [aiFaceRestoreLog, setAiFaceRestoreLog] = useState('');
   const [aiFaceRestoreResult, setAiFaceRestoreResult] = useState(null);
@@ -1398,7 +1386,7 @@ export default function App() {
       let cutoutUrl = null;
 
       try {
-        const { removeBackground } = await import("@imgly/background-removal");
+        const { removeBackground } = await import('./cutout');
         
         // Downscale large camera photos to max 1280px for 3-4x faster AI segmentation
         const maxInferDim = 1280;
@@ -2902,7 +2890,70 @@ export default function App() {
     </div>
   );
 
-  const desktopDocument = useMemo(() => ({ image, originalImage, filters, hslMixer, curves, rotation, flipH, flipV, texts, lutId, lutIntensity, customLutData, customLutName, accentAi, structureAi, skyMode, skyOpacity, skyLightMatch, customSkyUrl, relightNear, relightFar, aiBeautySmooth, aiBeautyClarity, aiBeautyGlow, aiBeautyUseMask, chromatic, prism, halation, filmDust, glitter, vhs, lightLeak, heatmap, logo, logoScale, logoScalePortrait, logoOpacity, logoPos, logoMargin, logoX, logoY, bgResult, bgMode, bgColor, bgBlur }), [image, originalImage, filters, hslMixer, curves, rotation, flipH, flipV, texts, lutId, lutIntensity, customLutData, customLutName, accentAi, structureAi, skyMode, skyOpacity, skyLightMatch, customSkyUrl, relightNear, relightFar, aiBeautySmooth, aiBeautyClarity, aiBeautyGlow, aiBeautyUseMask, chromatic, prism, halation, filmDust, glitter, vhs, lightLeak, heatmap, logo, logoScale, logoScalePortrait, logoOpacity, logoPos, logoMargin, logoX, logoY, bgResult, bgMode, bgColor, bgBlur]);
+  const desktopDocument = useMemo(() => ({ image, originalImage, filters, hslMixer, curves, rotation, flipH, flipV, texts, lutId, lutIntensity, customLutData, customLutName, accentAi, structureAi, skyMode, skyOpacity, skyLightMatch, customSkyUrl, relightNear, relightFar, aiBeautySmooth, aiBeautyClarity, aiBeautyGlow, aiBeautyUseMask, chromatic, prism, halation, filmDust, glitter, vhs, lightLeak, heatmap, logo, logoScale, logoScalePortrait, logoOpacity, logoPos, logoMargin, logoX, logoY, bgResult, bgMode, bgColor, bgBlur, bgSubUrl, bgStatus, bgScene, bgCustomUrl, bgShadowType, bgShadowOpacity, bgShadowBlur, bgShadowX, bgShadowY, bgOutlineWidth, bgOutlineColor, bgSubjectScale, bgSubjectX, bgSubjectY }), [image, originalImage, filters, hslMixer, curves, rotation, flipH, flipV, texts, lutId, lutIntensity, customLutData, customLutName, accentAi, structureAi, skyMode, skyOpacity, skyLightMatch, customSkyUrl, relightNear, relightFar, aiBeautySmooth, aiBeautyClarity, aiBeautyGlow, aiBeautyUseMask, chromatic, prism, halation, filmDust, glitter, vhs, lightLeak, heatmap, logo, logoScale, logoScalePortrait, logoOpacity, logoPos, logoMargin, logoX, logoY, bgResult, bgMode, bgColor, bgBlur, bgSubUrl, bgStatus, bgScene, bgCustomUrl, bgShadowType, bgShadowOpacity, bgShadowBlur, bgShadowX, bgShadowY, bgOutlineWidth, bgOutlineColor, bgSubjectScale, bgSubjectX, bgSubjectY]);
+  const workspaceSession = useMemo(() => ({ cullOptions, sourceHandle, outputHandle, batchImages, batchLogo, batchLogoFile, batchLogoScale, batchLogoScalePortrait, batchLogoOpacity, batchLogoPos, batchLogoMargin, batchResizeMode, batchResizePreset, batchCustomW, batchCustomH, batchKeepAspect, batchLongEdgePx, batchAutoLevels, batchAutoContrast, batchSharpen, batchSharpenAmt, batchSharpenRad, batchDenoise, batchDenoiseAmt, batchOutputFmt, batchOutputQ, batchPrefix, batchSuffix, batchProgress, batchDone, batchSection, batchFilterGroup, batchAiUpscale, batchAiBeauty, batchAiScale, batchAiBeautySmooth, batchAiBeautyClarity, batchAiBeautyGlow, batchAiFaceRestore, batchAiBeautyUseMask, batchRawFiles, batchConfirmFirst, batchStats, batchFbOptimize, cullSourceHandle, cullImages, cullResults, groups, cullActiveGroupIndex, cullActiveAlternateIndex, batchCullFilter, batchCullSort, batchLutId, batchLutIntensity, batchCustomLutData, batchCustomLutName }), [cullOptions, sourceHandle, outputHandle, batchImages, batchLogo, batchLogoFile, batchLogoScale, batchLogoScalePortrait, batchLogoOpacity, batchLogoPos, batchLogoMargin, batchResizeMode, batchResizePreset, batchCustomW, batchCustomH, batchKeepAspect, batchLongEdgePx, batchAutoLevels, batchAutoContrast, batchSharpen, batchSharpenAmt, batchSharpenRad, batchDenoise, batchDenoiseAmt, batchOutputFmt, batchOutputQ, batchPrefix, batchSuffix, batchProgress, batchDone, batchSection, batchFilterGroup, batchAiUpscale, batchAiBeauty, batchAiScale, batchAiBeautySmooth, batchAiBeautyClarity, batchAiBeautyGlow, batchAiFaceRestore, batchAiBeautyUseMask, batchRawFiles, batchConfirmFirst, batchStats, batchFbOptimize, cullSourceHandle, cullImages, cullResults, groups, cullActiveGroupIndex, cullActiveAlternateIndex, batchCullFilter, batchCullSort, batchLutId, batchLutIntensity, batchCustomLutData, batchCustomLutName]);
+  const restoreWorkspaceSession = async value => {
+    if (Object.hasOwn(value, 'sourceHandle')) setSourceHandle(value.sourceHandle);
+    if (Object.hasOwn(value, 'outputHandle')) setOutputHandle(value.outputHandle);
+    if (Object.hasOwn(value, 'batchImages')) setBatchImages(value.batchImages);
+    if (Object.hasOwn(value, 'batchLogo')) setBatchLogo(value.batchLogo);
+    if (Object.hasOwn(value, 'batchLogoFile')) setBatchLogoFile(value.batchLogoFile);
+    if (Object.hasOwn(value, 'batchLogoScale')) setBatchLogoScale(value.batchLogoScale);
+    if (Object.hasOwn(value, 'batchLogoScalePortrait')) setBatchLogoScalePortrait(value.batchLogoScalePortrait);
+    if (Object.hasOwn(value, 'batchLogoOpacity')) setBatchLogoOpacity(value.batchLogoOpacity);
+    if (Object.hasOwn(value, 'batchLogoPos')) setBatchLogoPos(value.batchLogoPos);
+    if (Object.hasOwn(value, 'batchLogoMargin')) setBatchLogoMargin(value.batchLogoMargin);
+    if (Object.hasOwn(value, 'batchResizeMode')) setBatchResizeMode(value.batchResizeMode);
+    if (Object.hasOwn(value, 'batchResizePreset')) setBatchResizePreset(value.batchResizePreset);
+    if (Object.hasOwn(value, 'batchCustomW')) setBatchCustomW(value.batchCustomW);
+    if (Object.hasOwn(value, 'batchCustomH')) setBatchCustomH(value.batchCustomH);
+    if (Object.hasOwn(value, 'batchKeepAspect')) setBatchKeepAspect(value.batchKeepAspect);
+    if (Object.hasOwn(value, 'batchLongEdgePx')) setBatchLongEdgePx(value.batchLongEdgePx);
+    if (Object.hasOwn(value, 'batchAutoLevels')) setBatchAutoLevels(value.batchAutoLevels);
+    if (Object.hasOwn(value, 'batchAutoContrast')) setBatchAutoContrast(value.batchAutoContrast);
+    if (Object.hasOwn(value, 'batchSharpen')) setBatchSharpen(value.batchSharpen);
+    if (Object.hasOwn(value, 'batchSharpenAmt')) setBatchSharpenAmt(value.batchSharpenAmt);
+    if (Object.hasOwn(value, 'batchSharpenRad')) setBatchSharpenRad(value.batchSharpenRad);
+    if (Object.hasOwn(value, 'batchDenoise')) setBatchDenoise(value.batchDenoise);
+    if (Object.hasOwn(value, 'batchDenoiseAmt')) setBatchDenoiseAmt(value.batchDenoiseAmt);
+    if (Object.hasOwn(value, 'batchOutputFmt')) setBatchOutputFmt(value.batchOutputFmt);
+    if (Object.hasOwn(value, 'batchOutputQ')) setBatchOutputQ(value.batchOutputQ);
+    if (Object.hasOwn(value, 'batchPrefix')) setBatchPrefix(value.batchPrefix);
+    if (Object.hasOwn(value, 'batchSuffix')) setBatchSuffix(value.batchSuffix);
+    if (Object.hasOwn(value, 'batchProgress')) setBatchProgress(value.batchProgress);
+    if (Object.hasOwn(value, 'batchDone')) setBatchDone(value.batchDone);
+    if (Object.hasOwn(value, 'batchSection')) setBatchSection(value.batchSection);
+    if (Object.hasOwn(value, 'batchFilterGroup')) setBatchFilterGroup(value.batchFilterGroup);
+    if (Object.hasOwn(value, 'batchAiUpscale')) setBatchAiUpscale(value.batchAiUpscale);
+    if (Object.hasOwn(value, 'batchAiBeauty')) setBatchAiBeauty(value.batchAiBeauty);
+    if (Object.hasOwn(value, 'batchAiScale')) setBatchAiScale(value.batchAiScale);
+    if (Object.hasOwn(value, 'batchAiBeautySmooth')) setBatchAiBeautySmooth(value.batchAiBeautySmooth);
+    if (Object.hasOwn(value, 'batchAiBeautyClarity')) setBatchAiBeautyClarity(value.batchAiBeautyClarity);
+    if (Object.hasOwn(value, 'batchAiBeautyGlow')) setBatchAiBeautyGlow(value.batchAiBeautyGlow);
+    if (Object.hasOwn(value, 'batchAiFaceRestore')) setBatchAiFaceRestore(value.batchAiFaceRestore);
+    if (Object.hasOwn(value, 'batchAiBeautyUseMask')) setBatchAiBeautyUseMask(value.batchAiBeautyUseMask);
+    if (Object.hasOwn(value, 'batchRawFiles')) setBatchRawFiles(value.batchRawFiles);
+    if (Object.hasOwn(value, 'batchConfirmFirst')) setBatchConfirmFirst(value.batchConfirmFirst);
+    if (Object.hasOwn(value, 'batchStats')) setBatchStats(value.batchStats);
+    if (Object.hasOwn(value, 'batchFbOptimize')) setBatchFbOptimize(value.batchFbOptimize);
+    if (Object.hasOwn(value, 'cullSourceHandle')) setCullSourceHandle(value.cullSourceHandle);
+    if (Object.hasOwn(value, 'cullImages')) setCullImages(value.cullImages);
+    if (Object.hasOwn(value, 'cullResults')) setCullResults(value.cullResults);
+    if (value.cullOptions) setCullOptions(value.cullOptions);
+    if (Object.hasOwn(value, 'groups')) setGroups(value.groups);
+    if (Object.hasOwn(value, 'cullActiveGroupIndex')) setCullActiveGroupIndex(value.cullActiveGroupIndex);
+    if (Object.hasOwn(value, 'cullActiveAlternateIndex')) setCullActiveAlternateIndex(value.cullActiveAlternateIndex);
+    if (Object.hasOwn(value, 'batchCullFilter')) setBatchCullFilter(value.batchCullFilter);
+    if (Object.hasOwn(value, 'batchCullSort')) setBatchCullSort(value.batchCullSort);
+    if (Object.hasOwn(value, 'batchLutId')) setBatchLutId(value.batchLutId);
+    if (Object.hasOwn(value, 'batchLutIntensity')) setBatchLutIntensity(value.batchLutIntensity);
+    if (Object.hasOwn(value, 'batchCustomLutData')) setBatchCustomLutData(value.batchCustomLutData);
+    if (Object.hasOwn(value, 'batchCustomLutName')) setBatchCustomLutName(value.batchCustomLutName);
+    setBatchProcessing(false); setBatchCancelRequested(false); setBatchConfirmData(null);
+    batchCancelRef.current = false;
+    setBatchPreviewOpen(false);
+    setActiveTab(value.cullImages?.length ? 'cull' : value.batchImages?.length || value.batchRawFiles?.length ? 'batch' : 'edit');
+  };
   const restoreDesktopDocument = value => {
     setImage(value.image);
     setOriginalImage(value.originalImage);
@@ -2949,7 +3000,21 @@ export default function App() {
     setBgMode(value.bgMode);
     setBgColor(value.bgColor);
     setBgBlur(value.bgBlur);
-    setBgSubUrl(null); setBgStatus('idle'); setLogoFile(null); setCropMode(false); setCropBox({ x: 0, y: 0, w: 100, h: 100 }); setSelText(null); setActiveTab('edit');
+    setBgSubUrl(value.bgSubUrl);
+    setBgStatus(value.bgStatus);
+    setBgScene(value.bgScene);
+    setBgCustomUrl(value.bgCustomUrl);
+    setBgShadowType(value.bgShadowType);
+    setBgShadowOpacity(value.bgShadowOpacity);
+    setBgShadowBlur(value.bgShadowBlur);
+    setBgShadowX(value.bgShadowX);
+    setBgShadowY(value.bgShadowY);
+    setBgOutlineWidth(value.bgOutlineWidth);
+    setBgOutlineColor(value.bgOutlineColor);
+    setBgSubjectScale(value.bgSubjectScale);
+    setBgSubjectX(value.bgSubjectX);
+    setBgSubjectY(value.bgSubjectY);
+    setLogoFile(null); setCropMode(false); setCropBox({ x: 0, y: 0, w: 100, h: 100 }); setSelText(null); setActiveTab('edit');
     setAiUpscaleResult(null); setAiFaceRestoreResult(null); setAiRemoveResult(null);
   };
 
@@ -3001,6 +3066,7 @@ export default function App() {
       <header className="glass-panel" style={{ height: "52px", width: "100%", maxWidth: "100vw", padding: isMobile ? "0 10px" : "0 14px", gap: "8px", display: "flex", alignItems: "center", justifyContent: "space-between", position: "sticky", top: 0, zIndex: 50, borderBottom: `1px solid ${dm ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'}` }}>
         <div style={{ display: "flex", alignItems: "center", gap: isMobile ? "6px" : "9px", cursor: "pointer", flexShrink: 0 }} onClick={() => setActiveTab("home")}>
           <ApertureLogo size={isMobile ? 24 : 30} />
+          <span style={{ fontSize: 11, opacity: .6 }}>v{APP_VERSION}</span>
           <div style={{ fontSize: isMobile ? "15px" : "17px", fontWeight: 900, color: dm ? '#ffffff' : '#0f172a', letterSpacing: "-0.5px", display: "flex", alignItems: "center", gap: "2px", fontFamily: "'Outfit', sans-serif" }}>
             <span>PHOTO</span>
             <span style={{ fontStyle: "italic", background: "linear-gradient(135deg, #06b6d4, #6c63ff, #ec4899)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", fontWeight: 900, paddingRight: "3px" }}>LAB</span>
@@ -3068,7 +3134,7 @@ export default function App() {
             )}
           </button>
           <div style={{ display: "flex", background: dm ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.04)', border: `1px solid ${dm ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'}`, backdropFilter: "blur(8px)", borderRadius: "12px", padding: "3px", gap: "3px", overflowX: "auto", minWidth: 0, scrollbarWidth: "none" }}>
-            {[["home", "Home"], ["edit", "Edit Studio"], ["cull", "Cull AI"], ["batch", "Batch"], ["account", isDesktop ? "Preview services" : user.tier === "pro" ? "⭐ Pro" : user.tier === "team" ? "💎 Team" : user.tier === "admin" ? "⚡ Admin" : "Account"]].map(([id, lb]) => {
+            {[["home", "Home"], ["edit", "Edit Studio"], ["cull", "Cull AI"], ["batch", "Batch"], ["account", user.tier === "pro" ? "⭐ Pro" : user.tier === "team" ? "💎 Team" : user.tier === "admin" ? "⚡ Admin" : "Account"]].map(([id, lb]) => {
               const isActive = activeTab === id;
               const isPremiumAccount = !isDesktop && id === "account" && user.tier !== "free";
               const isAdmin = user.tier === "admin";
@@ -3126,19 +3192,20 @@ export default function App() {
           )}
         </div>
       </header>
-      {isDesktop && <DesktopWorkspace document={desktopDocument} restore={restoreDesktopDocument} loadPhoto={file => { loadImage(file); setActiveTab('edit'); }} exportPhoto={() => { if (image) setShowExport(true); }} />}
+      <DesktopWorkspace document={desktopDocument} restore={restoreDesktopDocument} session={workspaceSession} restoreSession={restoreWorkspaceSession} loadPhoto={file => { loadImage(file); setActiveTab('edit'); }} exportPhoto={() => { if (image) setShowExport(true); }} />
+      <AISetup />
 
       <Suspense fallback={<div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "calc(100dvh - 52px)" }}><Spin /></div>}>
         {!isMobile && (
           activeTab === "home" ? (
-            <>{isDesktop ? <DesktopHome onEdit={() => setActiveTab("edit")} onCull={() => setActiveTab("cull")} onBatch={() => setActiveTab("batch")} /> : <LandingPage {...{ dm, loadImage, setActiveTab, handleInstallClick, deferredPrompt, isIOS, isInstalled }} onSelectPlan={(plan) => setCheckoutPlan(plan)} />}</>
+            <LandingPage {...{ dm, loadImage, setActiveTab, handleInstallClick, deferredPrompt, isIOS, isInstalled }} onSelectPlan={(plan) => setCheckoutPlan(plan)} />
           ) : activeTab === "batch" ? (
             <BatchPage {...{ dm, cardBg, cardBdr, inputSt, user, setActiveTab, sourceHandle, outputHandle, batchImages, selectSourceFolder, selectRawSourceFolder, selectOutputFolder, batchResizeMode, setBatchResizeMode, batchResizePreset, setBatchResizePreset, batchCustomW, setBatchCustomW, batchCustomH, setBatchCustomH, batchKeepAspect, setBatchKeepAspect, batchLongEdgePx, setBatchLongEdgePx, batchAutoLevels, setBatchAutoLevels, batchAutoContrast, setBatchAutoContrast, batchSharpen, setBatchSharpen, batchSharpenAmt, setBatchSharpenAmt, batchSharpenRad, setBatchSharpenRad, batchDenoise, setBatchDenoise, batchDenoiseAmt, setBatchDenoiseAmt, batchLogo, setBatchLogo, batchLogoFile, setBatchLogoFile, handleBatchLogoUpload, batchLogoScale, setBatchLogoScale, batchLogoScalePortrait, setBatchLogoScalePortrait, batchLogoOpacity, setBatchLogoOpacity, batchLogoPos, setBatchLogoPos, batchLogoMargin, setBatchLogoMargin, batchOutputFmt, setBatchOutputFmt, batchOutputQ, setBatchOutputQ, batchPrefix, setBatchPrefix, batchSuffix, setBatchSuffix, batchProcessing, batchProgress, batchDone, handleBatchProcess, batchPreviewIdx, batchPreviewOrigUrl, batchPreviewAfterUrl, batchPreviewLoading, batchPreviewSplit, setBatchPreviewSplit, batchPreviewDragging, setBatchPreviewDragging, batchPreviewOpen, setBatchPreviewOpen, generateBatchPreview, filters, setFilters, resetAll, batchFilterGroup, setBatchFilterGroup, calcBatchDims, batchAiUpscale, setBatchAiUpscale, batchAiBeauty, setBatchAiBeauty, batchAiScale, setBatchAiScale, batchAiBeautySmooth, setBatchAiBeautySmooth, batchAiBeautyClarity, setBatchAiBeautyClarity, batchAiBeautyGlow, setBatchAiBeautyGlow, batchAiFaceRestore, setBatchAiFaceRestore, batchAiBeautyUseMask, setBatchAiBeautyUseMask, batchSection, setBatchSection, batchRawFiles, setBatchRawFiles, handleRawBatchProcess, batchLogs, addBatchLog, batchConfirmFirst, setBatchConfirmFirst, batchConfirmData, batchCancelRequested, handleCancelBatch, continueBatchProcess, cancelBatchProcess, batchStats, batchLutId, setBatchLutId, batchLutIntensity, setBatchLutIntensity, batchCustomLutData, setBatchCustomLutData, batchCustomLutName, setBatchCustomLutName, batchFbOptimize, setBatchFbOptimize, importOutputsToCull, batchCullFilter, setBatchCullFilter, batchCullSort, setBatchCullSort, cullResults }} />
           ) : activeTab === "cull" ? (
-            <CullPage {...{ dm, cardBg, cardBdr, inputSt, sourceHandle: cullSourceHandle, outputHandle, batchImages: cullImages, selectSourceFolder: selectCullSourceFolder, selectRawSourceFolder, selectOutputFolder, batchLogs, addBatchLog, batchSection, setBatchSection, isMobile, user, setActiveTab, cullResults, setCullResults, groups, setGroups, activeGroupIndex: cullActiveGroupIndex, setActiveGroupIndex: setCullActiveGroupIndex, activeAlternateIndex: cullActiveAlternateIndex, setActiveAlternateIndex: setCullActiveAlternateIndex }} />
+            <CullPage {...{ cullOptions, setCullOptions, dm, cardBg, cardBdr, inputSt, sourceHandle: cullSourceHandle, outputHandle, batchImages: cullImages, selectSourceFolder: selectCullSourceFolder, selectRawSourceFolder, selectOutputFolder, batchLogs, addBatchLog, batchSection, setBatchSection, isMobile, user, setActiveTab, cullResults, setCullResults, groups, setGroups, activeGroupIndex: cullActiveGroupIndex, setActiveGroupIndex: setCullActiveGroupIndex, activeAlternateIndex: cullActiveAlternateIndex, setActiveAlternateIndex: setCullActiveAlternateIndex }} />
           ) : activeTab === "account" ? (
             <div style={{ display: "flex", justifyContent: "center", minHeight: "calc(100dvh - 52px)", overflowY: "auto", background: dm ? "#0a0e17" : "#f3f4f6" }}>
-              {isDesktop ? <DesktopAccount /> : <AccountDashboard user={user} onLogin={handleLogin} onLogout={handleLogout} onRenewLease={handleRenewLease} onUpgrade={() => { setActiveTab("home"); setTimeout(() => document.getElementById("pricing-container")?.scrollIntoView({ behavior: "smooth" }), 100); }} dm={dm} />}
+              <AccountDashboard user={user} onLogin={handleLogin} onLogout={handleLogout} onRenewLease={handleRenewLease} onUpgrade={() => { setActiveTab("home"); setTimeout(() => document.getElementById("pricing-container")?.scrollIntoView({ behavior: "smooth" }), 100); }} dm={dm} />
             </div>
           ) : (
             <div style={{ display: "flex", height: "calc(100dvh - 52px)", width: "100%", maxWidth: "100vw", overflow: "hidden" }}>
@@ -3157,7 +3224,7 @@ export default function App() {
         {isMobile && (
           activeTab === "home" ? (
             <div style={{ height: "calc(100dvh - 52px)", overflowY: "auto", overflowX: "hidden" }}>
-              <>{isDesktop ? <DesktopHome onEdit={() => setActiveTab("edit")} onCull={() => setActiveTab("cull")} onBatch={() => setActiveTab("batch")} /> : <LandingPage {...{ dm, loadImage, setActiveTab, handleInstallClick, deferredPrompt, isIOS, isInstalled }} onSelectPlan={(plan) => setCheckoutPlan(plan)} />}</>
+              <LandingPage {...{ dm, loadImage, setActiveTab, handleInstallClick, deferredPrompt, isIOS, isInstalled }} onSelectPlan={(plan) => setCheckoutPlan(plan)} />
             </div>
           ) : activeTab === "batch" ? (
             <div style={{ height: "calc(100dvh - 52px)", overflowY: "auto", overflowX: "hidden" }}>
@@ -3165,11 +3232,11 @@ export default function App() {
             </div>
           ) : activeTab === "cull" ? (
             <div style={{ height: "calc(100dvh - 52px)", overflowY: "auto", overflowX: "hidden", padding: "12px" }}>
-              <CullPage {...{ dm, cardBg, cardBdr, inputSt, sourceHandle: cullSourceHandle, outputHandle, batchImages: cullImages, selectSourceFolder: selectCullSourceFolder, selectRawSourceFolder, selectOutputFolder, batchLogs, addBatchLog, batchSection, setBatchSection, isMobile: true, user, setActiveTab, cullResults, setCullResults, groups, setGroups, activeGroupIndex: cullActiveGroupIndex, setActiveGroupIndex: setCullActiveGroupIndex, activeAlternateIndex: cullActiveAlternateIndex, setActiveAlternateIndex: setCullActiveAlternateIndex }} />
+              <CullPage {...{ cullOptions, setCullOptions, dm, cardBg, cardBdr, inputSt, sourceHandle: cullSourceHandle, outputHandle, batchImages: cullImages, selectSourceFolder: selectCullSourceFolder, selectRawSourceFolder, selectOutputFolder, batchLogs, addBatchLog, batchSection, setBatchSection, isMobile: true, user, setActiveTab, cullResults, setCullResults, groups, setGroups, activeGroupIndex: cullActiveGroupIndex, setActiveGroupIndex: setCullActiveGroupIndex, activeAlternateIndex: cullActiveAlternateIndex, setActiveAlternateIndex: setCullActiveAlternateIndex }} />
             </div>
           ) : activeTab === "account" ? (
             <div style={{ display: "flex", justifyContent: "center", minHeight: "calc(100dvh - 52px)", overflowY: "auto", overflowX: "hidden", background: dm ? "#0a0e17" : "#f3f4f6" }}>
-              {isDesktop ? <DesktopAccount /> : <AccountDashboard user={user} onLogin={handleLogin} onLogout={handleLogout} onRenewLease={handleRenewLease} onUpgrade={() => { setActiveTab("home"); setTimeout(() => document.getElementById("pricing-container")?.scrollIntoView({ behavior: "smooth" }), 100); }} dm={dm} />}
+              <AccountDashboard user={user} onLogin={handleLogin} onLogout={handleLogout} onRenewLease={handleRenewLease} onUpgrade={() => { setActiveTab("home"); setTimeout(() => document.getElementById("pricing-container")?.scrollIntoView({ behavior: "smooth" }), 100); }} dm={dm} />
             </div>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", height: "calc(100dvh - 52px)", width: "100%", maxWidth: "100vw", overflow: "hidden" }}>
@@ -3412,7 +3479,7 @@ export default function App() {
           </div>
         </div>
       )}
-      {!isDesktop && checkoutPlan && (
+      {checkoutPlan && (
         <StripeCheckout isOpen={!!checkoutPlan} onClose={() => setCheckoutPlan(null)} plan={checkoutPlan} dm={dm} user={user} onLogin={handleLogin} />
       )}
       <canvas ref={canvasRef} style={{ display: "none" }} />

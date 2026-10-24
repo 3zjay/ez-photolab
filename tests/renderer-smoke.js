@@ -59,4 +59,10 @@ await test('manual culling decisions survive regrouping and duplicate names stay
   const broken = { name: 'broken.jpg', analysisFailed: true, cullScore: 10, sharpness: 10, brightness: 50 };
   clusterPhotos([broken]); check(broken.category === 'alternate' && broken.rating === 0, 'Analysis failure became rejection');
 });
+if (new URLSearchParams(window.location.search).has('models')) {
+  await test('face model initializes using the bundled WASM runtime and cached weights', async () => { const { getLandmarker } = await import('../src/faceRestore'); const model = await getLandmarker(); check(Boolean(model.detect(canvas)), 'Face inference did not return a result'); });
+  await test('sky model loads and performs local semantic inference', async () => { const { getSegmenter } = await import('../src/skySegmenter'); const model = await getSegmenter(); const result = await model(src); check(Array.isArray(result), 'Sky inference did not return segments'); });
+  await test('depth model loads and performs local inference', async () => { const { getDepthPipeline } = await import('../src/depthEstimator'); const model = await getDepthPipeline(); const result = await model(src); check(Boolean(result.depth?.data?.length), 'Depth inference did not return a depth map'); });
+  await test('background removal model and runtime perform local inference', async () => { const { prepareCutout, removeBackground } = await import('../src/cutout'); await prepareCutout(); const input = await new Promise(resolve => canvas.toBlob(resolve, 'image/png')); const result = await removeBackground(input); check(result instanceof Blob && result.size > 0, 'Cutout did not return an image'); });
+}
 window.photoLabTestResults = { passed, failed };

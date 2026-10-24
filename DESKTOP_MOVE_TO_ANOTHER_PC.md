@@ -30,7 +30,7 @@ To create the Windows installer:
 npm run desktop:dist
 ```
 
-The expected output is `release/PHOTOlab-Desktop-Preview-2.9.1-x64-Setup.exe`. Installer tools are downloaded on the first packaging run. `npm run test:desktop:smoke` runs the Electron renderer checks. `npm run build` only builds the web version locally; these commands do not publish a website.
+The expected output is `release/PHOTOlab-Desktop-Preview-2.10.0-x64-Setup.exe`. Installer tools are downloaded on the first packaging run. `npm run test:desktop:smoke` runs the Electron renderer checks. `npm run build` only builds the web version locally; these commands do not publish a website.
 
 ## What is in GitHub
 
@@ -50,7 +50,7 @@ Save any open editing work as a named `.photolab` project before moving. Copy th
 
 If you need the previous session recovery, close PHOTOlab on both PCs, then copy the contents of `%APPDATA%\PHOTOlab Desktop Preview` to that same location on the other PC. Back up any existing destination profile first. That folder is optional for continuing development; saved `.photolab` files are the better way to transfer individual edits. Batch queues and culling sessions are not persisted in single-photo projects.
 
-Downloaded model caches may need to download again. Production/server secrets are not part of this transfer. Accounts, payments, and cloud uploads remain disabled in the local preview; see [DESKTOP_TEST_SETUP.md](DESKTOP_TEST_SETUP.md) for the separate test services needed for their next development stage.
+Downloaded model caches may need to download again. Production/server secrets are not part of this transfer. Web and desktop use the same Google account and subscription; see [DESKTOP.md](DESKTOP.md) for deployment requirements and current recovery behavior.
 
 ## Offline source backup
 

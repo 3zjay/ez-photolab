@@ -1,11 +1,17 @@
 node_modules/
+.env
+.env.*
+!.env.example
 dist/
 .idx/
 .DS_Store
 .vercel
 dist-desktop/
 release/
+release-*/
 .desktop-test/
+.web-test/
+.model-assets/
 package-lock.json
 transfer/
 run-stderr.log

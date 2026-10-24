@@ -2,7 +2,9 @@ const { contextBridge, ipcRenderer } = require('electron');
 const invoke = (channel, ...args) => ipcRenderer.invoke(channel, ...args);
 contextBridge.exposeInMainWorld('photoLab', Object.freeze({
   desktop: true,
-  environment: 'preview',
+  environment: 'connected',
+  signIn: () => invoke('auth:sign-in'),
+  openBilling: url => invoke('billing:open', url),
   pickFolder: options => invoke('files:folder', options),
   openPhoto: () => invoke('files:open'),
   list: id => invoke('files:list', id),
@@ -14,7 +16,17 @@ contextBridge.exposeInMainWorld('photoLab', Object.freeze({
   openProject: () => invoke('project:open'),
   autosave: data => invoke('project:autosave', data),
   recovery: () => invoke('project:recovery'),
+  saveWorkspace: data => invoke('workspace:save', data),
+  recoverWorkspace: () => invoke('workspace:recover'),
   setDirty: dirty => invoke('window:dirty', Boolean(dirty)),
+  onFlush: callback => {
+    const listener = async (_event, id) => {
+      try { await callback(); await invoke('workspace:flushed', id, true); }
+      catch { await invoke('workspace:flushed', id, false); }
+    };
+    ipcRenderer.on('workspace:flush', listener);
+    return () => ipcRenderer.removeListener('workspace:flush', listener);
+  },
   onMenu: callback => {
     const listener = (_event, command) => callback(command);
     ipcRenderer.on('menu:command', listener);

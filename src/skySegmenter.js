@@ -1,12 +1,15 @@
 let segmenterPromise = null;
+import { loadModel } from './aiModels';
 
-async function getSegmenter() {
+export async function getSegmenter() {
   if (!segmenterPromise) {
-    segmenterPromise = (async () => {
+    segmenterPromise = loadModel('sky', async () => {
       const { env, pipeline } = await import('@xenova/transformers');
       env.allowLocalModels = false;
+      env.backends.onnx.wasm.wasmPaths = '/transformers/';
+      env.backends.onnx.wasm.numThreads = 1;
       return pipeline('image-segmentation', 'Xenova/segformer-b0-finetuned-ade-512-512');
-    })().catch(error => { segmenterPromise = null; throw error; });
+    }).catch(error => { segmenterPromise = null; throw error; });
   }
   return segmenterPromise;
 }
@@ -110,10 +113,7 @@ function buildInstantSkyMask(imageElement) {
 export async function segmentSky(imageElement, onProgress) {
   try {
     onProgress?.('Analyzing horizon & sky lines…');
-    const segmenter = await Promise.race([
-      getSegmenter(),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout loading Sky AI Model')), 2500))
-    ]);
+    const segmenter = await getSegmenter();
 
     if (segmenter) {
       const input = (imageElement instanceof HTMLCanvasElement || typeof imageElement.toDataURL === 'function')

@@ -3,6 +3,11 @@ import assert from 'node:assert/strict';
 import { emptyDocument, parseProject, serializeProject } from '../src/platform/project.js';
 import { cropForAspect, transformedSize, checkCanvasSize, changeCrop } from '../src/imageGeometry.js';
 const pixel = 'data:image/png;base64,iVBORw0KGgo=';
+test('cutout and composition controls survive project save and reopen', async () => {
+  const document = { ...emptyDocument(), image: pixel, originalImage: pixel, bgResult: pixel, bgSubUrl: pixel, bgStatus: 'done', bgScene: 'neon_cyber', bgSubjectScale: 125, bgCustomUrl: pixel, bgOutlineWidth: 3 };
+  const restored = parseProject(await serializeProject(document));
+  for (const key of ['bgStatus', 'bgSubUrl', 'bgScene', 'bgSubjectScale', 'bgCustomUrl', 'bgOutlineWidth']) assert.equal(restored[key], document[key]);
+});
 test('editable projects round-trip adjustment values and typed LUTs without credentials', async () => {
   const document = { ...emptyDocument(), image: pixel, originalImage: pixel, accountToken: 'must-not-persist' };
   document.filters.saturation = 0; document.rotation = 90; document.hslMixer.red.hue = 50;

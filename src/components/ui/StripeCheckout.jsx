@@ -1,21 +1,6 @@
 import { useState } from "react";
 import { Spin } from "./common";
-
-function resolveClientPriceId(plan) {
-  if (plan?.priceId) return plan.priceId;
-  const isAnnual = plan?.period === "annual";
-  if (plan?.tier === "team") {
-    return isAnnual
-      ? (import.meta.env.VITE_STRIPE_PRICE_TEAM_ANNUAL || import.meta.env.VITE_STRIPE_PRICE_TEAM)
-      : import.meta.env.VITE_STRIPE_PRICE_TEAM;
-  }
-  if (plan?.tier === "pro") {
-    return isAnnual
-      ? (import.meta.env.VITE_STRIPE_PRICE_PRO_ANNUAL || import.meta.env.VITE_STRIPE_PRICE_PRO)
-      : import.meta.env.VITE_STRIPE_PRICE_PRO;
-  }
-  return undefined;
-}
+import { apiRequest, openBilling, serviceOrigin } from '../../platform/services';
 
 export function StripeCheckout({ isOpen, onClose, plan, dm, user, onLogin }) {
   const [isRedirecting, setIsRedirecting] = useState(false);
@@ -34,11 +19,8 @@ export function StripeCheckout({ isOpen, onClose, plan, dm, user, onLogin }) {
 
     setIsRedirecting(true);
     try {
-      const origin = window.location.origin;
-      const res = await fetch("/api/create-checkout-session", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      const origin = serviceOrigin();
+      const res = await apiRequest("/api/create-checkout-session", {
           priceId: resolveClientPriceId(plan),
           tier: plan.tier,
           billingPeriod: plan.period || "monthly",
@@ -46,7 +28,6 @@ export function StripeCheckout({ isOpen, onClose, plan, dm, user, onLogin }) {
           customerEmail: user.email,
           successUrl: `${origin}/?checkout=success`,
           cancelUrl: `${origin}/?checkout=canceled`,
-        }),
       });
 
       const data = await res.json().catch(() => ({}));
@@ -54,7 +35,8 @@ export function StripeCheckout({ isOpen, onClose, plan, dm, user, onLogin }) {
         throw new Error(data?.error || `Failed to create Stripe Checkout session (HTTP ${res.status}).`);
       }
 
-      window.location.href = data.url;
+      await openBilling(data.url);
+      setIsRedirecting(false);
     } catch (err) {
       console.error("Stripe Checkout error:", err);
       setErrorMsg(err.message || "Could not start Stripe Checkout. Verify your Stripe API keys and price IDs.");

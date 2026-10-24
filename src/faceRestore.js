@@ -4,18 +4,22 @@
  * No API key required — runs entirely on the user's device.
  */
 import { FaceLandmarker, FilesetResolver } from "@mediapipe/tasks-vision";
+import { cachedModel } from './modelAssets';
+import { loadModel } from './aiModels';
 
 export let landmarker = null;
 
-export async function getLandmarker() {
+export function getLandmarker() { return loadModel('faces', initializeLandmarker); }
+async function initializeLandmarker() {
   if (landmarker) return landmarker;
   const vision = await FilesetResolver.forVisionTasks(
-    "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.35/wasm"
+    "/mediapipe/wasm"
   );
+  const modelAssetBuffer = await cachedModel('https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task');
   try {
     landmarker = await FaceLandmarker.createFromOptions(vision, {
       baseOptions: {
-        modelAssetPath: "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task",
+        modelAssetBuffer,
         delegate: "GPU",
       },
       runningMode: "IMAGE",
@@ -26,7 +30,7 @@ export async function getLandmarker() {
     try {
       landmarker = await FaceLandmarker.createFromOptions(vision, {
         baseOptions: {
-          modelAssetPath: "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task",
+          modelAssetBuffer,
           delegate: "CPU",
         },
         runningMode: "IMAGE",
@@ -298,10 +302,7 @@ export async function restoreFaceLocal(sourceCanvas, onLog) {
   let landmarksResult = null;
   try {
     onLog?.("Initializing neural face enhancer…");
-    const fl = await Promise.race([
-      getLandmarker(),
-      new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 4000))
-    ]);
+    const fl = await getLandmarker();
 
     if (fl) {
       onLog?.("Scanning face landmarks…");

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { apiRequest, openBilling, serviceOrigin } from '../../platform/services';
 import { Spin } from "../ui/common";
 
 export function AccountDashboard({ user, onLogin, onLogout, onRenewLease, onUpgrade, dm }) {
@@ -381,20 +382,17 @@ export function AccountDashboard({ user, onLogin, onLogout, onRenewLease, onUpgr
                   setPortalError("");
                   setIsOpeningPortal(true);
                   try {
-                    const res = await fetch("/api/create-portal-session", {
-                      method: "POST",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({
+                    const res = await apiRequest("/api/create-portal-session", {
                         stripeCustomerId: user.stripeCustomerId,
                         customerEmail: user.email,
-                        returnUrl: `${window.location.origin}/?portal=returned`,
-                      }),
+                        returnUrl: `${serviceOrigin()}/?portal=returned`,
                     });
                     const data = await res.json().catch(() => ({}));
                     if (!res.ok || !data?.url) {
                       throw new Error(data?.error || `Failed to open Stripe Billing Portal (HTTP ${res.status}).`);
                     }
-                    window.location.href = data.url;
+                    await openBilling(data.url);
+                    setIsOpeningPortal(false);
                   } catch (err) {
                     console.error("Portal session error:", err);
                     setPortalError(err.message || "Unable to open Stripe Billing Portal.");

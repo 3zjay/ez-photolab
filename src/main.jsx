@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.jsx'
 import { ErrorBoundary } from './components/ui/ErrorBoundary'
+import { DesktopSignIn } from './platform/DesktopSignIn'
 
 if (import.meta.env.MODE !== 'desktop' && 'serviceWorker' in navigator) {
   window.addEventListener('load', () => {
@@ -13,7 +14,7 @@ if (import.meta.env.MODE !== 'desktop' && 'serviceWorker' in navigator) {
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <ErrorBoundary>
-      <App />
+      {new URLSearchParams(window.location.search).get('desktopAuth') === '1' && import.meta.env.MODE !== 'desktop' ? <DesktopSignIn /> : <App />}
     </ErrorBoundary>
   </StrictMode>,
 )

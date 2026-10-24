@@ -2,8 +2,12 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('node:path');
 const { allowPreviewRequest, bundlePath, trustedSender } = require('../electron/security.cjs');
-test('production, cloud uploads, unknown origins and insecure requests are blocked', () => {
-  for (const url of ['https://ez-photolab.vercel.app/', 'https://firestore.googleapis.com/', 'https://identitytoolkit.googleapis.com/', 'https://api.stripe.com/', 'https://api.claid.ai/', 'http://huggingface.co/a', 'file:///C:/secret', 'https://huggingface.co.evil.test/a']) assert.equal(allowPreviewRequest(url), false, url);
+test('only configured account APIs and local model downloads are permitted', () => {
+  for (const url of ['https://ez-photolab.vercel.app/', 'https://api.stripe.com/', 'https://api.claid.ai/', 'http://huggingface.co/a', 'file:///C:/secret', 'https://huggingface.co.evil.test/a']) assert.equal(allowPreviewRequest(url), false, url);
+  assert.equal(allowPreviewRequest('https://ez-photolab.vercel.app/api/desktop-auth', 'POST'), true);
+  assert.equal(allowPreviewRequest('https://ez-photolab.vercel.app/api/test', 'POST'), false);
+  assert.equal(allowPreviewRequest('https://identitytoolkit.googleapis.com/v1/accounts:signInWithCustomToken', 'POST'), true);
+  assert.equal(allowPreviewRequest('https://firestore.googleapis.com/v1/projects/x', 'DELETE'), false);
   assert.equal(allowPreviewRequest('https://huggingface.co/model'), true);
   assert.equal(allowPreviewRequest('https://huggingface.co/model', 'POST'), false);
   assert.equal(allowPreviewRequest('https://storage.googleapis.com/mediapipe-models/face.task'), true);

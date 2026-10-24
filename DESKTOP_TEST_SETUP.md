@@ -1,3 +1,7 @@
+# Historical separate-service proposal
+
+**Superseded for 2.10.0:** the user selected the existing Google sign-in and subscription for both web and desktop. See [DESKTOP.md](DESKTOP.md) for current setup and verification. The proposal below is retained as an optional staging-environment reference, not the current release configuration.
+
 # Separate test services for PHOTOlab Desktop
 
 The Windows preview currently blocks accounts, billing, and cloud photo uploads. This guide prepares the next stage. Creating these services does **not** automatically enable them in the current build; the desktop authentication and backend integration still need implementation and testing.

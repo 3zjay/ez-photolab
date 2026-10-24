@@ -15,9 +15,12 @@ function allowPreviewRequest(url, method = 'GET') {
     const parsed = new URL(url);
     if (['data:', 'blob:', 'devtools:'].includes(parsed.protocol)) return true;
     if (parsed.protocol === 'photolab:') return parsed.hostname === 'app';
-    if (parsed.protocol !== 'https:' || !['GET', 'HEAD'].includes(method)) return false;
+    if (parsed.protocol !== 'https:') return false;
+    if (parsed.hostname === 'ez-photolab.vercel.app') return ['POST', 'OPTIONS'].includes(method) && ['/api/create-checkout-session', '/api/create-portal-session', '/api/desktop-auth'].includes(parsed.pathname);
+    if (['identitytoolkit.googleapis.com', 'securetoken.googleapis.com', 'firestore.googleapis.com'].includes(parsed.hostname)) return ['GET', 'POST', 'OPTIONS'].includes(method);
+    if (!['GET', 'HEAD'].includes(method)) return false;
     if (parsed.hostname === 'storage.googleapis.com') return parsed.pathname.startsWith('/mediapipe-models/');
-    return ['huggingface.co', 'cdn-lfs.huggingface.co', 'cdn-lfs-us-1.huggingface.co', 'cdn-lfs.hf.co', 'cdn-lfs-us-1.hf.co', 'cas-bridge.xethub.hf.co', 'cdn.jsdelivr.net', 'staticimgly.com', 'fonts.googleapis.com', 'fonts.gstatic.com'].includes(parsed.hostname);
+    return ['huggingface.co', 'us.aws.cdn.hf.co', 'cdn-lfs.huggingface.co', 'cdn-lfs-us-1.huggingface.co', 'cdn-lfs.hf.co', 'cdn-lfs-us-1.hf.co', 'cas-bridge.xethub.hf.co', 'cdn.jsdelivr.net', 'staticimgly.com', 'fonts.googleapis.com', 'fonts.gstatic.com'].includes(parsed.hostname);
   } catch { return false; }
 }
 function trustedSender(event) {

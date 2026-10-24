@@ -1,5 +1,4 @@
 export const isDesktop = import.meta.env.MODE === 'desktop' || (typeof window !== 'undefined' && Boolean(window.photoLab?.desktop));
-export const previewUser = Object.freeze({ loggedIn: false, email: '', tier: 'team', billingPeriod: 'preview', offlineLeaseExpires: null });
 export async function unwrap(result) {
   const response = await result;
   if (!response?.ok) {

@@ -1,12 +1,15 @@
 let depthPipePromise = null;
+import { loadModel } from './aiModels';
 
-async function getDepthPipeline() {
+export async function getDepthPipeline() {
   if (!depthPipePromise) {
-    depthPipePromise = (async () => {
+    depthPipePromise = loadModel('depth', async () => {
       const { env, pipeline } = await import('@xenova/transformers');
       env.allowLocalModels = false;
+      env.backends.onnx.wasm.wasmPaths = '/transformers/';
+      env.backends.onnx.wasm.numThreads = 1;
       return pipeline('depth-estimation', 'Xenova/depth-anything-small-hf');
-    })().catch(error => { depthPipePromise = null; throw error; });
+    }).catch(error => { depthPipePromise = null; throw error; });
   }
   return depthPipePromise;
 }
@@ -70,10 +73,7 @@ function buildInstantDepthMap(imageElement) {
 export async function estimateDepth(imageElement, onProgress) {
   try {
     onProgress?.('Estimating 3D depth geometry…');
-    const depthPipe = await Promise.race([
-      getDepthPipeline(),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout loading Depth AI Model')), 2500))
-    ]);
+    const depthPipe = await getDepthPipeline();
 
     if (depthPipe) {
       const input = (imageElement instanceof HTMLCanvasElement || typeof imageElement.toDataURL === 'function')

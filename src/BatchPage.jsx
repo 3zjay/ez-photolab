@@ -537,7 +537,7 @@ export function BatchPage({ dm, cardBg, cardBdr, inputSt, isMobile = false,
 
               <div style={{ display: "flex", alignItems: "center", gap: "10px", padding: "12px", background: dm ? '#222' : '#f8f8fd', borderRadius: "10px", border: `1px solid ${cardBdr}` }}>
                 <input type="checkbox" id="baifr" checked={batchAiFaceRestore} onChange={e => setBatchAiFaceRestore(e.target.checked)} style={{ accentColor: accent, width: "16px", height: "16px" }} />
-                <label htmlFor="baifr" style={{ fontSize: "13px", fontWeight: 700, cursor: "pointer", color: dm ? '#eee' : '#333' }}>AI Face Restore (fal.ai)</label>
+                <label htmlFor="baifr" style={{ fontSize: "13px", fontWeight: 700, cursor: "pointer", color: dm ? '#eee' : '#333' }}>AI Face Restore (local)</label>
               </div>
 
               <div style={{ display: "flex", alignItems: "center", gap: "10px", padding: "12px", background: dm ? '#222' : '#f8f8fd', borderRadius: "10px", border: `1px solid ${cardBdr}` }}>
@@ -1121,7 +1121,7 @@ export function BatchPage({ dm, cardBg, cardBdr, inputSt, isMobile = false,
             </div>
           )}
 
-          <Toggle checked={batchAiFaceRestore} onChange={e => setBatchAiFaceRestore(e.target.checked)} label="AI Face Restore" sub="GenAI face restoration (Cloud)" />
+          <Toggle checked={batchAiFaceRestore} onChange={e => setBatchAiFaceRestore(e.target.checked)} label="AI Face Restore" sub="Local face enhancement" />
         </div>
       </Card>
     );

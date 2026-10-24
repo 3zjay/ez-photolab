@@ -8,9 +8,11 @@ export const emptyDocument = () => ({
   aiBeautySmooth: 0, aiBeautyClarity: 0, aiBeautyGlow: 0, aiBeautyUseMask: true,
   chromatic: 0, prism: 0, halation: 0, filmDust: 0, glitter: 0, vhs: false, lightLeak: 'none', heatmap: 0,
   logo: null, logoScale: .15, logoScalePortrait: .30, logoOpacity: .7, logoPos: 'bottom-right', logoMargin: 20, logoX: null, logoY: null,
-  bgResult: null, bgMode: 'transparent', bgColor: '#ffffff', bgBlur: 14,
+  bgResult: null, bgSubUrl: null, bgStatus: 'idle', bgMode: 'transparent', bgColor: '#ffffff', bgBlur: 14,
+  bgScene: 'podium_light', bgCustomUrl: null, bgShadowType: 'contact', bgShadowOpacity: 55, bgShadowBlur: 24, bgShadowX: 0, bgShadowY: 12,
+  bgOutlineWidth: 0, bgOutlineColor: '#ffffff', bgSubjectScale: 100, bgSubjectX: 0, bgSubjectY: 0,
 });
-const imageKeys = new Set(['image', 'originalImage', 'customSkyUrl', 'logo', 'bgResult']);
+const imageKeys = new Set(['image', 'originalImage', 'customSkyUrl', 'logo', 'bgResult', 'bgSubUrl', 'bgCustomUrl']);
 const validImage = value => value === null || (typeof value === 'string' && /^data:image\/(png|jpeg|webp);base64,[a-z\d+/=\s]+$/i.test(value));
 const bounded = (value, min = -10000, max = 10000) => typeof value === 'number' && Number.isFinite(value) && value >= min && value <= max;
 const fail = () => { throw new Error('This project contains unsupported or invalid editing data.'); };
@@ -44,6 +46,9 @@ export function parseProject(data) {
     result[key] = value;
   }
   if (!result.image || !result.originalImage) fail();
+  if (!('bgStatus' in source) && result.bgResult) result.bgStatus = 'done';
+  if (!['idle', 'done', 'loading', 'error'].includes(result.bgStatus)) fail();
+  if (result.bgStatus === 'loading') result.bgStatus = result.bgResult ? 'done' : 'idle';
   return result;
 }
 

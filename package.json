@@ -1,9 +1,9 @@
 {
   "name": "photolab",
-  "description": "PHOTOlab Windows photo editing preview",
+  "description": "PHOTOlab photo editor for web and Windows",
   "author": "PHOTOlab",
   "private": true,
-  "version": "2.9.0",
+  "version": "2.10.0",
   "type": "module",
   "main": "electron/main.cjs",
   "scripts": {
@@ -15,7 +15,8 @@
     "desktop:pack": "npm run desktop:build && electron-builder --dir --publish never",
     "desktop:dist": "npm run desktop:build && electron-builder --win nsis --x64 --publish never",
     "test:desktop": "node --test tests/*.test.cjs tests/*.test.mjs",
-    "test:desktop:smoke": "node scripts/desktop-smoke.mjs"
+    "test:desktop:smoke": "node scripts/desktop-smoke.mjs",
+    "test:web:smoke": "node scripts/web-smoke.mjs"
   },
   "dependencies": {
     "@fal-ai/client": "^1.10.1",
@@ -25,7 +26,7 @@
     "firebase": "^12.13.0",
     "firebase-admin": "^13.10.0",
     "libraw-wasm": "^1.1.2",
-    "onnxruntime-web": "^1.27.0",
+    "onnxruntime-web": "1.21.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "stripe": "^22.1.1"

@@ -1,90 +1,33 @@
 import Stripe from 'stripe';
+import { authenticated, cors, httpError, returnUrl, sendError, services } from './_lib/server.js';
 
+export function configuredPrice(tier, period) {
+  if (!['pro', 'team'].includes(tier) || !['monthly', 'annual'].includes(period)) throw httpError(400, 'Choose a valid plan and billing period.');
+  const price = process.env[`STRIPE_PRICE_${tier.toUpperCase()}${period === 'annual' ? '_ANNUAL' : ''}`];
+  if (!price) throw httpError(400, 'This plan is not configured. Please contact support.');
+  return price;
+}
 export default async function handler(req, res) {
-  // Enable CORS
-  const origin = req.headers.origin || '*';
-  res.setHeader('Access-Control-Allow-Origin', origin);
-  if (origin !== '*') {
-    res.setHeader('Access-Control-Allow-Credentials', 'true');
-  }
-  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
-  res.setHeader(
-    'Access-Control-Allow-Headers',
-    'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version'
-  );
-
-  if (req.method === 'OPTIONS') {
-    res.status(200).end();
-    return;
-  }
-
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method Not Allowed' });
-  }
-
-  if (!process.env.STRIPE_SECRET_KEY) {
-    return res.status(500).json({ error: 'STRIPE_SECRET_KEY environment variable is not configured.' });
-  }
-
-  const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
-  const { priceId: explicitPriceId, tier, billingPeriod = 'monthly', userId, customerEmail, successUrl, cancelUrl } = req.body || {};
-
-  const resolveServerPriceId = () => {
-    if (explicitPriceId) return explicitPriceId;
-    const isAnnual = billingPeriod === 'annual';
-    if (tier === 'team') {
-      return isAnnual
-        ? (process.env.STRIPE_PRICE_TEAM_ANNUAL || process.env.STRIPE_PRICE_TEAM)
-        : process.env.STRIPE_PRICE_TEAM;
-    }
-    if (tier === 'pro') {
-      return isAnnual
-        ? (process.env.STRIPE_PRICE_PRO_ANNUAL || process.env.STRIPE_PRICE_PRO)
-        : process.env.STRIPE_PRICE_PRO;
-    }
-    return null;
-  };
-
-  const priceId = resolveServerPriceId();
-
-  if (!priceId || !userId) {
-    return res.status(400).json({
-      error: !userId
-        ? 'Missing userId parameter. Please sign in before starting checkout.'
-        : 'Missing Stripe priceId configuration for the selected plan (check STRIPE_PRICE_PRO / STRIPE_PRICE_TEAM env vars).'
-    });
-  }
-
   try {
-    const appOrigin = req.headers.origin || process.env.NEXT_PUBLIC_APP_URL || 'https://ez-photolab.vercel.app';
-    const sessionParams = {
-      payment_method_types: ['card'],
-      line_items: [
-        {
-          price: priceId,
-          quantity: 1,
-        },
-      ],
-      mode: 'subscription',
-      success_url: successUrl || `${appOrigin}/?checkout=success`,
-      cancel_url: cancelUrl || `${appOrigin}/?checkout=canceled`,
-      client_reference_id: userId,
-      metadata: {
-        userId,
-        tier: tier || 'pro',
-        billingPeriod,
-      },
-    };
-
-    if (customerEmail) {
-      sessionParams.customer_email = customerEmail;
-    }
-
-    const session = await stripe.checkout.sessions.create(sessionParams);
-
+    cors(req, res);
+    if (req.method === 'OPTIONS') return res.status(204).end();
+    if (req.method !== 'POST') throw httpError(405, 'Method not allowed.');
+    const user = await authenticated(req);
+    const { tier, billingPeriod = 'monthly', successUrl, cancelUrl, priceId: requestedPrice } = req.body || {};
+    const price = configuredPrice(tier, billingPeriod);
+    if (requestedPrice && requestedPrice !== price) throw httpError(400, 'The selected price is not valid for this plan.');
+    if (!process.env.STRIPE_SECRET_KEY) throw new Error('Stripe is not configured.');
+    const profile = await services().db.collection('users').doc(user.uid).get();
+    if (profile.data()?.stripeSubscriptionId && ['pro', 'team'].includes(profile.data()?.tier)) throw httpError(409, 'Manage your existing subscription from Account to change plans.');
+    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+    const customer = profile.data()?.stripeCustomerId;
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ['card'], mode: 'subscription',
+      line_items: [{ price, quantity: 1 }],
+      success_url: returnUrl(successUrl, '?checkout=success'), cancel_url: returnUrl(cancelUrl, '?checkout=canceled'),
+      client_reference_id: user.uid, metadata: { userId: user.uid, tier, billingPeriod },
+      ...(customer ? { customer } : user.email ? { customer_email: user.email } : {}),
+    });
     return res.status(200).json({ url: session.url });
-  } catch (error) {
-    console.error('Error creating Stripe Checkout session:', error);
-    return res.status(500).json({ error: error.message });
-  }
+  } catch (error) { return sendError(res, error); }
 }

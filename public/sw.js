@@ -1,4 +1,4 @@
-const CACHE_NAME = 'photolab-cache-v2.9.7';
+const CACHE_NAME = 'photolab-cache-v2.10.0';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
@@ -27,7 +27,7 @@ self.addEventListener('activate', (event) => {
     caches.keys().then((cacheNames) => {
       return Promise.all(
         cacheNames.map((cache) => {
-          if (cache !== CACHE_NAME) {
+          if (cache.startsWith('photolab-cache-') && cache !== CACHE_NAME) {
             console.log('[Service Worker] Clearing old cache:', cache);
             return caches.delete(cache);
           }
@@ -44,13 +44,13 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
 
   // Only handle local GET requests
-  if (event.request.method !== 'GET' || !url.origin.startsWith(self.location.origin)) {
+  if (event.request.method !== 'GET' || url.origin !== self.location.origin || url.pathname.startsWith('/api/')) {
     return;
   }
 
   // Check if it's a static hashed asset or WASM
   const isStaticAsset = url.pathname.includes('/assets/') || 
-                         url.pathname.includes('/libraw/') || 
+                         url.pathname.includes('/libraw/') || url.pathname.includes('/mediapipe/') || url.pathname.includes('/transformers/') || url.pathname.includes('/cutout/') ||
                          url.pathname.endsWith('.png') || 
                          url.pathname.endsWith('.svg');
 
@@ -85,9 +85,9 @@ self.addEventListener('fetch', (event) => {
             });
           }
           return networkResponse;
-        }).catch(() => {
+        }).catch(async () => {
           // Offline fallback to cached shell or 503 Response
-          return cachedResponse || caches.match('/index.html') || new Response('Offline', { status: 503, statusText: 'Service Unavailable' });
+          return cachedResponse || await caches.match('/index.html') || new Response('Offline', { status: 503, statusText: 'Service Unavailable' });
         });
         
         return cachedResponse || fetchPromise;

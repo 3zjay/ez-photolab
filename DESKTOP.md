@@ -1,76 +1,36 @@
-# PHOTOlab Desktop v2.9.1
+# PHOTOlab 2.10.0 — shared web and Windows release
 
-## October 24 desktop fix
+Web and desktop now build the same React tools and use the version in package.json. The desktop retains the existing Preview installation identity to upgrade 2.9.1 in place without moving user data.
 
-Restored the canvas resize, rotate and flip handlers lost during the editor merge. A populated editor now loads instead of reporting `applyCanvasPreset is not defined`.
+## Accounts and billing
 
-The Electron smoke test now exercises the actual application: native photo import, brightness editing and live preview, project save to disk, undo/redo, renderer reload, project reopen, and PNG export. It verifies restored settings, exported dimensions and edited pixels, and that the source photo remains unchanged. OS file selections are substituted only inside the development smoke test; the real preload, IPC handlers and file/project services are used. Results and generated fixtures remain in `.desktop-test/`.
+Desktop uses the existing Firebase Google account, Firestore profile and Pro/Team subscription. Sign in opens the system browser; an expiring, single-use code with PKCE returns to a loopback listener. Firebase custom tokens travel over HTTPS and IPC, never in the browser URL. Checkout and billing portal open in the system browser. Both APIs verify the Firebase ID token and derive the user and billing customer on the server.
 
-This patch is maintained on `codex/windows-desktop`; it does not update `main` or deploy the live web app. The desktop packager uses version 2.9.1 independently of the shared web package version.
+Deploy the web release and /api/desktop-auth before testing desktop sign-in. The existing deployment needs FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY and STRIPE_SECRET_KEY, plus configured STRIPE_PRICE_PRO / STRIPE_PRICE_TEAM. Annual plans require their separate _ANNUAL price IDs. NEXT_PUBLIC_APP_URL defaults to https://ez-photolab.vercel.app. If using a named database, set FIREBASE_DATABASE_ID consistently with VITE_FIREBASE_DATABASE_ID. Never put server secrets in VITE_ variables or the installer. Existing subscriptions are read from the same users/{uid} documents.
 
-This is a separate Windows x64 preview built from the existing React editor. Desktop development is maintained on `codex/windows-desktop`. See [DESKTOP_MOVE_TO_ANOTHER_PC.md](DESKTOP_MOVE_TO_ANOTHER_PC.md) to clone this branch and set up another computer. No production Firebase or Stripe configuration has been changed as part of this desktop work.
+## Photos and recovery
 
-## Use the preview
+Open photo, edit, Save project, Open project and Export are available in both builds. Editable .photolab files embed the developed photo and editor settings, including background composition. RAW projects store the developed image rather than a camera-file development recipe.
 
-Build an installer with `npm run desktop:dist`. The current configuration creates `release/PHOTOlab-Desktop-Preview-2.9.1-x64-Setup.exe`. Alternatively, run `release/win-unpacked/PHOTOlab Desktop Preview.exe` with the rest of that folder beside it. Generated installers are local build outputs and are not stored in Git. The installer is unsigned and intended for internal testing.
+Recover session restores the editor, culling sources and manual decisions, culling analysis settings, batch queues, folder handles and batch settings. Desktop stores workspace-recovery.photolab in %APPDATA%/PHOTOlab Desktop Preview, with the preceding successful snapshot retained. Original-file protections and granted native handles survive restart. The renderer cannot grant arbitrary paths through a project file. A final recovery save is requested before closing a dirty desktop window.
 
-Use **Open photo** to import a picture, then **Save project** to save an editable `.photolab` file. Export creates a rendered JPEG, PNG, or WebP. Opening an existing project restores its embedded images and editing settings. Projects embed a developed image for RAW imports; they are not a RAW processing recipe that re-develops the camera file.
+Browser recovery uses IndexedDB; storage can be cleared or evicted, and folder access may need permission again. Recovery is local to each installation/browser, not cloud synchronization. Missing or moved source files must be restored to their original paths. Queued processing is recovered paused; starting a batch reruns the queue and preserves existing exports with numbered names. This is not automatic continuation from the exact interrupted file. Save named projects for work you intend to keep.
 
-| Shortcut | Action |
-| --- | --- |
-| Ctrl+O | Open photo |
-| Ctrl+Shift+O | Open project |
-| Ctrl+S / Ctrl+Shift+S | Save project through a Save As dialog |
-| Ctrl+E | Export photo |
-| Ctrl+Z / Ctrl+Shift+Z | Undo / redo photo edits |
+## Local AI
 
-Undo retains up to 30 recent document states in memory. After editing pauses, an autosave is stored in `%APPDATA%\PHOTOlab Desktop Preview\recovery.photolab`; the preceding successful save is retained as `.previous`. **Recover session** restores the previous editing session on startup. Check the status message for recovery failures. Save a named project for work you intend to keep; recovery is a rotating safety copy, not a project library.
+AI setup prepares face, sky and depth models on demand. These downloads run over HTTPS and are cached locally; after setup they can process photos offline. The background-removal model and matching ONNX runtime are bundled into both build outputs, along with MediaPipe and Transformers WASM runtimes. Browser users download those static assets from the site on first use. The build downloads pinned IMG.LY data into ignored .model-assets/; first build needs internet access. Cached build assets are reused.
 
-## Included in this preview
+The shared photo engine continues to run in the renderer using Canvas, WebAssembly and the acceleration available to those engines. Native filesystem access does not make every operation GPU accelerated. Large folder imports still read source files into memory; this release does not introduce a separate native RAW/GPU processing engine.
 
-- Sandboxed Electron window, isolated preload bridge, native menus, file and folder dialogs, and a per-user NSIS installer.
-- Separate desktop storage and a request allowlist. Production Firebase, the live Vercel application, Stripe, and cloud photo-upload endpoints are blocked. Local editing tools are unlocked only within the preview.
-- Native file access through handles issued by the main process for user-selected locations. Read-only source folders, filename validation, and protection for opened originals.
-- Existing export files are retained. Name collisions receive a numbered suffix; the OS dialog's replacement choice does not overwrite an image. Output operations can fail when a protected original is explicitly selected.
-- Versioned project files with embedded image assets and editing parameters; credentials and account state are excluded.
-- Crop ratios based on actual image dimensions, draggable crop handles, full-resolution cropping, and preserved rotation bounds during export.
-- HSL and curve adjustments in exports, correct zero-saturation handling, sky-opacity compositing, and aligned masks for rotated exports.
-- Manual culling decisions retained during regrouping, duplicate filenames kept distinct, and failed analyses left for review.
-- XMP ratings merged into existing metadata, including clearing a rating. Existing sidecars receive a backup before replacement. Conflicting RAW/JPEG ratings for the same sidecar are reported instead of silently overwriting one another.
+## Build and verify
 
-## Build and checks
+- npm run test:desktop — Node tests for files, projects, recovery, authentication and API validation.
+- npm run test:desktop:smoke — real Electron loading, editing, saving, reopening, pixel-verified export and shoot recovery.
+- npm run test:web:smoke — browser workflow with no native preload bridge.
+- PHOTOLAB_TEST_MODELS=1 adds actual model loading/inference to the desktop smoke test. PHOTOLAB_TEST_OFFLINE=1 blocks HTTPS to verify already-prepared models. PHOTOLAB_MODELS_ONLY=1 skips the editor/shoot workflows for this check.
+- npm run build / npm run desktop:build — web / desktop bundles.
+- npm run desktop:dist — Windows x64 NSIS installer under release/.
 
-Use the committed Bun lockfile for dependency installation. Desktop development adds Electron and electron-builder; the web and desktop build outputs remain separate.
+OS file choices are substituted in workflow tests; the real editor, renderer, preload, IPC, project and file services run. Google authentication and real Stripe billing require interactive account testing after deployment; the automated handoff test uses a fake authentication service and does not charge a subscription.
 
-```powershell
-npx --yes bun install --frozen-lockfile --ignore-scripts
-node node_modules/electron/install.js
-npm run test:desktop
-npm run test:desktop:smoke
-npm run desktop:start
-npm run desktop:dist
-```
-
-`npm run build` creates the web bundle in `dist`. `npm run desktop:build` creates the desktop bundle in `dist-desktop`. Neither command deploys anything. `desktop:dist` packages the desktop with publishing explicitly disabled. Close a preview launched from the output directory before rebuilding that same directory.
-
-The Electron smoke test builds into `.desktop-test/build` and uses its own `.desktop-test/user-data` profile, leaving the interactive preview's recovery files alone. In the Codex workspace sandbox, Electron required an approved run outside that sandbox to start its renderer; the application's own Chromium sandbox remains enabled.
-
-The installer builder encountered a Windows cache access error. A fresh cache resolved it:
-
-```powershell
-$env:ELECTRON_BUILDER_CACHE = 'C:\ez-photolab\.desktop-test\builder-cache'
-npx electron-builder --win nsis --x64 --publish never
-```
-
-Validation: 18 Node tests cover file capabilities, folder access, collision handling, backups, project parsing, crop geometry, and request restrictions. Seven Electron renderer tests cover actual canvas exports, HSL/curves, sky opacity, XMP preservation, sidecar conflicts, and culling decisions. The Electron smoke test also checks the full photo workflow described above, preload access, cross-origin isolation, renderer sandboxing, and blocked production requests. Interactive installer installation/uninstallation and all native-dialog paths are not covered by the automated tests.
-
-## Before a customer release
-
-1. Connect separate test accounts, billing, and cloud services using [DESKTOP_TEST_SETUP.md](DESKTOP_TEST_SETUP.md). The current account and payment screens in the web code are simulations and must be replaced with authenticated server-controlled flows. These backend endpoints were not changed or deployed in this phase.
-2. Complete large-file and camera-RAW testing, model-download/retry checks, processing cancellation, and worker-based background jobs. Heavy processing still runs in the renderer. Models are downloaded on demand; advanced AI features and HEIC support are not validated in this preview. Single-image export is limited to 64 megapixels and 16,384 pixels per side; this is a guard, not a guarantee of low memory usage.
-3. Persist culling catalogs and batch queues. Current project recovery covers the single-photo editor, not entire shoots, batch tasks, or all intermediate AI results.
-4. Verify rendering consistency across all combinations of effects. Random grain/FX can differ between renders. Add photographic color-management and metadata-preservation requirements before claiming professional archival fidelity.
-5. Finish application icons, Windows metadata, code signing, installer testing, and authenticated updates with rollback. This preview uses the default Electron icon and has no automatic updater.
-6. Review dependency/model licensing and include complete notices before distribution. In particular, the installed `@imgly/background-removal/LICENSE.md` identifies AGPL-3.0; the README's MIT badge does not describe all bundled dependencies.
-
-The original findings and broader release plan remain in [WINDOWS_DESKTOP_REVIEW.md](WINDOWS_DESKTOP_REVIEW.md). That report describes the pre-conversion review; this file records the subsequent implementation.
+The installer is unsigned and intended for testing. Installer outputs and test fixtures are ignored by Git. Save and close an existing desktop session before upgrading.
