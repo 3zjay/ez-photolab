@@ -101,3 +101,30 @@ test('folder access: native fast copy into sorted emoji folders', async t => {
   assert.equal(duplicateCopy.ok, true);
   assert.ok(duplicateCopy.path.includes('DSC_0001 (1).JPG'));
 });
+
+test('folder access: native fast move into sorted emoji folders (zero storage bloat)', async t => {
+  const root = await createTempFolder(t);
+  const shootDir = path.join(root, 'Shoot');
+  await fs.mkdir(shootDir, { recursive: true });
+  const originalFile = path.join(shootDir, 'DSC_0002.JPG');
+  await fs.writeFile(originalFile, 'move-photo-bytes');
+
+  const service = new FileService();
+  const shootHandle = await service.grantDirectory(shootDir, true);
+  const list = await service.list(shootHandle.id);
+  const sourceFile = list.find(x => x.name === 'DSC_0002.JPG');
+  assert.ok(sourceFile, 'Missing source photo');
+
+  // Create keepers target
+  const keepersDir = await service.child(shootHandle.id, '📗 Keepers', 'directory', true);
+  const moveResult = await service.move(sourceFile.id, keepersDir.id, 'DSC_0002.JPG');
+  assert.equal(moveResult.ok, true);
+
+  // Verify file was moved to subfolder
+  const movedBytes = await fs.readFile(path.join(shootDir, '📗 Keepers', 'DSC_0002.JPG'), 'utf8');
+  assert.equal(movedBytes, 'move-photo-bytes');
+
+  // Verify original file in root is gone (moved, not duplicated!)
+  const originalExists = await fs.access(originalFile).then(() => true).catch(() => false);
+  assert.equal(originalExists, false, 'Original file should have been moved, not duplicated');
+});

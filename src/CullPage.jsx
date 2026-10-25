@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo, memo } from "
 import { cullBatch, analyzePhotoExposure, getPhotoIsDark, clusterPhotos } from "./cullEngine";
 import { setAppPowerKeepAwake, setAppTaskbarProgress } from "./platform/power";
 import { exportXmpSidecars } from "./xmpExporter";
-import { copyDesktopFile } from "./platform/desktop";
+import { copyDesktopFile, moveDesktopFile } from "./platform/desktop";
 
 function StarRating({ rating, onChange, size = 18 }) {
   return (
@@ -139,6 +139,8 @@ export default function CullPage({
   sourceHandle,
   outputHandle,
   setOutputHandle,
+  batchCullFilter,
+  setBatchCullFilter,
   batchImages,
   selectSourceFolder,
   selectRawSourceFolder,
@@ -261,7 +263,21 @@ export default function CullPage({
   const [isExporting, setIsExporting] = useState(false);
   const [exportProgress, setExportProgress] = useState({ current: 0, total: 0, currentFile: "" });
   const [exportMethod, setExportMethod] = useState("folders"); // "folders" or "xmp"
-  const [layoutMode, setLayoutMode] = useState("full_sort"); // "full_sort", "dark_separated", "dark_only", "keepers_rejects", "keepers_only", "clusters"
+  const [layoutMode, setLayoutMode] = useState("full_sort"); // "full_sort", "keepers_only", "clusters"
+  const [exportAction, setExportAction] = useState("move"); // "move" (0 extra disk space) or "copy"
+  const [isolateDarkSubfolder, setIsolateDarkSubfolder] = useState(false);
+
+  const handleSendKeepersToBatch = () => {
+    if (!groups || groups.length === 0) return;
+    if (setBatchCullFilter) {
+      setBatchCullFilter("keepers");
+    }
+    if (setActiveTab) {
+      setActiveTab("batch");
+    }
+    showToast("Loaded 5★ Keepers into Batch Processing! Zero extra disk space used.");
+    addBatchLog?.("🚀 Switched to Batch Lab with 5★ Keepers pre-selected for editing.", "success");
+  }; // "full_sort", "dark_separated", "dark_only", "keepers_rejects", "keepers_only", "clusters"
 
   // Toast / Status state
   const [toastMessage, setToastMessage] = useState(null);
@@ -439,7 +455,7 @@ export default function CullPage({
     }
   };
 
-  // 5b. Exporter to physically copy and group files into subfolders
+  // 5b. Exporter to physically copy or move files into organized subfolders
   const handlePhysicalExport = async (mode = layoutMode) => {
     let targetRoot = outputHandle || sourceHandle;
     if (!targetRoot) {
@@ -450,13 +466,14 @@ export default function CullPage({
     setIsExporting(true);
     await setAppPowerKeepAwake(true);
     setExportProgress({ current: 0, total: 0, currentFile: "Initializing folders..." });
-    addBatchLog?.(`📁 Starting physical file sort using mode: "${mode}" into ${targetRoot.name}...`, "info");
+    const actionLabel = exportAction === "move" ? "moving" : "copying";
+    addBatchLog?.(`📁 Starting physical file organization (${actionLabel}) using mode: "${mode}" into ${targetRoot.name}...`, "info");
 
     try {
       const allImages = groups.flat();
 
-      // If separating dark photos, ensure every file has exposure data
-      if (mode === "dark_separated" || mode === "dark_only") {
+      // If dark separation is checked, ensure every file has exposure data
+      if (isolateDarkSubfolder) {
         setExportProgress({ current: 0, total: allImages.length, currentFile: "Checking exposure metrics..." });
         for (let i = 0; i < allImages.length; i++) {
           const itm = allImages[i];
@@ -472,17 +489,13 @@ export default function CullPage({
         }
       }
 
-      // Determine what files will actually be copied
+      // Determine what files will actually be organized
       const filesToCopy = mode === "keepers_only"
         ? allImages.filter(item => item.isKeyPhoto || item.category === "keeper")
-        : mode === "dark_only"
-        ? allImages.filter(item => getPhotoIsDark(item, darkThreshold))
         : allImages;
 
       if (filesToCopy.length === 0) {
-        throw new Error(mode === "dark_only"
-          ? `No dark photos found under ${darkThreshold}% cutoff. You can adjust the Dark Cutoff slider in Cull AI settings.`
-          : "No files matched the current export criteria.");
+        throw new Error("No files matched the current export criteria.");
       }
 
       // Pre-create directories as needed
@@ -490,29 +503,23 @@ export default function CullPage({
       let alternatesDir = null;
       let blurryDir = null;
       let rejectedDir = null;
-      let wellLitDir = null;
       let darkDir = null;
 
       try {
+        if (isolateDarkSubfolder) {
+          darkDir = await targetRoot.getDirectoryHandle("🌙 Dark Photos", { create: true });
+        }
         if (mode === "full_sort") {
           keepersDir   = await targetRoot.getDirectoryHandle("📗 Keepers",   { create: true });
           alternatesDir = await targetRoot.getDirectoryHandle("📘 Alternates", { create: true });
           blurryDir    = await targetRoot.getDirectoryHandle("📙 Blurry",     { create: true });
           rejectedDir  = await targetRoot.getDirectoryHandle("📕 Rejected",   { create: true });
-        } else if (mode === "dark_separated") {
-          wellLitDir   = await targetRoot.getDirectoryHandle("☀️ Well-Lit Photos", { create: true });
-          darkDir      = await targetRoot.getDirectoryHandle("🌙 Dark & Underexposed", { create: true });
-        } else if (mode === "dark_only") {
-          darkDir      = await targetRoot.getDirectoryHandle("🌙 Dark & Underexposed", { create: true });
-        } else if (mode === "keepers_rejects") {
-          keepersDir   = await targetRoot.getDirectoryHandle("Keepers",            { create: true });
-          alternatesDir = await targetRoot.getDirectoryHandle("Rejected & Alternates", { create: true });
         } else if (mode === "keepers_only") {
-          keepersDir = await targetRoot.getDirectoryHandle("Keepers", { create: true });
+          keepersDir = await targetRoot.getDirectoryHandle("📗 Keepers", { create: true });
         }
       } catch (dirErr) {
         if (dirErr.message?.toLowerCase().includes("read only") && !outputHandle && selectOutputFolder) {
-          addBatchLog?.("⚠️ The source photo folder is read-only. Please choose an export destination folder.", "warning");
+          addBatchLog?.("⚠️ The source photo folder is read-only. Please choose a writable export destination folder.", "warning");
           await selectOutputFolder();
           return;
         }
@@ -521,7 +528,6 @@ export default function CullPage({
 
       let copiedCount = 0;
       let darkCount = 0;
-      let wellLitCount = 0;
       const total = filesToCopy.length;
 
       for (let i = 0; i < total; i++) {
@@ -533,23 +539,16 @@ export default function CullPage({
         let targetDir = targetRoot;
         let destName = item.name;
 
-        if (mode === "full_sort") {
-          // Route by category (set by cullEngine 4-tier logic)
-          const cat = item.category || (item.isKeyPhoto ? "keeper" : "alternate");
-          if (cat === "keeper")    targetDir = keepersDir;
-          else if (cat === "alternate") targetDir = alternatesDir;
-          else if (cat === "blurry")    targetDir = blurryDir;
-          else                          targetDir = rejectedDir; // rejected
-        } else if (mode === "dark_separated") {
-          const isDark = getPhotoIsDark(item, darkThreshold);
-          targetDir = isDark ? darkDir : wellLitDir;
-          if (isDark) darkCount++;
-          else wellLitCount++;
-        } else if (mode === "dark_only") {
+        const isDark = getPhotoIsDark(item, darkThreshold);
+        if (isolateDarkSubfolder && isDark) {
           targetDir = darkDir;
           darkCount++;
-        } else if (mode === "keepers_rejects") {
-          targetDir = item.isKeyPhoto ? keepersDir : alternatesDir;
+        } else if (mode === "full_sort") {
+          const cat = item.category || (item.isKeyPhoto ? "keeper" : "alternate");
+          if (cat === "keeper")         targetDir = keepersDir;
+          else if (cat === "alternate") targetDir = alternatesDir;
+          else if (cat === "blurry")    targetDir = blurryDir;
+          else                          targetDir = rejectedDir;
         } else if (mode === "keepers_only") {
           targetDir = keepersDir;
         } else if (mode === "clusters") {
@@ -560,64 +559,94 @@ export default function CullPage({
 
         const fileObj = item.file || activeInputFiles?.find(f => f.name === item.name)?.file;
         const photoLabId = fileObj?.photoLabId || item.photoLabId;
-        let fileCopied = false;
+        let fileHandled = false;
 
-        // 1. High-Performance Desktop Native Copy (OS kernel CopyFileEx without reading into JS RAM)
-        if (photoLabId && targetDir?.id) {
-          try {
-            const nativeRes = await copyDesktopFile(photoLabId, targetDir.id, destName);
-            if (nativeRes?.ok) {
-              fileCopied = true;
-              copiedCount++;
+        if (exportAction === "move") {
+          // 1. High-Performance Desktop Native Move (Instant OS rename, 0 extra disk space)
+          if (photoLabId && targetDir?.id) {
+            try {
+              const moveRes = await moveDesktopFile(photoLabId, targetDir.id, destName);
+              if (moveRes?.ok) {
+                fileHandled = true;
+                copiedCount++;
+              }
+            } catch (moveErr) {
+              console.warn(`Desktop native move fallback for ${destName}:`, moveErr);
             }
-          } catch (nativeErr) {
-            console.warn(`Desktop native copy fallback for ${destName}:`, nativeErr);
+          }
+          // 2. Web fallback for move: write to destination and remove from original if supported
+          if (!fileHandled && fileObj) {
+            try {
+              const arrayBuffer = await fileObj.arrayBuffer();
+              const fileRef = await targetDir.getFileHandle(destName, { create: true });
+              const writable = await fileRef.createWritable();
+              await writable.write(new Uint8Array(arrayBuffer));
+              await writable.close();
+              if (targetRoot?.removeEntry) {
+                await targetRoot.removeEntry(item.name).catch(() => {});
+              }
+              copiedCount++;
+              fileHandled = true;
+            } catch (fileErr) {
+              console.error(`Failed to move ${destName}:`, fileErr);
+              addBatchLog?.(`⚠️ Could not move ${destName}: ${fileErr.message}`, "warning");
+            }
+          }
+        } else {
+          // Copy mode (Safety duplicate)
+          // 1. Desktop native copy
+          if (photoLabId && targetDir?.id) {
+            try {
+              const copyRes = await copyDesktopFile(photoLabId, targetDir.id, destName);
+              if (copyRes?.ok) {
+                fileHandled = true;
+                copiedCount++;
+              }
+            } catch (copyErr) {
+              console.warn(`Desktop native copy fallback for ${destName}:`, copyErr);
+            }
+          }
+          // 2. Web fallback for copy
+          if (!fileHandled && fileObj) {
+            try {
+              const arrayBuffer = await fileObj.arrayBuffer();
+              const fileRef = await targetDir.getFileHandle(destName, { create: true });
+              const writable = await fileRef.createWritable();
+              await writable.write(new Uint8Array(arrayBuffer));
+              await writable.close();
+              copiedCount++;
+              fileHandled = true;
+            } catch (fileErr) {
+              console.error(`Failed to copy ${destName}:`, fileErr);
+              addBatchLog?.(`⚠️ Could not copy ${destName}: ${fileErr.message}`, "warning");
+            }
           }
         }
 
-        // 2. Stream / ArrayBuffer fallback (for web or memory blobs)
-        if (!fileCopied && fileObj) {
-          try {
-            const arrayBuffer = await fileObj.arrayBuffer();
-            const fileRef = await targetDir.getFileHandle(destName, { create: true });
-            const writable = await fileRef.createWritable();
-            await writable.write(new Uint8Array(arrayBuffer));
-            await writable.close();
-            copiedCount++;
-            fileCopied = true;
-          } catch (fileErr) {
-            console.error(`Failed to export ${destName}:`, fileErr);
-            addBatchLog?.(`⚠️ Could not save ${destName}: ${fileErr.message}`, "warning");
-          }
-        }
-
-        if (!fileCopied && !fileObj) {
+        if (!fileHandled && !fileObj) {
           console.warn(`No readable file object found for ${destName}`);
         }
       }
 
-      if (mode === "dark_separated") {
-        addBatchLog?.(`📁 Separated ${copiedCount} files: ${wellLitCount} into "☀️ Well-Lit Photos", ${darkCount} into "🌙 Dark & Underexposed".`, "success");
-        showToast(`Exported: ${wellLitCount} Well-Lit, ${darkCount} Dark photos`);
-        if (darkCount === 0) {
-          addBatchLog?.(`ℹ️ All photos were categorized as well-lit at ${darkThreshold}% cutoff. You can raise the Dark Cutoff slider in settings or click 'Mark as Dark' on photos.`, "warning");
-        }
+      const verbPast = exportAction === "move" ? "moved" : "copied";
+      if (isolateDarkSubfolder) {
+        addBatchLog?.(`📁 ${exportAction === "move" ? "Moved" : "Organized"} ${copiedCount} files (including ${darkCount} into "🌙 Dark Photos") inside "${targetRoot.name}".`, "success");
       } else {
-        addBatchLog?.(`✅ Successfully organized and sorted ${copiedCount} files into subdirectories inside "${targetRoot.name}".`, "success");
-        showToast(`Sorted ${copiedCount} files into subdirectories successfully!`);
+        addBatchLog?.(`✅ Successfully ${verbPast} ${copiedCount} files into subdirectories inside "${targetRoot.name}".`, "success");
       }
+      showToast(`Successfully ${verbPast} ${copiedCount} files into folders!`);
 
       if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
         try {
-          new Notification('PHOTOlab Folder Sort Complete', {
-            body: `Finished organizing ${copiedCount} photos successfully into ${targetRoot.name}.`
+          new Notification('PHOTOlab Organization Complete', {
+            body: `Finished ${verbPast} ${copiedCount} photos successfully into ${targetRoot.name}.`
           });
         } catch {}
       }
     } catch (e) {
-      addBatchLog?.(`❌ Folder Export Failed: ${e.message}`, "error");
+      addBatchLog?.(`❌ Organization Failed: ${e.message}`, "error");
       console.error(e);
-      alert(`Sort export failed: ${e.message}`);
+      alert(`Organization failed: ${e.message}`);
     } finally {
       setIsExporting(false);
       await setAppPowerKeepAwake(false);
@@ -1419,6 +1448,32 @@ export default function CullPage({
 
             <div style={{ width: "1px", height: "24px", background: dm ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)", margin: "0 4px" }} />
 
+            {/* Quick 1-Click Send to Batch */}
+            <button
+              onClick={handleSendKeepersToBatch}
+              style={{
+                marginLeft: "auto",
+                padding: "8px 16px",
+                background: "linear-gradient(135deg, #22c55e, #16a34a)",
+                color: "#fff",
+                border: "none",
+                borderRadius: "10px",
+                fontSize: "12px",
+                fontWeight: 800,
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: "6px",
+                boxShadow: "0 4px 14px rgba(34, 197, 94, 0.35)",
+                transition: "transform 0.15s ease"
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.transform = "scale(1.03)")}
+              onMouseLeave={(e) => (e.currentTarget.style.transform = "none")}
+              title="Send 5-star Key Photos directly to Batch Lab without copying files"
+            >
+              <span>⚡</span> Process Keepers in Batch ({keepers})
+            </button>
+
             {/* Quick Exposure Separation Filters */}
             <button
               onClick={() => {
@@ -2160,10 +2215,55 @@ export default function CullPage({
 
               {/* Dynamic Tab Contents */}
               {exportMethod === "folders" ? (
-                <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-                  <span style={{ fontSize: "11px", color: dm ? "#a1a1aa" : "#71717a", lineHeight: "1.4" }}>
-                    Physically sort photos by copying them into organized subdirectories inside your output destination.
-                  </span>
+                <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+                  
+                  {/* Option A: Fast Direct to Batch Lab (Zero Disk Space) */}
+                  <div style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "8px",
+                    padding: "14px",
+                    borderRadius: "14px",
+                    background: dm ? "rgba(34, 197, 94, 0.08)" : "rgba(34, 197, 94, 0.04)",
+                    border: `1.5px solid ${dm ? "rgba(34, 197, 94, 0.35)" : "rgba(34, 197, 94, 0.25)"}`
+                  }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "10px" }}>
+                      <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+                        <span style={{ fontSize: "12px", fontWeight: 800, color: "#22c55e", display: "flex", alignItems: "center", gap: "6px" }}>
+                          ⚡ Recommended: Send Keepers to Batch Lab
+                        </span>
+                        <span style={{ fontSize: "11px", color: dm ? "#a1a1aa" : "#64748b" }}>
+                          Instant in-memory handoff — zero extra disk space, no duplicate files created.
+                        </span>
+                      </div>
+                      <button
+                        onClick={handleSendKeepersToBatch}
+                        style={{
+                          padding: "9px 16px",
+                          background: "linear-gradient(135deg, #22c55e, #16a34a)",
+                          color: "#fff",
+                          border: "none",
+                          borderRadius: "10px",
+                          fontSize: "12px",
+                          fontWeight: 800,
+                          cursor: "pointer",
+                          boxShadow: "0 4px 14px rgba(34, 197, 94, 0.35)",
+                          whiteSpace: "nowrap"
+                        }}
+                      >
+                        🚀 Edit Keepers in Batch
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Section Divider */}
+                  <div style={{ display: "flex", alignItems: "center", gap: "10px", margin: "4px 0" }}>
+                    <div style={{ flex: 1, height: "1px", background: dm ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)" }} />
+                    <span style={{ fontSize: "10px", fontWeight: 800, color: dm ? "#71717a" : "#a1a1aa", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                      Or Organize Files on Disk
+                    </span>
+                    <div style={{ flex: 1, height: "1px", background: dm ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)" }} />
+                  </div>
 
                   {/* Destination Folder Selector */}
                   <div style={{
@@ -2189,7 +2289,7 @@ export default function CullPage({
                       {outputHandle && setOutputHandle && (
                         <button
                           onClick={() => setOutputHandle(null)}
-                          title="Sort directly inside the shoot folder"
+                          title="Organize directly inside the shoot folder"
                           style={{
                             padding: "6px 10px",
                             fontSize: "11px",
@@ -2222,15 +2322,15 @@ export default function CullPage({
                     </div>
                   </div>
 
-                  {/* Folder Layout Options */}
+                  {/* 1. Folder Structure Selection (Simplified from 6 to 3 clear modes) */}
                   <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                    <span style={{ fontSize: "11px", fontWeight: 700, color: dm ? "#a1a1aa" : "#71717a", textTransform: "uppercase" }}>
+                      1. Folder Structure
+                    </span>
                     {[
-                      { id: "dark_separated",  title: "🌙 Separate Dark & Well-Lit Photos (Exposure Split)", desc: "Splits entire photoshoot into ☀️ Well-Lit Photos and 🌙 Dark & Underexposed folders." },
-                      { id: "full_sort",       title: "★ Full 4-Folder Sort (Recommended)", desc: "Separates into 📗 Keepers · 📘 Alternates · 📙 Blurry · 📕 Rejected based on AI ratings." },
-                      { id: "keepers_rejects", title: "Keepers vs Rejected",                desc: "Creates /Keepers and /Rejected & Alternates folders." },
-                      { id: "keepers_only",    title: "Keepers Only",                       desc: "Only saves the best 5-star photos to a /Keepers folder." },
-                      { id: "dark_only",       title: "🌙 Dark Photos Only",                desc: "Isolates and exports only the underexposed and dark photos." },
-                      { id: "clusters",        title: "AI Duplicate Groups",                desc: "Puts each duplicate burst into /Group_1, /Group_2, etc. folders." }
+                      { id: "full_sort",    title: "⭐ Full 4-Tier Sort (Recommended)", desc: "Separates into 📗 Keepers · 📘 Alternates · 📙 Blurry · 📕 Rejected based on AI ratings." },
+                      { id: "keepers_only", title: "Keepers Only",                       desc: "Only saves the best 5-star photos to a /Keepers folder (leaves alternates untouched)." },
+                      { id: "clusters",     title: "Duplicate Burst Groups",             desc: "Puts each duplicate burst into /Group_1, /Group_2, etc. folders." }
                     ].map((opt) => (
                       <label
                         key={opt.id}
@@ -2261,6 +2361,89 @@ export default function CullPage({
                     ))}
                   </div>
 
+                  {/* 2. Exposure Handling Modifier (Checkbox, NOT competing radio button) */}
+                  <label style={{
+                    display: "flex",
+                    alignItems: "flex-start",
+                    gap: "10px",
+                    padding: "10px 12px",
+                    borderRadius: "10px",
+                    background: isolateDarkSubfolder ? (dm ? "rgba(168, 85, 247, 0.12)" : "rgba(168, 85, 247, 0.05)") : (dm ? "rgba(255,255,255,0.02)" : "rgba(0,0,0,0.02)"),
+                    border: `1px solid ${isolateDarkSubfolder ? "#a855f7" : (dm ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)")}`,
+                    cursor: "pointer",
+                    transition: "all 0.15s ease"
+                  }}>
+                    <input
+                      type="checkbox"
+                      checked={isolateDarkSubfolder}
+                      onChange={e => setIsolateDarkSubfolder(e.target.checked)}
+                      style={{ accentColor: "#a855f7", marginTop: "2px" }}
+                    />
+                    <div style={{ display: "flex", flexDirection: "column", gap: "1px" }}>
+                      <span style={{ fontSize: "12px", fontWeight: 700, color: dm ? "#f3e8ff" : "#581c87" }}>
+                        🌙 Isolate Dark / Underexposed photos into a 🌙 Dark Photos folder
+                      </span>
+                      <span style={{ fontSize: "10px", color: dm ? "#a1a1aa" : "#71717a" }}>
+                        Separates photos under {darkThreshold}% brightness so you can batch-brighten them separately.
+                      </span>
+                    </div>
+                  </label>
+
+                  {/* 3. Storage Mode (Move vs Copy — Solves disk storage consumption!) */}
+                  <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                    <span style={{ fontSize: "11px", fontWeight: 700, color: dm ? "#a1a1aa" : "#71717a", textTransform: "uppercase" }}>
+                      2. Storage Mode (Saves Hard Drive Space)
+                    </span>
+                    <div style={{ display: "flex", gap: "8px" }}>
+                      <label style={{
+                        flex: 1,
+                        display: "flex",
+                        alignItems: "flex-start",
+                        gap: "8px",
+                        padding: "10px",
+                        borderRadius: "10px",
+                        background: exportAction === "move" ? (dm ? "rgba(108, 99, 255, 0.08)" : "rgba(108, 99, 255, 0.04)") : "transparent",
+                        border: `1.5px solid ${exportAction === "move" ? accent : (dm ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)")}`,
+                        cursor: "pointer"
+                      }}>
+                        <input
+                          type="radio"
+                          name="export_action"
+                          checked={exportAction === "move"}
+                          onChange={() => setExportAction("move")}
+                          style={{ accentColor: accent, marginTop: "2px" }}
+                        />
+                        <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+                          <span style={{ fontSize: "12px", fontWeight: 700 }}>⚡ Move Files (Recommended)</span>
+                          <span style={{ fontSize: "10px", color: dm ? "#888" : "#666" }}>0 MB extra space. Moves into subfolders instantly without duplicating.</span>
+                        </div>
+                      </label>
+                      <label style={{
+                        flex: 1,
+                        display: "flex",
+                        alignItems: "flex-start",
+                        gap: "8px",
+                        padding: "10px",
+                        borderRadius: "10px",
+                        background: exportAction === "copy" ? (dm ? "rgba(108, 99, 255, 0.08)" : "rgba(108, 99, 255, 0.04)") : "transparent",
+                        border: `1.5px solid ${exportAction === "copy" ? accent : (dm ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)")}`,
+                        cursor: "pointer"
+                      }}>
+                        <input
+                          type="radio"
+                          name="export_action"
+                          checked={exportAction === "copy"}
+                          onChange={() => setExportAction("copy")}
+                          style={{ accentColor: accent, marginTop: "2px" }}
+                        />
+                        <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+                          <span style={{ fontSize: "12px", fontWeight: 700 }}>📋 Copy Files</span>
+                          <span style={{ fontSize: "10px", color: dm ? "#888" : "#666" }}>Duplicates photos as backup (uses 2× disk space).</span>
+                        </div>
+                      </label>
+                    </div>
+                  </div>
+
                   {/* Execute Button */}
                   {isExporting ? (
                     <div style={{ display: "flex", flexDirection: "column", gap: "6px", padding: "10px 0" }}>
@@ -2275,7 +2458,7 @@ export default function CullPage({
                         />
                       </div>
                       <span style={{ fontSize: "11px", fontWeight: 700, textAlign: "center" }}>
-                        Saving: {exportProgress.current} / {exportProgress.total} ({exportProgress.currentFile})
+                        Organizing: {exportProgress.current} / {exportProgress.total} ({exportProgress.currentFile})
                       </span>
                     </div>
                   ) : (
@@ -2295,14 +2478,14 @@ export default function CullPage({
                         transition: "all 0.2s ease"
                       }}
                     >
-                      📁 Execute Smart Folder Export into "{outputHandle ? outputHandle.name : sourceHandle ? `${sourceHandle.name} / subfolders` : 'chosen destination'}"
+                      📁 {exportAction === "move" ? "Move" : "Copy"} & Organize into "{outputHandle ? outputHandle.name : sourceHandle ? `${sourceHandle.name} / subfolders` : 'chosen destination'}"
                     </button>
                   )}
                 </div>
               ) : (
                 <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
                   <span style={{ fontSize: "11px", color: dm ? "#a1a1aa" : "#71717a", lineHeight: "1.4" }}>
-                    Export non-destructive star ratings and color labels directly into standard Adobe XMP sidecar metadata files. Ideal for Lightroom or Bridge workflows.
+                    Export non-destructive star ratings and color labels directly into standard Adobe XMP sidecar metadata files. Ideal for Lightroom or Bridge workflows. Zero photos are moved or duplicated.
                   </span>
 
                   {/* Destination Info */}

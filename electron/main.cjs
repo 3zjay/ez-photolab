@@ -75,6 +75,7 @@ function registerHandlers() {
   handle('files:read', id => files.read(id));
   handle('files:write', (...args) => files.write(...args));
   handle('files:copy', (sourceId, targetDirId, newName) => files.copy(sourceId, targetDirId, newName));
+  handle('files:move', (sourceId, targetDirId, newName) => files.move(sourceId, targetDirId, newName));
   handle('files:save', async (name, bytes) => {
     validName(name);
     if (!(bytes instanceof Uint8Array) || bytes.byteLength > 512 * 1024 * 1024) throw new Error('Invalid image data.');

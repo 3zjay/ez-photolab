@@ -132,3 +132,7 @@ export async function copyDesktopFile(sourceId, targetDirId, newName) {
   if (!isDesktop || !window.photoLab?.copyFile) return null;
   return unwrap(window.photoLab.copyFile(sourceId, targetDirId, newName));
 }
+export async function moveDesktopFile(sourceId, targetDirId, newName) {
+  if (!isDesktop || !window.photoLab?.moveFile) return null;
+  return unwrap(window.photoLab.moveFile(sourceId, targetDirId, newName));
+}
