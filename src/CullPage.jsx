@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo, memo } from "react";
 import { cullBatch, analyzePhotoExposure, getPhotoIsDark, clusterPhotos } from "./cullEngine";
+import { setAppPowerKeepAwake, setAppTaskbarProgress } from "./platform/power";
 import { exportXmpSidecars } from "./xmpExporter";
 
 function StarRating({ rating, onChange, size = 18 }) {
@@ -154,7 +155,11 @@ export default function CullPage({
   activeGroupIndex,
   setActiveGroupIndex,
   activeAlternateIndex,
-  setActiveAlternateIndex
+  setActiveAlternateIndex,
+  isProcessing: propIsProcessing,
+  setIsProcessing: propSetIsProcessing,
+  progress: propProgress,
+  setProgress: propSetProgress
 }) {
   const option = key => [cullOptions[key], value => setCullOptions(previous => ({ ...previous, [key]: typeof value === "function" ? value(previous[key]) : value }))];
   // Option Parameters
@@ -237,8 +242,14 @@ export default function CullPage({
   };
 
   // Runtime State
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [progress, setProgress] = useState({ current: 0, total: 0, currentFile: "" });
+  const [localIsProcessing, setLocalIsProcessing] = useState(false);
+  const isProcessing = propIsProcessing !== undefined ? propIsProcessing : localIsProcessing;
+  const setIsProcessing = propSetIsProcessing || setLocalIsProcessing;
+
+  const [localProgress, setLocalProgress] = useState({ current: 0, total: 0, currentFile: "" });
+  const progress = propProgress !== undefined ? propProgress : localProgress;
+  const setProgress = propSetProgress || setLocalProgress;
+  const cullCancelRef = useRef(false);
   const [showFaceBoxes, setShowFaceBoxes] = useState(true);
   const [showShortcutsHelp, setShowShortcutsHelp] = useState(true);
   const [activePhotoUrl, setActivePhotoUrl] = useState(null);
@@ -271,15 +282,26 @@ export default function CullPage({
   }, [setActiveGroupIndex, setActiveAlternateIndex]);
 
   // 2. Main Culling AI Execution Loop
-  const handleStartCulling = async () => {
+  const handleStartCulling = async (startIndex = 0) => {
     if (!activeInputFiles || activeInputFiles.length === 0) {
       alert("Please select a folder with photos first!");
       return;
     }
 
-    addBatchLog?.("🚀 Commencing local AI Culling sequence...", "info");
+    const isResume = typeof startIndex === 'number' && startIndex > 0;
+    cullCancelRef.current = false;
+    await setAppPowerKeepAwake(true);
+
+    if (isResume) {
+      addBatchLog?.(`▶️ Resuming AI Culling sequence from photo #${startIndex + 1} of ${activeInputFiles.length}...`, "info");
+    } else {
+      addBatchLog?.("🚀 Commencing local AI Culling sequence...", "info");
+      setCullResults([]);
+      setGroups([]);
+    }
+
     setIsProcessing(true);
-    setProgress({ current: 0, total: activeInputFiles.length, currentFile: "" });
+    setProgress({ current: startIndex, total: activeInputFiles.length, currentFile: "" });
 
     try {
       const results = await cullBatch(
@@ -290,21 +312,50 @@ export default function CullPage({
           enableFaceLandmarks: useFaceLandmarks,
           darkThreshold: darkThreshold,
           enableExposureAnalysis: enableExposureCheck,
-          separateExposureGroups: separateExposureGroups
+          separateExposureGroups: separateExposureGroups,
+          startIndex,
+          existingResults: isResume ? cullResults : [],
+          cancelRef: cullCancelRef
         },
-        (prog) => setProgress(prog)
+        (prog) => {
+          setProgress(prog);
+          setAppTaskbarProgress(prog.current / prog.total);
+        }
       );
 
       setCullResults(results);
       rebuildGroups(results, darkThreshold, separateExposureGroups);
-      addBatchLog?.(`✅ Completed local culling for ${results.length} files.`, "success");
-      showToast("AI Culling completed successfully!");
+
+      if (cullCancelRef.current) {
+        addBatchLog?.(`⏸️ AI Culling paused at ${results.length} of ${activeInputFiles.length} photos. You can resume at any time.`, "warning");
+        showToast(`Culling paused at ${results.length} photos`, "info");
+      } else {
+        addBatchLog?.(`✅ Completed local culling for ${results.length} files.`, "success");
+        showToast("AI Culling completed successfully!");
+        setAppTaskbarProgress(-1);
+        if (typeof Notification !== 'undefined') {
+          try {
+            if (Notification.permission === 'granted') {
+              new Notification('PHOTOlab Cull Complete', { body: `Finished culling ${results.length} photos successfully.` });
+            }
+          } catch {}
+        }
+      }
     } catch (e) {
       addBatchLog?.(`❌ AI Culling Failed: ${e.message}`, "error");
       console.error(e);
     } finally {
       setIsProcessing(false);
+      await setAppPowerKeepAwake(false);
+      if (!cullCancelRef.current) {
+        setAppTaskbarProgress(-1);
+      }
     }
+  };
+
+  const handlePauseCulling = () => {
+    cullCancelRef.current = true;
+    addBatchLog?.("⏸️ Pausing AI Culling...", "info");
   };
 
   // 3. Promote a selected duplicate to become the new "Key Photo"
@@ -1160,16 +1211,74 @@ export default function CullPage({
                 
                 <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "4px" }}>
                   <span style={{ fontSize: "14px", fontWeight: 800, letterSpacing: "-0.2px" }}>
-                    Analyzing photo clusters... {progress.current} / {progress.total} ({Math.round((progress.current / progress.total) * 100)}%)
+                    Analyzing photo clusters in background... {progress.current} / {progress.total} ({Math.round((progress.current / progress.total) * 100)}%)
                   </span>
                   <span style={{ fontSize: "12px", color: accent, fontWeight: 600 }}>
                     Scanning: {progress.currentFile}
                   </span>
                 </div>
+                <button
+                  onClick={handlePauseCulling}
+                  style={{
+                    padding: "7px 16px",
+                    borderRadius: "8px",
+                    border: "1px solid #ef4444",
+                    background: dm ? "rgba(239, 68, 68, 0.15)" : "#fef2f2",
+                    color: "#ef4444",
+                    fontSize: "12px",
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    marginTop: "4px",
+                    fontFamily: "inherit"
+                  }}
+                >
+                  ⏸️ Pause Culling
+                </button>
+              </div>
+            ) : progress && progress.current > 0 && progress.current < activeInputFiles.length && cullResults && cullResults.length > 0 ? (
+              <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: "10px" }}>
+                <button
+                  onClick={() => handleStartCulling(progress.current)}
+                  style={{
+                    width: "100%",
+                    padding: "16px",
+                    background: "linear-gradient(135deg, #10b981, #06b6d4)",
+                    color: "#fff",
+                    border: "none",
+                    borderRadius: "14px",
+                    cursor: "pointer",
+                    fontSize: "15px",
+                    fontWeight: 700,
+                    boxShadow: "0 8px 30px rgba(16, 185, 129, 0.25)",
+                    fontFamily: "inherit"
+                  }}
+                >
+                  ⚡ Resume Culling from Photo #{progress.current + 1} ({progress.current}/{activeInputFiles.length})
+                </button>
+                <button
+                  onClick={() => handleStartCulling(0)}
+                  style={{
+                    width: "100%",
+                    padding: "10px",
+                    background: dm ? "#222" : "#f3f4f6",
+                    color: dm ? "#bbb" : "#666",
+                    border: `1px solid ${dm ? "#333" : "#ddd"}`,
+                    borderRadius: "10px",
+                    cursor: "pointer",
+                    fontSize: "12px",
+                    fontWeight: 600,
+                    fontFamily: "inherit"
+                  }}
+                >
+                  🔄 Restart Culling from Beginning (1 of {activeInputFiles.length})
+                </button>
               </div>
             ) : (
               <button
-                onClick={handleStartCulling}
+                onClick={() => handleStartCulling(0)}
                 disabled={activeInputFiles.length === 0}
                 style={{
                   width: "100%",
@@ -1182,7 +1291,8 @@ export default function CullPage({
                   fontSize: "15px",
                   fontWeight: 700,
                   boxShadow: activeInputFiles.length === 0 ? "none" : "0 8px 30px rgba(108, 99, 255, 0.25)",
-                  transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)"
+                  transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
+                  fontFamily: "inherit"
                 }}
                 onMouseEnter={(e) => {
                   if (activeInputFiles.length > 0) {

@@ -20,6 +20,7 @@ import { inpaintCanvasLocal } from "./inpaintEngine";
 import { createSkinMask, createFaceOvalMask } from "./faceMasking";
 import { restoreFaceLocal } from "./faceRestore";
 import { decodeRaw, RAW_REGEX } from "./rawProcessor";
+import { setAppPowerKeepAwake, setAppTaskbarProgress } from "./platform/power";
 import { generateBuiltInLut, parseCubeLut } from "./lutParser";
 import { analyzeImage } from "./accentEngine";
 import { segmentSky } from "./skySegmenter";
@@ -346,6 +347,8 @@ export default function App() {
   const [batchCancelRequested, setBatchCancelRequested] = useState(false);
   const batchCancelRef = useRef(false);
   const [batchStats, setBatchStats] = useState({ saved: 0, failed: 0 });
+  const [cullProcessing, setCullProcessing] = useState(false);
+  const [cullProgress, setCullProgress] = useState({ current: 0, total: 0, currentFile: "" });
   const [batchFbOptimize, setBatchFbOptimize] = useState(false);
   const [cullSourceHandle, setCullSourceHandle] = useState(null);
   const [cullImages, setCullImages] = useState([]);
@@ -2028,6 +2031,7 @@ export default function App() {
       return;
     }
 
+    await setAppPowerKeepAwake(true);
     if (startIndex === 0) {
       addBatchLog(`🚀 Starting batch process for ${filesToProcess.length} images...`, "info");
       setBatchProcessing(true);
@@ -2035,6 +2039,12 @@ export default function App() {
       setBatchCancelRequested(false);
       batchCancelRef.current = false;
       setBatchStats({ saved: 0, failed: 0 });
+    } else {
+      addBatchLog(`▶️ Resuming batch process from photo #${startIndex + 1} of ${filesToProcess.length}...`, "info");
+      setBatchProcessing(true);
+      setBatchDone(false);
+      setBatchCancelRequested(false);
+      batchCancelRef.current = false;
     }
     setBatchProgress({ current: startIndex, total: filesToProcess.length, currentFile: startIndex > 0 ? batchProgress.currentFile : "" });
 
@@ -2058,14 +2068,17 @@ export default function App() {
 
     for (let i = startIndex; i < filesToProcess.length; i++) {
       if (batchCancelRef.current) {
-        addBatchLog("🛑 Batch processing cancelled by user.", "warning");
+        addBatchLog(`🛑 Batch processing paused by user at photo ${i} of ${filesToProcess.length}. You can resume where you left off.`, "warning");
         setBatchProcessing(false);
         setBatchCancelRequested(false);
         setBatchConfirmData(null);
+        await setAppPowerKeepAwake(false);
+        setAppTaskbarProgress(-1);
         return;
       }
       const { name, file } = filesToProcess[i];
       setBatchProgress({ current: i + 1, total: filesToProcess.length, currentFile: name });
+      setAppTaskbarProgress((i + 1) / filesToProcess.length);
       try {
         const img = await new Promise(async (resolve, reject) => {
           try {
@@ -2257,6 +2270,15 @@ export default function App() {
     addBatchLog("🏁 Batch process complete.", "success");
     setBatchProcessing(false);
     setBatchDone(true);
+    await setAppPowerKeepAwake(false);
+    setAppTaskbarProgress(-1);
+    if (typeof Notification !== 'undefined') {
+      try {
+        if (Notification.permission === 'granted') {
+          new Notification('PHOTOlab Batch Complete', { body: `Successfully processed ${filesToProcess.length} images.` });
+        }
+      } catch {}
+    }
   };
 
   const handleRawBatchProcess = async (startIndex = 0) => {
@@ -2299,6 +2321,7 @@ export default function App() {
       return;
     }
     
+    await setAppPowerKeepAwake(true);
     if (startIndex === 0) {
       addBatchLog(`🚀 Starting RAW batch process for ${filesToProcess.length} files...`, "info");
       setBatchProcessing(true);
@@ -2306,6 +2329,12 @@ export default function App() {
       setBatchCancelRequested(false);
       batchCancelRef.current = false;
       setBatchStats({ saved: 0, failed: 0 });
+    } else {
+      addBatchLog(`▶️ Resuming RAW batch process from file #${startIndex + 1} of ${filesToProcess.length}...`, "info");
+      setBatchProcessing(true);
+      setBatchDone(false);
+      setBatchCancelRequested(false);
+      batchCancelRef.current = false;
     }
     setBatchProgress({ current: startIndex, total: filesToProcess.length, currentFile: startIndex > 0 ? batchProgress.currentFile : "" });
 
@@ -2330,14 +2359,17 @@ export default function App() {
 
     for (let i = startIndex; i < filesToProcess.length; i++) {
       if (batchCancelRef.current) {
-        addBatchLog("🛑 RAW Batch processing cancelled by user.", "warning");
+        addBatchLog(`🛑 RAW Batch processing paused by user at file ${i} of ${filesToProcess.length}. You can resume where you left off.`, "warning");
         setBatchProcessing(false);
         setBatchCancelRequested(false);
         setBatchConfirmData(null);
+        await setAppPowerKeepAwake(false);
+        setAppTaskbarProgress(-1);
         return;
       }
       const { name, previewUrl } = filesToProcess[i];
       setBatchProgress({ current: i + 1, total: filesToProcess.length, currentFile: name });
+      setAppTaskbarProgress((i + 1) / filesToProcess.length);
       
       try {
         addBatchLog(`[${i+1}/${filesToProcess.length}] Processing ${name}...`, "info");
@@ -2594,6 +2626,15 @@ export default function App() {
     addBatchLog("🏁 RAW Batch process complete.", "success");
     setBatchProcessing(false);
     setBatchDone(true);
+    await setAppPowerKeepAwake(false);
+    setAppTaskbarProgress(-1);
+    if (typeof Notification !== 'undefined') {
+      try {
+        if (Notification.permission === 'granted') {
+          new Notification('PHOTOlab RAW Batch Complete', { body: `Successfully processed ${filesToProcess.length} RAW files.` });
+        }
+      } catch {}
+    }
   };
 
   const handleCancelBatch = () => {
@@ -3220,7 +3261,21 @@ export default function App() {
                     flexShrink: 0
                   }}>
                   {getTabIcon(id, isActive, dm)}
-                  {!isMobile && <span>{lb}</span>}
+                  {!isMobile && (
+                    <span>
+                      {lb}
+                      {id === "batch" && batchProcessing && !isActive && (
+                        <span style={{ marginLeft: "4px", fontSize: "10px", color: "#6c63ff", fontWeight: 700 }}>
+                          ({batchProgress.current}/{batchProgress.total})
+                        </span>
+                      )}
+                      {id === "cull" && cullProcessing && !isActive && (
+                        <span style={{ marginLeft: "4px", fontSize: "10px", color: "#06b6d4", fontWeight: 700 }}>
+                          ({cullProgress.current}/{cullProgress.total})
+                        </span>
+                      )}
+                    </span>
+                  )}
                 </button>
               );
             })}
@@ -3238,49 +3293,64 @@ export default function App() {
 
       <Suspense fallback={<div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "calc(100dvh - 52px)" }}><Spin /></div>}>
         {!isMobile && (
-          activeTab === "home" ? (
-            <LandingPage {...{ dm, loadImage, setActiveTab, handleInstallClick, deferredPrompt, isIOS, isInstalled }} onSelectPlan={(plan) => setCheckoutPlan(plan)} />
-          ) : activeTab === "batch" ? (
-            <BatchPage {...{ dm, cardBg, cardBdr, inputSt, user, setActiveTab, sourceHandle, outputHandle, batchImages, selectSourceFolder, selectRawSourceFolder, selectOutputFolder, batchResizeMode, setBatchResizeMode, batchResizePreset, setBatchResizePreset, batchCustomW, setBatchCustomW, batchCustomH, setBatchCustomH, batchKeepAspect, setBatchKeepAspect, batchLongEdgePx, setBatchLongEdgePx, batchAutoLevels, setBatchAutoLevels, batchAutoContrast, setBatchAutoContrast, batchSharpen, setBatchSharpen, batchSharpenAmt, setBatchSharpenAmt, batchSharpenRad, setBatchSharpenRad, batchDenoise, setBatchDenoise, batchDenoiseAmt, setBatchDenoiseAmt, batchLogo, setBatchLogo, batchLogoFile, setBatchLogoFile, handleBatchLogoUpload, batchLogoScale, setBatchLogoScale, batchLogoScalePortrait, setBatchLogoScalePortrait, batchLogoOpacity, setBatchLogoOpacity, batchLogoPos, setBatchLogoPos, batchLogoMargin, setBatchLogoMargin, batchOutputFmt, setBatchOutputFmt, batchOutputQ, setBatchOutputQ, batchPrefix, setBatchPrefix, batchSuffix, setBatchSuffix, batchProcessing, batchProgress, batchDone, handleBatchProcess, batchPreviewIdx, batchPreviewOrigUrl, batchPreviewAfterUrl, batchPreviewLoading, batchPreviewSplit, setBatchPreviewSplit, batchPreviewDragging, setBatchPreviewDragging, batchPreviewOpen, setBatchPreviewOpen, generateBatchPreview, filters, setFilters, resetAll, batchFilterGroup, setBatchFilterGroup, calcBatchDims, batchAiUpscale, setBatchAiUpscale, batchAiBeauty, setBatchAiBeauty, batchAiScale, setBatchAiScale, batchAiBeautySmooth, setBatchAiBeautySmooth, batchAiBeautyClarity, setBatchAiBeautyClarity, batchAiBeautyGlow, setBatchAiBeautyGlow, batchAiFaceRestore, setBatchAiFaceRestore, batchAiBeautyUseMask, setBatchAiBeautyUseMask, batchSection, setBatchSection, batchRawFiles, setBatchRawFiles, handleRawBatchProcess, batchLogs, addBatchLog, batchConfirmFirst, setBatchConfirmFirst, batchConfirmData, batchCancelRequested, handleCancelBatch, continueBatchProcess, cancelBatchProcess, batchStats, batchLutId, setBatchLutId, batchLutIntensity, setBatchLutIntensity, batchCustomLutData, setBatchCustomLutData, batchCustomLutName, setBatchCustomLutName, batchFbOptimize, setBatchFbOptimize, importOutputsToCull, batchCullFilter, setBatchCullFilter, batchCullSort, setBatchCullSort, cullResults }} />
-          ) : activeTab === "cull" ? (
-            <CullPage {...{ cullOptions, setCullOptions, dm, cardBg, cardBdr, inputSt, sourceHandle: cullSourceHandle, outputHandle, batchImages: cullImages, selectSourceFolder: selectCullSourceFolder, selectRawSourceFolder, selectOutputFolder, batchLogs, addBatchLog, batchSection, setBatchSection, isMobile, user, setActiveTab, cullResults, setCullResults, groups, setGroups, activeGroupIndex: cullActiveGroupIndex, setActiveGroupIndex: setCullActiveGroupIndex, activeAlternateIndex: cullActiveAlternateIndex, setActiveAlternateIndex: setCullActiveAlternateIndex }} />
-          ) : activeTab === "account" ? (
-            <div style={{ display: "flex", justifyContent: "center", minHeight: "calc(100dvh - 52px)", overflowY: "auto", background: dm ? "#0a0e17" : "#f3f4f6" }}>
-              <AccountDashboard user={user} onLogin={handleLogin} onLogout={handleLogout} onRenewLease={handleRenewLease} onUpgrade={() => { setActiveTab("home"); setTimeout(() => document.getElementById("pricing-container")?.scrollIntoView({ behavior: "smooth" }), 100); }} dm={dm} />
-            </div>
-          ) : (
-            <div style={{ display: "flex", height: "calc(100dvh - 52px)", width: "100%", maxWidth: "100vw", overflow: "hidden" }}>
-              {image && (
-                <div className="glass-panel" style={{ width: "clamp(300px, 34vw, 360px)", minWidth: 0, borderRight: `1px solid ${dm ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'}`, overflowY: "auto", overflowX: "hidden", flexShrink: 0 }}>
-                  {renderPanel()}
-                </div>
+          <>
+            {activeTab === "home" && (
+              <LandingPage {...{ dm, loadImage, setActiveTab, handleInstallClick, deferredPrompt, isIOS, isInstalled }} onSelectPlan={(plan) => setCheckoutPlan(plan)} />
+            )}
+            <div style={{ display: activeTab === "batch" ? "block" : "none" }}>
+              {(activeTab === "batch" || batchProcessing) && (
+                <BatchPage {...{ dm, cardBg, cardBdr, inputSt, user, setActiveTab, sourceHandle, outputHandle, batchImages, selectSourceFolder, selectRawSourceFolder, selectOutputFolder, batchResizeMode, setBatchResizeMode, batchResizePreset, setBatchResizePreset, batchCustomW, setBatchCustomW, batchCustomH, setBatchCustomH, batchKeepAspect, setBatchKeepAspect, batchLongEdgePx, setBatchLongEdgePx, batchAutoLevels, setBatchAutoLevels, batchAutoContrast, setBatchAutoContrast, batchSharpen, setBatchSharpen, batchSharpenAmt, setBatchSharpenAmt, batchSharpenRad, setBatchSharpenRad, batchDenoise, setBatchDenoise, batchDenoiseAmt, setBatchDenoiseAmt, batchLogo, setBatchLogo, batchLogoFile, setBatchLogoFile, handleBatchLogoUpload, batchLogoScale, setBatchLogoScale, batchLogoScalePortrait, setBatchLogoScalePortrait, batchLogoOpacity, setBatchLogoOpacity, batchLogoPos, setBatchLogoPos, batchLogoMargin, setBatchLogoMargin, batchOutputFmt, setBatchOutputFmt, batchOutputQ, setBatchOutputQ, batchPrefix, setBatchPrefix, batchSuffix, setBatchSuffix, batchProcessing, batchProgress, batchDone, handleBatchProcess, batchPreviewIdx, batchPreviewOrigUrl, batchPreviewAfterUrl, batchPreviewLoading, batchPreviewSplit, setBatchPreviewSplit, batchPreviewDragging, setBatchPreviewDragging, batchPreviewOpen, setBatchPreviewOpen, generateBatchPreview, filters, setFilters, resetAll, batchFilterGroup, setBatchFilterGroup, calcBatchDims, batchAiUpscale, setBatchAiUpscale, batchAiBeauty, setBatchAiBeauty, batchAiScale, setBatchAiScale, batchAiBeautySmooth, setBatchAiBeautySmooth, batchAiBeautyClarity, setBatchAiBeautyClarity, batchAiBeautyGlow, setBatchAiBeautyGlow, batchAiFaceRestore, setBatchAiFaceRestore, batchAiBeautyUseMask, setBatchAiBeautyUseMask, batchSection, setBatchSection, batchRawFiles, setBatchRawFiles, handleRawBatchProcess, batchLogs, addBatchLog, batchConfirmFirst, setBatchConfirmFirst, batchConfirmData, batchCancelRequested, handleCancelBatch, continueBatchProcess, cancelBatchProcess, batchStats, batchLutId, setBatchLutId, batchLutIntensity, setBatchLutIntensity, batchCustomLutData, setBatchCustomLutData, batchCustomLutName, setBatchCustomLutName, batchFbOptimize, setBatchFbOptimize, importOutputsToCull, batchCullFilter, setBatchCullFilter, batchCullSort, setBatchCullSort, cullResults }} />
               )}
-              <div style={{ flex: 1, minWidth: 0, minHeight: 0, display: "flex", alignItems: "center", justifyContent: "center", padding: "20px", position: "relative", overflow: "hidden" }}>
-                <Preview {...previewProps} />
-              </div>
             </div>
-          )
+            <div style={{ display: activeTab === "cull" ? "block" : "none" }}>
+              {(activeTab === "cull" || cullProcessing) && (
+                <CullPage {...{ cullOptions, setCullOptions, dm, cardBg, cardBdr, inputSt, sourceHandle: cullSourceHandle, outputHandle, batchImages: cullImages, selectSourceFolder: selectCullSourceFolder, selectRawSourceFolder, selectOutputFolder, batchLogs, addBatchLog, batchSection, setBatchSection, isMobile, user, setActiveTab, cullResults, setCullResults, groups, setGroups, activeGroupIndex: cullActiveGroupIndex, setActiveGroupIndex: setCullActiveGroupIndex, activeAlternateIndex: cullActiveAlternateIndex, setActiveAlternateIndex: setCullActiveAlternateIndex, isProcessing: cullProcessing, setIsProcessing: setCullProcessing, progress: cullProgress, setProgress: setCullProgress }} />
+              )}
+            </div>
+            {activeTab === "account" && (
+              <div style={{ display: "flex", justifyContent: "center", minHeight: "calc(100dvh - 52px)", overflowY: "auto", background: dm ? "#0a0e17" : "#f3f4f6" }}>
+                <AccountDashboard user={user} onLogin={handleLogin} onLogout={handleLogout} onRenewLease={handleRenewLease} onUpgrade={() => { setActiveTab("home"); setTimeout(() => document.getElementById("pricing-container")?.scrollIntoView({ behavior: "smooth" }), 100); }} dm={dm} />
+              </div>
+            )}
+            {activeTab === "edit" && (
+              <div style={{ display: "flex", height: "calc(100dvh - 52px)", width: "100%", maxWidth: "100vw", overflow: "hidden" }}>
+                {image && (
+                  <div className="glass-panel" style={{ width: "clamp(300px, 34vw, 360px)", minWidth: 0, borderRight: `1px solid ${dm ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'}`, overflowY: "auto", overflowX: "hidden", flexShrink: 0 }}>
+                    {renderPanel()}
+                  </div>
+                )}
+                <div style={{ flex: 1, minWidth: 0, minHeight: 0, display: "flex", alignItems: "center", justifyContent: "center", padding: "20px", position: "relative", overflow: "hidden" }}>
+                  <Preview {...previewProps} />
+                </div>
+              </div>
+            )}
+          </>
         )}
 
         {isMobile && (
-          activeTab === "home" ? (
-            <div style={{ height: "calc(100dvh - 52px)", overflowY: "auto", overflowX: "hidden" }}>
-              <LandingPage {...{ dm, loadImage, setActiveTab, handleInstallClick, deferredPrompt, isIOS, isInstalled }} onSelectPlan={(plan) => setCheckoutPlan(plan)} />
+          <>
+            {activeTab === "home" && (
+              <div style={{ height: "calc(100dvh - 52px)", overflowY: "auto", overflowX: "hidden" }}>
+                <LandingPage {...{ dm, loadImage, setActiveTab, handleInstallClick, deferredPrompt, isIOS, isInstalled }} onSelectPlan={(plan) => setCheckoutPlan(plan)} />
+              </div>
+            )}
+            <div style={{ display: activeTab === "batch" ? "block" : "none", height: "calc(100dvh - 52px)", overflowY: "auto", overflowX: "hidden" }}>
+              {(activeTab === "batch" || batchProcessing) && (
+                <BatchPage {...{ dm, cardBg, cardBdr, inputSt, isMobile: true, user, setActiveTab, sourceHandle, outputHandle, batchImages, selectSourceFolder, selectRawSourceFolder, selectOutputFolder, batchResizeMode, setBatchResizeMode, batchResizePreset, setBatchResizePreset, batchCustomW, setBatchCustomW, batchCustomH, setBatchCustomH, batchKeepAspect, setBatchKeepAspect, batchLongEdgePx, setBatchLongEdgePx, batchAutoLevels, setBatchAutoLevels, batchAutoContrast, setBatchAutoContrast, batchSharpen, setBatchSharpen, batchSharpenAmt, setBatchSharpenAmt, batchSharpenRad, setBatchSharpenRad, batchDenoise, setBatchDenoise, batchDenoiseAmt, setBatchDenoiseAmt, batchLogo, setBatchLogo, batchLogoFile, setBatchLogoFile, handleBatchLogoUpload, batchLogoScale, setBatchLogoScale, batchLogoScalePortrait, setBatchLogoScalePortrait, batchLogoOpacity, setBatchLogoOpacity, batchLogoPos, setBatchLogoPos, batchLogoMargin, setBatchLogoMargin, batchOutputFmt, setBatchOutputFmt, batchOutputQ, setBatchOutputQ, batchPrefix, setBatchPrefix, batchSuffix, setBatchSuffix, batchProcessing, batchProgress, batchDone, handleBatchProcess, batchPreviewIdx, batchPreviewOrigUrl, batchPreviewAfterUrl, batchPreviewLoading, batchPreviewSplit, setBatchPreviewSplit, batchPreviewDragging, setBatchPreviewDragging, batchPreviewOpen, setBatchPreviewOpen, generateBatchPreview, filters, setFilters, resetAll, batchFilterGroup, setBatchFilterGroup, calcBatchDims, batchAiUpscale, setBatchAiUpscale, batchAiBeauty, setBatchAiBeauty, batchAiScale, setBatchAiScale, batchAiBeautySmooth, setBatchAiBeautySmooth, batchAiBeautyClarity, setBatchAiBeautyClarity, batchAiBeautyGlow, setBatchAiBeautyGlow, batchAiFaceRestore, setBatchAiFaceRestore, batchAiBeautyUseMask, setBatchAiBeautyUseMask, batchSection, setBatchSection, batchRawFiles, setBatchRawFiles, handleRawBatchProcess, batchLogs, addBatchLog, batchConfirmFirst, setBatchConfirmFirst, batchConfirmData, batchCancelRequested, handleCancelBatch, continueBatchProcess, cancelBatchProcess, batchStats, batchLutId, setBatchLutId, batchLutIntensity, setBatchLutIntensity, batchCustomLutData, setBatchCustomLutData, batchCustomLutName, setBatchCustomLutName, batchFbOptimize, setBatchFbOptimize, importOutputsToCull, batchCullFilter, setBatchCullFilter, batchCullSort, setBatchCullSort, cullResults }} />
+              )}
             </div>
-          ) : activeTab === "batch" ? (
-            <div style={{ height: "calc(100dvh - 52px)", overflowY: "auto", overflowX: "hidden" }}>
-              <BatchPage {...{ dm, cardBg, cardBdr, inputSt, isMobile: true, user, setActiveTab, sourceHandle, outputHandle, batchImages, selectSourceFolder, selectRawSourceFolder, selectOutputFolder, batchResizeMode, setBatchResizeMode, batchResizePreset, setBatchResizePreset, batchCustomW, setBatchCustomW, batchCustomH, setBatchCustomH, batchKeepAspect, setBatchKeepAspect, batchLongEdgePx, setBatchLongEdgePx, batchAutoLevels, setBatchAutoLevels, batchAutoContrast, setBatchAutoContrast, batchSharpen, setBatchSharpen, batchSharpenAmt, setBatchSharpenAmt, batchSharpenRad, setBatchSharpenRad, batchDenoise, setBatchDenoise, batchDenoiseAmt, setBatchDenoiseAmt, batchLogo, setBatchLogo, batchLogoFile, setBatchLogoFile, handleBatchLogoUpload, batchLogoScale, setBatchLogoScale, batchLogoScalePortrait, setBatchLogoScalePortrait, batchLogoOpacity, setBatchLogoOpacity, batchLogoPos, setBatchLogoPos, batchLogoMargin, setBatchLogoMargin, batchOutputFmt, setBatchOutputFmt, batchOutputQ, setBatchOutputQ, batchPrefix, setBatchPrefix, batchSuffix, setBatchSuffix, batchProcessing, batchProgress, batchDone, handleBatchProcess, batchPreviewIdx, batchPreviewOrigUrl, batchPreviewAfterUrl, batchPreviewLoading, batchPreviewSplit, setBatchPreviewSplit, batchPreviewDragging, setBatchPreviewDragging, batchPreviewOpen, setBatchPreviewOpen, generateBatchPreview, filters, setFilters, resetAll, batchFilterGroup, setBatchFilterGroup, calcBatchDims, batchAiUpscale, setBatchAiUpscale, batchAiBeauty, setBatchAiBeauty, batchAiScale, setBatchAiScale, batchAiBeautySmooth, setBatchAiBeautySmooth, batchAiBeautyClarity, setBatchAiBeautyClarity, batchAiBeautyGlow, setBatchAiBeautyGlow, batchAiFaceRestore, setBatchAiFaceRestore, batchAiBeautyUseMask, setBatchAiBeautyUseMask, batchSection, setBatchSection, batchRawFiles, setBatchRawFiles, handleRawBatchProcess, batchLogs, addBatchLog, batchConfirmFirst, setBatchConfirmFirst, batchConfirmData, batchCancelRequested, handleCancelBatch, continueBatchProcess, cancelBatchProcess, batchStats, batchLutId, setBatchLutId, batchLutIntensity, setBatchLutIntensity, batchCustomLutData, setBatchCustomLutData, batchCustomLutName, setBatchCustomLutName, batchFbOptimize, setBatchFbOptimize, importOutputsToCull, batchCullFilter, setBatchCullFilter, batchCullSort, setBatchCullSort, cullResults }} />
+            <div style={{ display: activeTab === "cull" ? "block" : "none", height: "calc(100dvh - 52px)", overflowY: "auto", overflowX: "hidden", padding: "12px" }}>
+              {(activeTab === "cull" || cullProcessing) && (
+                <CullPage {...{ cullOptions, setCullOptions, dm, cardBg, cardBdr, inputSt, sourceHandle: cullSourceHandle, outputHandle, batchImages: cullImages, selectSourceFolder: selectCullSourceFolder, selectRawSourceFolder, selectOutputFolder, batchLogs, addBatchLog, batchSection, setBatchSection, isMobile: true, user, setActiveTab, cullResults, setCullResults, groups, setGroups, activeGroupIndex: cullActiveGroupIndex, setActiveGroupIndex: setCullActiveGroupIndex, activeAlternateIndex: cullActiveAlternateIndex, setActiveAlternateIndex: setCullActiveAlternateIndex, isProcessing: cullProcessing, setIsProcessing: setCullProcessing, progress: cullProgress, setProgress: setCullProgress }} />
+              )}
             </div>
-          ) : activeTab === "cull" ? (
-            <div style={{ height: "calc(100dvh - 52px)", overflowY: "auto", overflowX: "hidden", padding: "12px" }}>
-              <CullPage {...{ cullOptions, setCullOptions, dm, cardBg, cardBdr, inputSt, sourceHandle: cullSourceHandle, outputHandle, batchImages: cullImages, selectSourceFolder: selectCullSourceFolder, selectRawSourceFolder, selectOutputFolder, batchLogs, addBatchLog, batchSection, setBatchSection, isMobile: true, user, setActiveTab, cullResults, setCullResults, groups, setGroups, activeGroupIndex: cullActiveGroupIndex, setActiveGroupIndex: setCullActiveGroupIndex, activeAlternateIndex: cullActiveAlternateIndex, setActiveAlternateIndex: setCullActiveAlternateIndex }} />
-            </div>
-          ) : activeTab === "account" ? (
-            <div style={{ display: "flex", justifyContent: "center", minHeight: "calc(100dvh - 52px)", overflowY: "auto", overflowX: "hidden", background: dm ? "#0a0e17" : "#f3f4f6" }}>
-              <AccountDashboard user={user} onLogin={handleLogin} onLogout={handleLogout} onRenewLease={handleRenewLease} onUpgrade={() => { setActiveTab("home"); setTimeout(() => document.getElementById("pricing-container")?.scrollIntoView({ behavior: "smooth" }), 100); }} dm={dm} />
-            </div>
-          ) : (
-            <div style={{ display: "flex", flexDirection: "column", height: "calc(100dvh - 52px)", width: "100%", maxWidth: "100vw", overflow: "hidden" }}>
+            {activeTab === "account" && (
+              <div style={{ display: "flex", justifyContent: "center", minHeight: "calc(100dvh - 52px)", overflowY: "auto", overflowX: "hidden", background: dm ? "#0a0e17" : "#f3f4f6" }}>
+                <AccountDashboard user={user} onLogin={handleLogin} onLogout={handleLogout} onRenewLease={handleRenewLease} onUpgrade={() => { setActiveTab("home"); setTimeout(() => document.getElementById("pricing-container")?.scrollIntoView({ behavior: "smooth" }), 100); }} dm={dm} />
+              </div>
+            )}
+            {activeTab === "edit" && (
+              <div style={{ display: "flex", flexDirection: "column", height: "calc(100dvh - 52px)", width: "100%", maxWidth: "100vw", overflow: "hidden" }}>
               {image ? (
                 <>
                   <div style={{ height: "42dvh", minWidth: 0, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", padding: "8px 12px 36px", position: "relative", overflow: "hidden", borderBottom: `1px solid ${dm ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'}` }}>
@@ -3296,8 +3366,9 @@ export default function App() {
                 </div>
               )}
             </div>
-          )
-        )}
+          )}
+        </>
+      )}
       </Suspense>
 
       {showExport && (

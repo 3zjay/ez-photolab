@@ -1290,14 +1290,40 @@ export function BatchPage({ dm, cardBg, cardBdr, inputSt, isMobile = false,
               🛑 {batchCancelRequested ? "Cancelling..." : "Cancel"}
             </button>
           )}
+          {!batchProcessing && !batchDone && batchProgress && batchProgress.current > 0 && batchProgress.current < batchProgress.total && canProcess && (
+            <button
+              onClick={() => {
+                const fn = isRaw || (batchImages.length === 0 && batchRawFiles.length > 0) ? handleRawBatchProcess : handleBatchProcess;
+                fn(0);
+              }}
+              style={{
+                padding: "10px 16px",
+                border: `1px solid ${dm ? "#444" : "#ccc"}`,
+                borderRadius: "10px",
+                fontFamily: "inherit",
+                fontWeight: 600,
+                fontSize: "13px",
+                cursor: "pointer",
+                background: dm ? "#222" : "#f3f4f6",
+                color: dm ? "#bbb" : "#666",
+                transition: "all .2s"
+              }}
+              title="Restart batch processing from photo #1"
+            >
+              🔄 Restart
+            </button>
+          )}
           <button
             onClick={() => {
+              const resumeIndex = (!batchProcessing && !batchDone && batchProgress && batchProgress.current > 0 && batchProgress.current < batchProgress.total)
+                ? batchProgress.current
+                : 0;
               if (isRaw) {
-                handleRawBatchProcess(0);
+                handleRawBatchProcess(resumeIndex);
               } else if (batchImages.length === 0 && batchRawFiles.length > 0) {
-                handleRawBatchProcess(0);
+                handleRawBatchProcess(resumeIndex);
               } else {
-                handleBatchProcess(0);
+                handleBatchProcess(resumeIndex);
               }
             }}
             disabled={!canProcess}
@@ -1307,9 +1333,11 @@ export function BatchPage({ dm, cardBg, cardBdr, inputSt, isMobile = false,
               boxShadow: canProcess ? "0 2px 12px rgba(108,99,255,.35)" : "none",
               transition: "all .2s", display: "flex", alignItems: "center", gap: "8px" }}>
             {batchProcessing
-              ? <><Spin />Processing {batchProgress.current}/{batchProgress.total}…</>
+              ? <><Spin />Processing in background {batchProgress.current}/{batchProgress.total}…</>
               : batchDone ? "✅ Done — Run Again"
-                : canProcess ? (
+                : (!batchProcessing && batchProgress && batchProgress.current > 0 && batchProgress.current < batchProgress.total)
+                  ? `⚡ Resume Batch (Photo #${batchProgress.current + 1} of ${batchProgress.total})`
+                  : canProcess ? (
                     !isRaw && batchImages.length === 0 && batchRawFiles.length > 0
                       ? `⚡ Process ${batchRawFiles.length} RAW File${batchRawFiles.length !== 1 ? "s" : ""}`
                       : `⚡ Process ${filteredCurrentFiles.length} Image${filteredCurrentFiles.length !== 1 ? "s" : ""}`

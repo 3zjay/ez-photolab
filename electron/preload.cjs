@@ -19,6 +19,8 @@ contextBridge.exposeInMainWorld('photoLab', Object.freeze({
   saveWorkspace: data => invoke('workspace:save', data),
   recoverWorkspace: () => invoke('workspace:recover'),
   setDirty: dirty => invoke('window:dirty', Boolean(dirty)),
+  preventSleep: enable => invoke('power:prevent-sleep', Boolean(enable)),
+  setProgress: ratio => invoke('window:progress', ratio),
   onFlush: callback => {
     const listener = async (_event, id) => {
       try { await callback(); await invoke('workspace:flushed', id, true); }

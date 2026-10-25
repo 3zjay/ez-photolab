@@ -1,4 +1,4 @@
-const { app, BrowserWindow, protocol, session, ipcMain, dialog, Menu, shell } = require('electron');
+const { app, BrowserWindow, protocol, session, ipcMain, dialog, Menu, shell, powerSaveBlocker } = require('electron');
 const fs = require('node:fs/promises');
 const { createReadStream } = require('node:fs');
 const { Readable } = require('node:stream');
@@ -16,6 +16,21 @@ app.setPath('userData', smokeTest ? path.join(app.getAppPath(), webSmoke ? '.web
 protocol.registerSchemesAsPrivileged([{ scheme: 'photolab', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true } }]);
 const files = new FileService();
 let mainWindow;
+let powerBlockerId = null;
+function setPowerBlocker(enable) {
+  if (enable) {
+    if (powerBlockerId === null || !powerSaveBlocker.isStarted(powerBlockerId)) {
+      powerBlockerId = powerSaveBlocker.start('prevent-app-suspension');
+    }
+  } else {
+    if (powerBlockerId !== null && powerSaveBlocker.isStarted(powerBlockerId)) {
+      powerSaveBlocker.stop(powerBlockerId);
+      powerBlockerId = null;
+    }
+  }
+  return powerBlockerId !== null && powerSaveBlocker.isStarted(powerBlockerId);
+}
+
 let dirty = false;
 let closing = false;
 let autosaveQueue = Promise.resolve();
@@ -102,6 +117,17 @@ function registerHandlers() {
     return operation.then(() => true);
   });
   handle('workspace:recover', () => recoverWorkspace(path.join(app.getPath('userData'), 'workspace-recovery.photolab'), files));
+  handle('power:prevent-sleep', enable => setPowerBlocker(Boolean(enable)));
+  handle('window:progress', ratio => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      if (typeof ratio === 'number' && ratio >= 0 && ratio <= 1) {
+        mainWindow.setProgressBar(ratio);
+      } else {
+        mainWindow.setProgressBar(-1);
+      }
+    }
+    return true;
+  });
 }
 
 async function createWindow() {
@@ -130,7 +156,7 @@ async function createWindow() {
       return new Response(Readable.toWeb(createReadStream(filename)), { status: 200, headers });
     } catch { return new Response('Asset not found', { status: 404 }); }
   });
-  mainWindow = new BrowserWindow({ width: 1440, height: 940, minWidth: 1050, minHeight: 720, show: false, backgroundColor: '#10121a', title: `PHOTOlab ${app.getVersion()}`, webPreferences: { ...(webSmoke ? {} : { preload: path.join(__dirname, 'preload.cjs') }), contextIsolation: true, nodeIntegration: false, sandbox: true, webSecurity: true } });
+  mainWindow = new BrowserWindow({ width: 1440, height: 940, minWidth: 1050, minHeight: 720, show: false, backgroundColor: '#10121a', title: `PHOTOlab ${app.getVersion()}`, webPreferences: { ...(webSmoke ? {} : { preload: path.join(__dirname, 'preload.cjs') }), contextIsolation: true, nodeIntegration: false, sandbox: true, webSecurity: true, backgroundThrottling: false } });
   mainWindow.webContents.on('console-message', (_event, level, message, line, sourceId) => {
     console.log(`[Renderer] ${message}`);
   });
@@ -140,7 +166,24 @@ async function createWindow() {
   mainWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   mainWindow.webContents.on('will-navigate', (event, url) => { if (!url.startsWith(`${APP_ORIGIN}/`)) event.preventDefault(); });
   mainWindow.on('close', async event => {
-    if (closing || !dirty) return;
+    if (closing) return;
+    if (powerBlockerId !== null && powerSaveBlocker.isStarted(powerBlockerId)) {
+      event.preventDefault();
+      const result = await dialog.showMessageBox(mainWindow, {
+        type: 'question',
+        buttons: ['Keep running in background', 'Cancel & Exit'],
+        defaultId: 0,
+        cancelId: 0,
+        message: 'A batch or culling operation is currently in progress.',
+        detail: 'Do you want PHOTOlab to keep processing in the background, or cancel the operation and exit?'
+      });
+      if (result.response === 0) {
+        mainWindow.minimize();
+        return;
+      }
+      setPowerBlocker(false);
+    }
+    if (!dirty) return;
     event.preventDefault();
     const result = await dialog.showMessageBox(mainWindow, { type: 'question', buttons: ['Keep editing', 'Close'], defaultId: 0, cancelId: 0, message: 'Close this project?', detail: 'Save a project file to keep your edits. The last successful autosave is available under Recover session.' });
     if (result.response === 1) {

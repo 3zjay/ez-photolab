@@ -506,7 +506,11 @@ export async function cullBatch(images, options = {}, onProgress) {
     enableFaceLandmarks = true, // Run MediaPipe vision resolver
     darkThreshold = 46,        // Brightness threshold below which photo is dark (0-100)
     enableExposureAnalysis = true,
-    separateExposureGroups = true
+    separateExposureGroups = true,
+    startIndex = 0,
+    existingResults = [],
+    cancelRef = null,
+    onResult = null
   } = options;
 
   let fl = null;
@@ -518,7 +522,9 @@ export async function cullBatch(images, options = {}, onProgress) {
     }
   }
 
-  const results = [];
+  const results = Array.isArray(existingResults) && startIndex > 0
+    ? existingResults.slice(0, startIndex)
+    : [];
   const total = images.length;
 
   // Reusable canvas elements to prevent context/memory leaks
@@ -540,7 +546,10 @@ export async function cullBatch(images, options = {}, onProgress) {
   exposureCanvas.height = 120;
   const exposureCtx = exposureCanvas.getContext("2d");
 
-  for (let i = 0; i < total; i++) {
+  for (let i = startIndex; i < total; i++) {
+    if (cancelRef?.current) {
+      break;
+    }
     const imgObj = images[i];
     let imageBitmap = null;
     let previewUrl = imgObj.previewUrl || null;
@@ -718,15 +727,17 @@ export async function cullBatch(images, options = {}, onProgress) {
   }
 
   // 8. PERCEPTUAL SIMILARITY GROUPING WITH EXPOSURE SEPARATION & KEY PHOTO PROMOTION
-  clusterPhotos(results, {
-    groupingSensitivity,
-    blurStrictness,
-    darkThreshold,
-    separateExposureGroups
-  });
+  if (results.length > 0) {
+    clusterPhotos(results, {
+      groupingSensitivity,
+      blurStrictness,
+      darkThreshold,
+      separateExposureGroups
+    });
 
-  // Restore original ordering
-  results.sort((a, b) => images.indexOf(images.find(x => x.name === a.name)) - images.indexOf(images.find(x => x.name === b.name)));
+    // Restore original ordering
+    results.sort((a, b) => images.indexOf(images.find(x => x.name === a.name)) - images.indexOf(images.find(x => x.name === b.name)));
+  }
 
   return results;
 }
