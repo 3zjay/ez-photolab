@@ -11,6 +11,7 @@ contextBridge.exposeInMainWorld('photoLab', Object.freeze({
   child: (id, name, kind, create) => invoke('files:child', id, name, kind, create),
   read: id => invoke('files:read', id),
   write: (id, bytes, options) => invoke('files:write', id, bytes, options),
+  copyFile: (sourceId, targetDirId, newName) => invoke('files:copy', sourceId, targetDirId, newName),
   saveImage: (name, bytes) => invoke('files:save', name, bytes),
   saveProject: data => invoke('project:save', data),
   openProject: () => invoke('project:open'),

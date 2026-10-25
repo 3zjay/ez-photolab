@@ -1559,7 +1559,13 @@ export default function App() {
 
   const selectSourceFolder = async () => {
     try {
-      const handle = await pickDirectory();
+      let handle;
+      try {
+        handle = await pickDirectory({ mode: 'readwrite' });
+      } catch (e) {
+        if (e.name === 'AbortError') return;
+        handle = await pickDirectory();
+      }
       setSourceHandle(handle);
       setCullSourceHandle(handle);
       const stdFiles = [];
@@ -1623,7 +1629,13 @@ export default function App() {
 
   const selectCullSourceFolder = async () => {
     try {
-      const handle = await pickDirectory();
+      let handle;
+      try {
+        handle = await pickDirectory({ mode: 'readwrite' });
+      } catch (e) {
+        if (e.name === 'AbortError') return;
+        handle = await pickDirectory();
+      }
       setCullSourceHandle(handle);
       setSourceHandle(handle);
       setGroups([]);
@@ -1732,7 +1744,13 @@ export default function App() {
   const selectRawSourceFolder = async () => {
     addBatchLog("Opening folder picker for RAW files...", "info");
     try {
-      const handle = await pickDirectory();
+      let handle;
+      try {
+        handle = await pickDirectory({ mode: 'readwrite' });
+      } catch (e) {
+        if (e.name === 'AbortError') return;
+        handle = await pickDirectory();
+      }
       setSourceHandle(handle);
       setCullSourceHandle(handle);
       const stdFiles = [];
@@ -3304,7 +3322,7 @@ export default function App() {
             </div>
             <div style={{ display: activeTab === "cull" ? "block" : "none" }}>
               {(activeTab === "cull" || cullProcessing) && (
-                <CullPage {...{ cullOptions, setCullOptions, dm, cardBg, cardBdr, inputSt, sourceHandle: cullSourceHandle, outputHandle, batchImages: cullImages, selectSourceFolder: selectCullSourceFolder, selectRawSourceFolder, selectOutputFolder, batchLogs, addBatchLog, batchSection, setBatchSection, isMobile, user, setActiveTab, cullResults, setCullResults, groups, setGroups, activeGroupIndex: cullActiveGroupIndex, setActiveGroupIndex: setCullActiveGroupIndex, activeAlternateIndex: cullActiveAlternateIndex, setActiveAlternateIndex: setCullActiveAlternateIndex, isProcessing: cullProcessing, setIsProcessing: setCullProcessing, progress: cullProgress, setProgress: setCullProgress }} />
+                <CullPage {...{ cullOptions, setCullOptions, dm, cardBg, cardBdr, inputSt, sourceHandle: cullSourceHandle, outputHandle, setOutputHandle, batchImages: cullImages, selectSourceFolder: selectCullSourceFolder, selectRawSourceFolder, selectOutputFolder, batchLogs, addBatchLog, batchSection, setBatchSection, isMobile, user, setActiveTab, cullResults, setCullResults, groups, setGroups, activeGroupIndex: cullActiveGroupIndex, setActiveGroupIndex: setCullActiveGroupIndex, activeAlternateIndex: cullActiveAlternateIndex, setActiveAlternateIndex: setCullActiveAlternateIndex, isProcessing: cullProcessing, setIsProcessing: setCullProcessing, progress: cullProgress, setProgress: setCullProgress }} />
               )}
             </div>
             {activeTab === "account" && (
@@ -3341,7 +3359,7 @@ export default function App() {
             </div>
             <div style={{ display: activeTab === "cull" ? "block" : "none", height: "calc(100dvh - 52px)", overflowY: "auto", overflowX: "hidden", padding: "12px" }}>
               {(activeTab === "cull" || cullProcessing) && (
-                <CullPage {...{ cullOptions, setCullOptions, dm, cardBg, cardBdr, inputSt, sourceHandle: cullSourceHandle, outputHandle, batchImages: cullImages, selectSourceFolder: selectCullSourceFolder, selectRawSourceFolder, selectOutputFolder, batchLogs, addBatchLog, batchSection, setBatchSection, isMobile: true, user, setActiveTab, cullResults, setCullResults, groups, setGroups, activeGroupIndex: cullActiveGroupIndex, setActiveGroupIndex: setCullActiveGroupIndex, activeAlternateIndex: cullActiveAlternateIndex, setActiveAlternateIndex: setCullActiveAlternateIndex, isProcessing: cullProcessing, setIsProcessing: setCullProcessing, progress: cullProgress, setProgress: setCullProgress }} />
+                <CullPage {...{ cullOptions, setCullOptions, dm, cardBg, cardBdr, inputSt, sourceHandle: cullSourceHandle, outputHandle, setOutputHandle, batchImages: cullImages, selectSourceFolder: selectCullSourceFolder, selectRawSourceFolder, selectOutputFolder, batchLogs, addBatchLog, batchSection, setBatchSection, isMobile: true, user, setActiveTab, cullResults, setCullResults, groups, setGroups, activeGroupIndex: cullActiveGroupIndex, setActiveGroupIndex: setCullActiveGroupIndex, activeAlternateIndex: cullActiveAlternateIndex, setActiveAlternateIndex: setCullActiveAlternateIndex, isProcessing: cullProcessing, setIsProcessing: setCullProcessing, progress: cullProgress, setProgress: setCullProgress }} />
               )}
             </div>
             {activeTab === "account" && (

@@ -75,3 +75,29 @@ test('folder access: nested directory creation and deep access', async t => {
   assert.equal(content, 'deep-content');
 });
 
+
+test('folder access: native fast copy into sorted emoji folders', async t => {
+  const root = await createTempFolder(t);
+  const shootDir = path.join(root, 'Shoot');
+  await fs.mkdir(shootDir, { recursive: true });
+  await fs.writeFile(path.join(shootDir, 'DSC_0001.JPG'), 'original-photo-bytes');
+
+  const service = new FileService();
+  const shootHandle = await service.grantDirectory(shootDir, true);
+  const list = await service.list(shootHandle.id);
+  const sourceFile = list.find(x => x.name === 'DSC_0001.JPG');
+  assert.ok(sourceFile, 'Missing source photo');
+
+  // Create 4-folder sort target
+  const keepersDir = await service.child(shootHandle.id, '📗 Keepers', 'directory', true);
+  const copyResult = await service.copy(sourceFile.id, keepersDir.id, 'DSC_0001.JPG');
+  assert.equal(copyResult.ok, true);
+
+  const copiedBytes = await fs.readFile(path.join(shootDir, '📗 Keepers', 'DSC_0001.JPG'), 'utf8');
+  assert.equal(copiedBytes, 'original-photo-bytes');
+
+  // Test collision handling
+  const duplicateCopy = await service.copy(sourceFile.id, keepersDir.id, 'DSC_0001.JPG');
+  assert.equal(duplicateCopy.ok, true);
+  assert.ok(duplicateCopy.path.includes('DSC_0001 (1).JPG'));
+});

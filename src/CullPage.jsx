@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo, memo } from "
 import { cullBatch, analyzePhotoExposure, getPhotoIsDark, clusterPhotos } from "./cullEngine";
 import { setAppPowerKeepAwake, setAppTaskbarProgress } from "./platform/power";
 import { exportXmpSidecars } from "./xmpExporter";
+import { copyDesktopFile } from "./platform/desktop";
 
 function StarRating({ rating, onChange, size = 18 }) {
   return (
@@ -137,6 +138,7 @@ export default function CullPage({
   inputSt,
   sourceHandle,
   outputHandle,
+  setOutputHandle,
   batchImages,
   selectSourceFolder,
   selectRawSourceFolder,
@@ -411,37 +413,44 @@ export default function CullPage({
 
   // 5. Exporter to write XMP Sidecar files
   const handleExportXmp = async () => {
-    if (!outputHandle) {
-      alert("Please select a Destination Output Folder first!");
+    const destination = outputHandle || sourceHandle;
+    if (!destination) {
+      if (selectOutputFolder) await selectOutputFolder();
       return;
     }
 
     setIsExporting(true);
+    await setAppPowerKeepAwake(true);
     setExportProgress({ current: 0, total: 1, currentFile: "Writing sidecars..." });
-    addBatchLog?.("📝 Exporting Adobe-compliant XMP sidecars...", "info");
+    addBatchLog?.(`📝 Starting Adobe XMP sidecar export into ${destination.name}...`, "info");
 
     try {
       const allImages = groups.flat();
-      const result = await exportXmpSidecars(outputHandle, allImages, addBatchLog);
-      showToast(`Sidecars: ${result.saved} saved, ${result.failed} failed. See the log for details.`);
+      const result = await exportXmpSidecars(destination, allImages, addBatchLog);
+      addBatchLog?.(`✅ XMP Export Complete: ${result.saved} saved, ${result.skipped} skipped, ${result.failed} failed.`, "success");
+      showToast(`Saved ${result.saved} XMP sidecar files!`);
     } catch (e) {
-      addBatchLog?.(`❌ XMP Sidecars Export Failed: ${e.message}`, "error");
-      alert(`Export failed: ${e.message}`);
+      addBatchLog?.(`❌ XMP Export Failed: ${e.message}`, "error");
+      console.error(e);
+      alert(`XMP export failed: ${e.message}`);
     } finally {
       setIsExporting(false);
+      await setAppPowerKeepAwake(false);
     }
   };
 
   // 5b. Exporter to physically copy and group files into subfolders
   const handlePhysicalExport = async (mode = layoutMode) => {
-    if (!outputHandle) {
-      alert("Please select a Destination Output Folder first!");
+    let targetRoot = outputHandle || sourceHandle;
+    if (!targetRoot) {
+      if (selectOutputFolder) await selectOutputFolder();
       return;
     }
 
     setIsExporting(true);
+    await setAppPowerKeepAwake(true);
     setExportProgress({ current: 0, total: 0, currentFile: "Initializing folders..." });
-    addBatchLog?.(`📁 Starting physical file sort using mode: "${mode}"`, "info");
+    addBatchLog?.(`📁 Starting physical file sort using mode: "${mode}" into ${targetRoot.name}...`, "info");
 
     try {
       const allImages = groups.flat();
@@ -484,21 +493,30 @@ export default function CullPage({
       let wellLitDir = null;
       let darkDir = null;
 
-      if (mode === "full_sort") {
-        keepersDir   = await outputHandle.getDirectoryHandle("📗 Keepers",   { create: true });
-        alternatesDir = await outputHandle.getDirectoryHandle("📘 Alternates", { create: true });
-        blurryDir    = await outputHandle.getDirectoryHandle("📙 Blurry",     { create: true });
-        rejectedDir  = await outputHandle.getDirectoryHandle("📕 Rejected",   { create: true });
-      } else if (mode === "dark_separated") {
-        wellLitDir   = await outputHandle.getDirectoryHandle("☀️ Well-Lit Photos", { create: true });
-        darkDir      = await outputHandle.getDirectoryHandle("🌙 Dark & Underexposed", { create: true });
-      } else if (mode === "dark_only") {
-        darkDir      = await outputHandle.getDirectoryHandle("🌙 Dark & Underexposed", { create: true });
-      } else if (mode === "keepers_rejects") {
-        keepersDir   = await outputHandle.getDirectoryHandle("Keepers",            { create: true });
-        alternatesDir = await outputHandle.getDirectoryHandle("Rejected & Alternates", { create: true });
-      } else if (mode === "keepers_only") {
-        keepersDir = await outputHandle.getDirectoryHandle("Keepers", { create: true });
+      try {
+        if (mode === "full_sort") {
+          keepersDir   = await targetRoot.getDirectoryHandle("📗 Keepers",   { create: true });
+          alternatesDir = await targetRoot.getDirectoryHandle("📘 Alternates", { create: true });
+          blurryDir    = await targetRoot.getDirectoryHandle("📙 Blurry",     { create: true });
+          rejectedDir  = await targetRoot.getDirectoryHandle("📕 Rejected",   { create: true });
+        } else if (mode === "dark_separated") {
+          wellLitDir   = await targetRoot.getDirectoryHandle("☀️ Well-Lit Photos", { create: true });
+          darkDir      = await targetRoot.getDirectoryHandle("🌙 Dark & Underexposed", { create: true });
+        } else if (mode === "dark_only") {
+          darkDir      = await targetRoot.getDirectoryHandle("🌙 Dark & Underexposed", { create: true });
+        } else if (mode === "keepers_rejects") {
+          keepersDir   = await targetRoot.getDirectoryHandle("Keepers",            { create: true });
+          alternatesDir = await targetRoot.getDirectoryHandle("Rejected & Alternates", { create: true });
+        } else if (mode === "keepers_only") {
+          keepersDir = await targetRoot.getDirectoryHandle("Keepers", { create: true });
+        }
+      } catch (dirErr) {
+        if (dirErr.message?.toLowerCase().includes("read only") && !outputHandle && selectOutputFolder) {
+          addBatchLog?.("⚠️ The source photo folder is read-only. Please choose an export destination folder.", "warning");
+          await selectOutputFolder();
+          return;
+        }
+        throw dirErr;
       }
 
       let copiedCount = 0;
@@ -510,48 +528,71 @@ export default function CullPage({
         const item = filesToCopy[i];
 
         setExportProgress({ current: i + 1, total, currentFile: item.name });
+        setAppTaskbarProgress((i + 1) / total);
 
-        if (item.file) {
-          let targetDir = outputHandle;
-          let destName = item.name;
+        let targetDir = targetRoot;
+        let destName = item.name;
 
-          if (mode === "full_sort") {
-            // Route by category (set by cullEngine 4-tier logic)
-            const cat = item.category || (item.isKeyPhoto ? "keeper" : "alternate");
-            if (cat === "keeper")    targetDir = keepersDir;
-            else if (cat === "alternate") targetDir = alternatesDir;
-            else if (cat === "blurry")    targetDir = blurryDir;
-            else                          targetDir = rejectedDir; // rejected
-          } else if (mode === "dark_separated") {
-            const isDark = getPhotoIsDark(item, darkThreshold);
-            targetDir = isDark ? darkDir : wellLitDir;
-            if (isDark) darkCount++;
-            else wellLitCount++;
-          } else if (mode === "dark_only") {
-            targetDir = darkDir;
-            darkCount++;
-          } else if (mode === "keepers_rejects") {
-            targetDir = item.isKeyPhoto ? keepersDir : alternatesDir;
-          } else if (mode === "keepers_only") {
-            targetDir = keepersDir;
-          } else if (mode === "clusters") {
-            const clusterFolder = `Group_${item.cullGroup + 1}`;
-            targetDir = await outputHandle.getDirectoryHandle(clusterFolder, { create: true });
-            if (item.isKeyPhoto) destName = `KEEPER_${item.name}`;
-          }
+        if (mode === "full_sort") {
+          // Route by category (set by cullEngine 4-tier logic)
+          const cat = item.category || (item.isKeyPhoto ? "keeper" : "alternate");
+          if (cat === "keeper")    targetDir = keepersDir;
+          else if (cat === "alternate") targetDir = alternatesDir;
+          else if (cat === "blurry")    targetDir = blurryDir;
+          else                          targetDir = rejectedDir; // rejected
+        } else if (mode === "dark_separated") {
+          const isDark = getPhotoIsDark(item, darkThreshold);
+          targetDir = isDark ? darkDir : wellLitDir;
+          if (isDark) darkCount++;
+          else wellLitCount++;
+        } else if (mode === "dark_only") {
+          targetDir = darkDir;
+          darkCount++;
+        } else if (mode === "keepers_rejects") {
+          targetDir = item.isKeyPhoto ? keepersDir : alternatesDir;
+        } else if (mode === "keepers_only") {
+          targetDir = keepersDir;
+        } else if (mode === "clusters") {
+          const clusterFolder = `Group_${item.cullGroup + 1}`;
+          targetDir = await targetRoot.getDirectoryHandle(clusterFolder, { create: true });
+          if (item.isKeyPhoto) destName = `KEEPER_${item.name}`;
+        }
 
-          // Write file
+        const fileObj = item.file || activeInputFiles?.find(f => f.name === item.name)?.file;
+        const photoLabId = fileObj?.photoLabId || item.photoLabId;
+        let fileCopied = false;
+
+        // 1. High-Performance Desktop Native Copy (OS kernel CopyFileEx without reading into JS RAM)
+        if (photoLabId && targetDir?.id) {
           try {
-            const arrayBuffer = await item.file.arrayBuffer();
+            const nativeRes = await copyDesktopFile(photoLabId, targetDir.id, destName);
+            if (nativeRes?.ok) {
+              fileCopied = true;
+              copiedCount++;
+            }
+          } catch (nativeErr) {
+            console.warn(`Desktop native copy fallback for ${destName}:`, nativeErr);
+          }
+        }
+
+        // 2. Stream / ArrayBuffer fallback (for web or memory blobs)
+        if (!fileCopied && fileObj) {
+          try {
+            const arrayBuffer = await fileObj.arrayBuffer();
             const fileRef = await targetDir.getFileHandle(destName, { create: true });
             const writable = await fileRef.createWritable();
             await writable.write(new Uint8Array(arrayBuffer));
             await writable.close();
             copiedCount++;
+            fileCopied = true;
           } catch (fileErr) {
             console.error(`Failed to export ${destName}:`, fileErr);
             addBatchLog?.(`⚠️ Could not save ${destName}: ${fileErr.message}`, "warning");
           }
+        }
+
+        if (!fileCopied && !fileObj) {
+          console.warn(`No readable file object found for ${destName}`);
         }
       }
 
@@ -562,8 +603,16 @@ export default function CullPage({
           addBatchLog?.(`ℹ️ All photos were categorized as well-lit at ${darkThreshold}% cutoff. You can raise the Dark Cutoff slider in settings or click 'Mark as Dark' on photos.`, "warning");
         }
       } else {
-        addBatchLog?.(`✅ Successfully organized and saved ${copiedCount} files into subdirectories.`, "success");
-        showToast(`Saved ${copiedCount} files to folders successfully!`);
+        addBatchLog?.(`✅ Successfully organized and sorted ${copiedCount} files into subdirectories inside "${targetRoot.name}".`, "success");
+        showToast(`Sorted ${copiedCount} files into subdirectories successfully!`);
+      }
+
+      if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+        try {
+          new Notification('PHOTOlab Folder Sort Complete', {
+            body: `Finished organizing ${copiedCount} photos successfully into ${targetRoot.name}.`
+          });
+        } catch {}
       }
     } catch (e) {
       addBatchLog?.(`❌ Folder Export Failed: ${e.message}`, "error");
@@ -571,6 +620,8 @@ export default function CullPage({
       alert(`Sort export failed: ${e.message}`);
     } finally {
       setIsExporting(false);
+      await setAppPowerKeepAwake(false);
+      setAppTaskbarProgress(-1);
     }
   };
 
@@ -995,7 +1046,7 @@ export default function CullPage({
             <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
               <label style={{ fontSize: "14px", fontWeight: 700, display: "flex", alignItems: "center", gap: "6px" }}>
                 <span style={{ display: "flex", alignItems: "center", justifyContent: "center", width: "20px", height: "20px", background: accent, color: "#fff", borderRadius: "50%", fontSize: "11px" }}>2</span>
-                Set Sidecar Export Destination
+                Output & Organize Destination (Optional)
               </label>
               
               <button
@@ -1029,14 +1080,14 @@ export default function CullPage({
                 }}
               >
                 <span style={{ fontSize: "18px" }}>💾</span>
-                {outputHandle ? `Folder: ${outputHandle.name}` : `Select Rating Output Folder`}
+                {outputHandle ? `Custom Output: ${outputHandle.name}` : (sourceHandle ? `In-Place: ${sourceHandle.name} (Click to Change)` : `Select Output Folder (Optional)`)}
               </button>
               
               <span style={{ fontSize: "12px", color: dm ? "#a1a1aa" : "#71717a" }}>
                 {outputHandle ? (
-                  <strong style={{ color: "#22c55e" }}>✓ Outputs synced directly. Ready to save ratings.</strong>
+                  <strong style={{ color: "#22c55e" }}>✓ Custom output folder configured for physical sorting and XMP sidecars.</strong>
                 ) : (
-                  "Used to write non-destructive XMP metadata for Adobe Lightroom/Bridge."
+                  "Optional: Defaults to photoshoot folder. Choose a custom folder if exporting to an external drive or separate folder."
                 )}
               </span>
             </div>
@@ -2114,6 +2165,63 @@ export default function CullPage({
                     Physically sort photos by copying them into organized subdirectories inside your output destination.
                   </span>
 
+                  {/* Destination Folder Selector */}
+                  <div style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    padding: "10px 14px",
+                    borderRadius: "12px",
+                    background: dm ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)",
+                    border: `1px solid ${dm ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)"}`,
+                    gap: "8px",
+                    flexWrap: "wrap"
+                  }}>
+                    <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+                      <span style={{ fontSize: "10px", fontWeight: 700, color: dm ? "#a1a1aa" : "#71717a", textTransform: "uppercase" }}>
+                        Destination Folder
+                      </span>
+                      <span style={{ fontSize: "12px", fontWeight: 700, color: dm ? "#f4f4f5" : "#18181b", display: "flex", alignItems: "center", gap: "6px" }}>
+                        📂 {outputHandle ? outputHandle.name : sourceHandle ? `${sourceHandle.name} (Shoot Folder)` : "Select Destination"}
+                      </span>
+                    </div>
+                    <div style={{ display: "flex", gap: "6px" }}>
+                      {outputHandle && setOutputHandle && (
+                        <button
+                          onClick={() => setOutputHandle(null)}
+                          title="Sort directly inside the shoot folder"
+                          style={{
+                            padding: "6px 10px",
+                            fontSize: "11px",
+                            fontWeight: 600,
+                            background: "transparent",
+                            border: `1px solid ${dm ? "#444" : "#ccc"}`,
+                            borderRadius: "8px",
+                            cursor: "pointer",
+                            color: dm ? "#aaa" : "#555"
+                          }}
+                        >
+                          Use Shoot Folder
+                        </button>
+                      )}
+                      <button
+                        onClick={selectOutputFolder}
+                        style={{
+                          padding: "6px 12px",
+                          fontSize: "11px",
+                          fontWeight: 700,
+                          background: `linear-gradient(135deg, ${accent}, #5b54d6)`,
+                          color: "#fff",
+                          border: "none",
+                          borderRadius: "8px",
+                          cursor: "pointer"
+                        }}
+                      >
+                        {outputHandle ? "Change Folder" : "Choose Custom Folder"}
+                      </button>
+                    </div>
+                  </div>
+
                   {/* Folder Layout Options */}
                   <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
                     {[
@@ -2173,21 +2281,21 @@ export default function CullPage({
                   ) : (
                     <button
                       onClick={() => handlePhysicalExport()}
-                      disabled={!outputHandle}
+                      disabled={!outputHandle && !sourceHandle}
                       style={{
                         padding: "14px",
-                        background: outputHandle ? `linear-gradient(135deg, ${accent}, #5b54d6)` : (dm ? "#222" : "#eee"),
-                        color: outputHandle ? "#fff" : (dm ? "#555" : "#aaa"),
+                        background: (outputHandle || sourceHandle) ? `linear-gradient(135deg, ${accent}, #5b54d6)` : (dm ? "#222" : "#eee"),
+                        color: (outputHandle || sourceHandle) ? "#fff" : (dm ? "#555" : "#aaa"),
                         border: "none",
                         borderRadius: "12px",
-                        cursor: outputHandle ? "pointer" : "not-allowed",
+                        cursor: (outputHandle || sourceHandle) ? "pointer" : "not-allowed",
                         fontSize: "13px",
                         fontWeight: 700,
-                        boxShadow: outputHandle ? "0 4px 14px rgba(108, 99, 255, 0.25)" : "none",
+                        boxShadow: (outputHandle || sourceHandle) ? "0 4px 14px rgba(108, 99, 255, 0.25)" : "none",
                         transition: "all 0.2s ease"
                       }}
                     >
-                      📁 Execute Smart Folder Export
+                      📁 Execute Smart Folder Export into "{outputHandle ? outputHandle.name : sourceHandle ? `${sourceHandle.name} / subfolders` : 'chosen destination'}"
                     </button>
                   )}
                 </div>
@@ -2196,6 +2304,43 @@ export default function CullPage({
                   <span style={{ fontSize: "11px", color: dm ? "#a1a1aa" : "#71717a", lineHeight: "1.4" }}>
                     Export non-destructive star ratings and color labels directly into standard Adobe XMP sidecar metadata files. Ideal for Lightroom or Bridge workflows.
                   </span>
+
+                  {/* Destination Info */}
+                  <div style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    padding: "10px 14px",
+                    borderRadius: "12px",
+                    background: dm ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)",
+                    border: `1px solid ${dm ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)"}`,
+                    gap: "8px",
+                    flexWrap: "wrap"
+                  }}>
+                    <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+                      <span style={{ fontSize: "10px", fontWeight: 700, color: dm ? "#a1a1aa" : "#71717a", textTransform: "uppercase" }}>
+                        Sidecar Destination
+                      </span>
+                      <span style={{ fontSize: "12px", fontWeight: 700, color: dm ? "#f4f4f5" : "#18181b" }}>
+                        📝 {outputHandle ? outputHandle.name : sourceHandle ? `${sourceHandle.name} (Shoot Folder)` : "Select Folder"}
+                      </span>
+                    </div>
+                    <button
+                      onClick={selectOutputFolder}
+                      style={{
+                        padding: "6px 12px",
+                        fontSize: "11px",
+                        fontWeight: 700,
+                        background: `linear-gradient(135deg, ${accent}, #5b54d6)`,
+                        color: "#fff",
+                        border: "none",
+                        borderRadius: "8px",
+                        cursor: "pointer"
+                      }}
+                    >
+                      {outputHandle ? "Change Folder" : "Choose Custom Folder"}
+                    </button>
+                  </div>
 
                   {isExporting ? (
                     <div style={{ display: "flex", flexDirection: "column", gap: "6px", padding: "10px 0" }}>
@@ -2206,21 +2351,21 @@ export default function CullPage({
                   ) : (
                     <button
                       onClick={handleExportXmp}
-                      disabled={!outputHandle}
+                      disabled={!outputHandle && !sourceHandle}
                       style={{
                         padding: "14px",
-                        background: outputHandle ? `linear-gradient(135deg, ${accent}, #5b54d6)` : (dm ? "#222" : "#eee"),
-                        color: outputHandle ? "#fff" : (dm ? "#555" : "#aaa"),
+                        background: (outputHandle || sourceHandle) ? `linear-gradient(135deg, ${accent}, #5b54d6)` : (dm ? "#222" : "#eee"),
+                        color: (outputHandle || sourceHandle) ? "#fff" : (dm ? "#555" : "#aaa"),
                         border: "none",
                         borderRadius: "12px",
-                        cursor: outputHandle ? "pointer" : "not-allowed",
+                        cursor: (outputHandle || sourceHandle) ? "pointer" : "not-allowed",
                         fontSize: "13px",
                         fontWeight: 700,
-                        boxShadow: outputHandle ? "0 4px 14px rgba(108, 99, 255, 0.25)" : "none",
+                        boxShadow: (outputHandle || sourceHandle) ? "0 4px 14px rgba(108, 99, 255, 0.25)" : "none",
                         transition: "all 0.2s ease"
                       }}
                     >
-                      📝 Save XMP Sidecars to Output Folder
+                      📝 Save XMP Sidecars to {outputHandle ? outputHandle.name : sourceHandle ? `${sourceHandle.name}` : 'Folder'}
                     </button>
                   )}
                 </div>

@@ -128,3 +128,7 @@ export async function openDesktopPhoto() {
   Object.defineProperty(file, 'photoLabId', { value: descriptor.id });
   return file;
 }
+export async function copyDesktopFile(sourceId, targetDirId, newName) {
+  if (!isDesktop || !window.photoLab?.copyFile) return null;
+  return unwrap(window.photoLab.copyFile(sourceId, targetDirId, newName));
+}

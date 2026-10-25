@@ -133,5 +133,26 @@ class FileService {
     }
     throw new Error('Too many existing files with this name.');
   }
+  async copy(sourceId, targetDirId, newName) {
+    validName(newName);
+    const sourceEntry = await this.get(sourceId, 'file');
+    const targetDir = await this.get(targetDirId, 'directory');
+    if (!targetDir.writable) throw new Error('This destination folder is read only.');
+    let destPath = path.join(targetDir.path, newName);
+    if (key(destPath) === key(sourceEntry.path)) {
+      return { ok: true, path: destPath, skipped: true };
+    }
+    const parsed = path.parse(destPath);
+    for (let suffix = 0; suffix < 10000; suffix++) {
+      try {
+        await fs.copyFile(sourceEntry.path, destPath, fs.constants.COPYFILE_EXCL);
+        return { ok: true, path: destPath };
+      } catch (err) {
+        if (err.code !== 'EEXIST') throw err;
+        destPath = path.join(parsed.dir, `${parsed.name} (${suffix + 1})${parsed.ext}`);
+      }
+    }
+    throw new Error('Too many existing files with this name.');
+  }
 }
 module.exports = { FileService, validName, atomicWrite, hash };
