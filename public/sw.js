@@ -1,4 +1,4 @@
-const CACHE_NAME = 'photolab-cache-v2.10.0';
+const CACHE_NAME = 'photolab-cache-v2.10.4';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
@@ -38,8 +38,8 @@ self.addEventListener('activate', (event) => {
 });
 
 // Fetch Event: Advanced Caching Strategy
-// - Cache-First for static assets (Vite JS/CSS, WASM)
-// - Stale-While-Revalidate for local page assets & HTML
+// - Cache-First for static hashed assets (Vite JS/CSS, WASM, images)
+// - Network-First for HTML/navigation so users always get the latest deployment when online
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
 
@@ -74,23 +74,19 @@ self.addEventListener('fetch', (event) => {
       })
     );
   } else {
-    // Stale-While-Revalidate strategy: serve from cache, fetch in background to update
+    // Network-First strategy for HTML / root shell: ensures fresh versions after redeploys, with offline cache fallback
     event.respondWith(
-      caches.match(event.request).then((cachedResponse) => {
-        const fetchPromise = fetch(event.request).then((networkResponse) => {
-          if (networkResponse && networkResponse.status === 200) {
-            const responseToCache = networkResponse.clone();
-            caches.open(CACHE_NAME).then((cache) => {
-              cache.put(event.request, responseToCache);
-            });
-          }
-          return networkResponse;
-        }).catch(async () => {
-          // Offline fallback to cached shell or 503 Response
-          return cachedResponse || await caches.match('/index.html') || new Response('Offline', { status: 503, statusText: 'Service Unavailable' });
-        });
-        
-        return cachedResponse || fetchPromise;
+      fetch(event.request).then((networkResponse) => {
+        if (networkResponse && networkResponse.status === 200) {
+          const responseToCache = networkResponse.clone();
+          caches.open(CACHE_NAME).then((cache) => {
+            cache.put(event.request, responseToCache);
+          });
+        }
+        return networkResponse;
+      }).catch(async () => {
+        // Offline fallback to cached shell or 503 Response
+        return await caches.match(event.request) || await caches.match('/index.html') || new Response('Offline', { status: 503, statusText: 'Service Unavailable' });
       })
     );
   }

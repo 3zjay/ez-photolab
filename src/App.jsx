@@ -30,10 +30,10 @@ import { auth, db, googleProvider } from "./firebase";
 import { signInWithCustomToken, signInWithPopup, signInWithRedirect, getRedirectResult, signOut as firebaseSignOut, onAuthStateChanged } from "firebase/auth";
 import { doc, onSnapshot, setDoc } from "firebase/firestore";
 
-const LandingPage = lazy(() => import("./LandingPage").then(m => ({ default: m.LandingPage })));
-const BatchPage = lazy(() => import("./BatchPage").then(m => ({ default: m.BatchPage })));
-const CullPage = lazy(() => import("./CullPage"));
-const AccountDashboard = lazy(() => import("./components/panels/AccountDashboard").then(m => ({ default: m.AccountDashboard })));
+import { LandingPage } from "./LandingPage";
+import { BatchPage } from "./BatchPage";
+import CullPage from "./CullPage";
+import { AccountDashboard } from "./components/panels/AccountDashboard";
 
 export function ApertureLogo({ size = 26, className = "" }) {
   return (

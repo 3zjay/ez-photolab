@@ -13,10 +13,40 @@ export class ErrorBoundary extends Component {
   componentDidCatch(error, errorInfo) {
     console.error("ErrorBoundary caught error:", error, errorInfo);
     this.setState({ errorInfo });
+
+    const msg = error?.message || "";
+    if (
+      msg.includes("Failed to fetch dynamically imported module") ||
+      msg.includes("Importing a module script failed") ||
+      msg.includes("error loading dynamically imported module")
+    ) {
+      const hasReloaded = sessionStorage.getItem("chunk_reload_retry");
+      if (!hasReloaded) {
+        sessionStorage.setItem("chunk_reload_retry", "true");
+        if ("serviceWorker" in navigator) {
+          navigator.serviceWorker.getRegistrations().then(regs => {
+            Promise.all(regs.map(r => r.unregister())).finally(() => {
+              window.location.reload();
+            });
+          }).catch(() => window.location.reload());
+        } else {
+          window.location.reload();
+        }
+      }
+    }
   }
 
   handleReload = () => {
-    window.location.reload();
+    sessionStorage.removeItem("chunk_reload_retry");
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.getRegistrations().then(regs => {
+        Promise.all(regs.map(r => r.unregister())).finally(() => {
+          window.location.reload();
+        });
+      }).catch(() => window.location.reload());
+    } else {
+      window.location.reload();
+    }
   };
 
   handleReset = () => {
@@ -25,6 +55,11 @@ export class ErrorBoundary extends Component {
 
   render() {
     if (this.state.hasError) {
+      const isDynamicChunkError =
+        this.state.error?.message?.includes("Failed to fetch dynamically imported module") ||
+        this.state.error?.message?.includes("Importing a module script failed") ||
+        this.state.error?.message?.includes("error loading dynamically imported module");
+
       return (
         <div
           style={{
@@ -56,8 +91,8 @@ export class ErrorBoundary extends Component {
                 width: "56px",
                 height: "56px",
                 borderRadius: "50%",
-                background: "rgba(239, 68, 68, 0.15)",
-                color: "#ef4444",
+                background: isDynamicChunkError ? "rgba(99, 102, 241, 0.15)" : "rgba(239, 68, 68, 0.15)",
+                color: isDynamicChunkError ? "#818cf8" : "#ef4444",
                 display: "inline-flex",
                 alignItems: "center",
                 justifyContent: "center",
@@ -65,7 +100,7 @@ export class ErrorBoundary extends Component {
                 fontSize: "24px"
               }}
             >
-              ⚠️
+              {isDynamicChunkError ? "🔄" : "⚠️"}
             </div>
 
             <h1
@@ -76,7 +111,7 @@ export class ErrorBoundary extends Component {
                 color: "#ffffff"
               }}
             >
-              Something went wrong in the Studio
+              {isDynamicChunkError ? "App Update Available" : "Something went wrong in the Studio"}
             </h1>
 
             <p
@@ -87,10 +122,12 @@ export class ErrorBoundary extends Component {
                 margin: "0 0 24px 0"
               }}
             >
-              An unexpected component error occurred. Your local workspace files and data are intact.
+              {isDynamicChunkError
+                ? "A new version of PHOTOlab was published. Reloading to get the latest features and updates."
+                : "An unexpected component error occurred. Your local workspace files and data are intact."}
             </p>
 
-            {this.state.error?.message && (
+            {this.state.error?.message && !isDynamicChunkError && (
               <div
                 style={{
                   background: "rgba(0,0,0,0.4)",
@@ -111,21 +148,23 @@ export class ErrorBoundary extends Component {
             )}
 
             <div style={{ display: "flex", gap: "12px", justifyContent: "center" }}>
-              <button
-                onClick={this.handleReset}
-                style={{
-                  padding: "10px 20px",
-                  background: "rgba(255, 255, 255, 0.08)",
-                  border: "1px solid rgba(255, 255, 255, 0.15)",
-                  borderRadius: "10px",
-                  color: "#ffffff",
-                  fontSize: "14px",
-                  fontWeight: 600,
-                  cursor: "pointer"
-                }}
-              >
-                Try Again
-              </button>
+              {!isDynamicChunkError && (
+                <button
+                  onClick={this.handleReset}
+                  style={{
+                    padding: "10px 20px",
+                    background: "rgba(255, 255, 255, 0.08)",
+                    border: "1px solid rgba(255, 255, 255, 0.15)",
+                    borderRadius: "10px",
+                    color: "#ffffff",
+                    fontSize: "14px",
+                    fontWeight: 600,
+                    cursor: "pointer"
+                  }}
+                >
+                  Try Again
+                </button>
+              )}
               <button
                 onClick={this.handleReload}
                 style={{
@@ -140,7 +179,7 @@ export class ErrorBoundary extends Component {
                   boxShadow: "0 4px 14px rgba(108, 99, 255, 0.4)"
                 }}
               >
-                Reload Studio
+                {isDynamicChunkError ? "Update Now" : "Reload Studio"}
               </button>
             </div>
           </div>

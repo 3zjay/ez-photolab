@@ -5,6 +5,12 @@ import App from './App.jsx'
 import { ErrorBoundary } from './components/ui/ErrorBoundary'
 import { DesktopSignIn } from './platform/DesktopSignIn'
 
+// Auto-recover from stale chunks after deployments
+window.addEventListener('vite:preloadError', (event) => {
+  console.warn('[PHOTOlab] Vite preload error detected, reloading to fetch latest bundle...', event);
+  window.location.reload();
+});
+
 if (import.meta.env.MODE !== 'desktop' && 'serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/sw.js').catch(error => console.error('Service worker registration failed:', error));
